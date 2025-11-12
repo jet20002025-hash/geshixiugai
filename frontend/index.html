@@ -148,7 +148,26 @@
         </div>
         <div class="links" id="previewLinks"></div>
         <hr class="divider" />
-        <button id="mockPay">模拟支付后解锁正式版</button>
+        
+        <!-- 支付信息显示 -->
+        <div id="paymentInfo" style="background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0; display: none;">
+          <h3 style="margin-top: 0; color: #1976D2;">💳 支付信息</h3>
+          <div id="paymentInfoContent">
+            <p><strong>支付金额：</strong><span id="paymentAmount" style="color: #f44336; font-size: 24px; font-weight: bold;">¥0.00</span></p>
+            <p style="margin-top: 15px;"><strong>支付方式：</strong></p>
+            <div id="paymentMethods" style="margin-top: 10px;"></div>
+          </div>
+        </div>
+        
+        <!-- 支付按钮 -->
+        <button id="payButton" style="display: none; width: 100%; padding: 15px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">
+          立即支付
+        </button>
+        
+        <!-- 已支付提示 -->
+        <div id="paidNotice" style="background: #e8f5e9; border: 2px solid #4CAF50; padding: 15px; border-radius: 5px; margin: 20px 0; display: none;">
+          <p style="margin: 0; color: #2e7d32; font-weight: bold;">✅ 已支付，可以下载正式版文档</p>
+        </div>
       </div>
       <div id="resultStatus" class="status" style="display: none"></div>
     </section>
@@ -165,7 +184,11 @@
       const docStatusSpan = document.getElementById("docStatus");
       const docPaidSpan = document.getElementById("docPaid");
       const previewLinks = document.getElementById("previewLinks");
-      const mockPayBtn = document.getElementById("mockPay");
+      const paymentInfo = document.getElementById("paymentInfo");
+      const paymentAmount = document.getElementById("paymentAmount");
+      const paymentMethods = document.getElementById("paymentMethods");
+      const payButton = document.getElementById("payButton");
+      const paidNotice = document.getElementById("paidNotice");
       const changesSummary = document.getElementById("changesSummary");
       const changesContent = document.getElementById("changesContent");
       const figureIssues = document.getElementById("figureIssues");
@@ -437,29 +460,147 @@
 
           resultCard.style.display = "block";
           resultStatus.style.display = "none";
+          
+          // 加载支付信息
+          await loadPaymentInfo(data.document_id, data.paid);
         } catch (error) {
           showMessage(resultStatus, error.message, true);
         }
       }
 
-      mockPayBtn.addEventListener("click", async () => {
-        if (!latestDocumentId) return;
-        try {
-          const response = await fetch("/payments/mock", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ document_id: latestDocumentId }),
-          });
-          if (!response.ok) {
-            const detail = await response.json();
-            throw new Error(detail.detail || "支付失败");
-          }
-          showMessage(resultStatus, "模拟支付成功，正式版已解锁");
-          await refreshDocumentStatus();
-        } catch (error) {
-          showMessage(resultStatus, error.message, true);
+      // 加载支付信息
+      async function loadPaymentInfo(documentId, isPaid) {
+        if (isPaid) {
+          // 已支付，显示提示
+          paymentInfo.style.display = "none";
+          payButton.style.display = "none";
+          paidNotice.style.display = "block";
+          return;
         }
-      });
+
+        try {
+          const response = await fetch(`/payments/info/${documentId}`);
+          if (!response.ok) {
+            throw new Error("获取支付信息失败");
+          }
+          const paymentData = await response.json();
+          
+          // 显示支付金额
+          paymentAmount.textContent = `¥${paymentData.amount.toFixed(2)}`;
+          
+          // 显示支付方式
+          paymentMethods.innerHTML = "";
+          let selectedMethod = paymentData.payment_methods[0] || "mock";
+          
+          paymentData.payment_methods.forEach(method => {
+            const methodDiv = document.createElement("div");
+            methodDiv.style.marginBottom = "10px";
+            
+            const label = document.createElement("label");
+            label.style.display = "flex";
+            label.style.alignItems = "center";
+            label.style.cursor = "pointer";
+            label.style.padding = "10px";
+            label.style.border = "2px solid #ddd";
+            label.style.borderRadius = "5px";
+            label.style.backgroundColor = "#fff";
+            label.style.transition = "all 0.3s";
+            
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "paymentMethod";
+            radio.value = method;
+            radio.style.marginRight = "10px";
+            
+            if (method === selectedMethod) {
+              radio.checked = true;
+              label.style.borderColor = "#4CAF50";
+              label.style.backgroundColor = "#f1f8f4";
+            }
+            
+            const methodName = {
+              "mock": "模拟支付（测试）",
+              "alipay": "支付宝",
+              "wechat": "微信支付",
+              "stripe": "Stripe（国际支付）"
+            }[method] || method;
+            
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(methodName));
+            
+            // 点击时更新选中状态
+            label.addEventListener("click", (e) => {
+              // 更新所有单选按钮
+              document.querySelectorAll('input[name="paymentMethod"]').forEach(r => {
+                r.checked = false;
+                r.closest('label').style.borderColor = "#ddd";
+                r.closest('label').style.backgroundColor = "#fff";
+              });
+              
+              radio.checked = true;
+              selectedMethod = method;
+              label.style.borderColor = "#4CAF50";
+              label.style.backgroundColor = "#f1f8f4";
+            });
+            
+            methodDiv.appendChild(label);
+            paymentMethods.appendChild(methodDiv);
+          });
+          
+          // 显示支付界面
+          paymentInfo.style.display = "block";
+          payButton.style.display = "block";
+          paidNotice.style.display = "none";
+          
+          // 更新支付按钮事件
+          payButton.onclick = () => {
+            const selected = document.querySelector('input[name="paymentMethod"]:checked');
+            handlePayment(documentId, selected ? selected.value : selectedMethod);
+          };
+        } catch (error) {
+          console.error("加载支付信息失败:", error);
+          paymentInfo.style.display = "none";
+          payButton.style.display = "none";
+        }
+      }
+
+      // 处理支付
+      async function handlePayment(documentId, paymentMethod) {
+        if (!paymentMethod) {
+          showMessage(resultStatus, "请选择支付方式", true);
+          return;
+        }
+
+        try {
+          showMessage(resultStatus, "处理支付中...", false);
+          
+          if (paymentMethod === "mock") {
+            // 模拟支付
+            const response = await fetch("/payments/mock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                document_id: documentId,
+                payment_method: paymentMethod
+              }),
+            });
+            
+            if (!response.ok) {
+              const detail = await response.json();
+              throw new Error(detail.detail || "支付失败");
+            }
+            
+            showMessage(resultStatus, "支付成功，正式版已解锁！", false);
+            await refreshDocumentStatus();
+          } else {
+            // 真实支付（待实现）
+            showMessage(resultStatus, `${paymentMethod} 支付功能开发中...`, true);
+          }
+        } catch (error) {
+          console.error("支付错误:", error);
+          showMessage(resultStatus, error.message || "支付失败，请稍后重试", true);
+        }
+      }
     </script>
   </body>
 </html>
