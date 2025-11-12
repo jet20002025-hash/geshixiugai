@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>论文格式自动修复 - 本地预览</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 2rem auto;
+        max-width: 760px;
+        line-height: 1.6;
+      }
+      h1,
+      h2 {
+        color: #16324f;
+      }
+      section {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+      input[type="file"],
+      select,
+      button {
+        width: 100%;
+        padding: 0.6rem;
+        margin-bottom: 1rem;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        font-size: 1rem;
+      }
+      button {
+        background: linear-gradient(135deg, #2563eb, #1e3a8a);
+        color: white;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        border: none;
+      }
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+      }
+      .card-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .status {
+        padding: 0.75rem;
+        border-radius: 8px;
+        background: #ecfdf5;
+        border: 1px solid #10b98133;
+        color: #047857;
+        font-size: 0.95rem;
+      }
+      .status.error {
+        background: #fef2f2;
+        border-color: #dc262633;
+        color: #b91c1c;
+      }
+      .list {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+      }
+      .list ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+      .divider {
+        height: 1px;
+        margin: 1.5rem 0;
+        background: linear-gradient(90deg, rgba(229, 231, 235, 0), rgba(209, 213, 219, 0.9), rgba(229, 231, 235, 0));
+        border: none;
+      }
+      .small {
+        font-size: 0.9rem;
+        color: #6b7280;
+      }
+      .links a {
+        display: inline-block;
+        margin-right: 1rem;
+        color: #2563eb;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>论文格式自动修复（本地预览版）</h1>
+    <p class="small">流程：上传模板 → 上传学生文档 → 预览水印版 → 模拟支付后下载正式版。</p>
+
+    <section>
+      <div class="card-title">
+        <h2>1. 上传模板</h2>
+      </div>
+      <form id="templateForm">
+        <label for="templateFile">选择模板（.docx）</label>
+        <input id="templateFile" type="file" accept=".docx" required />
+        <button type="submit">上传模板</button>
+      </form>
+      <div id="templateStatus" class="status" style="display: none"></div>
+    </section>
+
+    <section>
+      <div class="card-title">
+        <h2>2. 上传学生文档</h2>
+      </div>
+      <form id="documentForm">
+        <label for="templateSelect">选择模板</label>
+        <select id="templateSelect" required>
+          <option value="">请先上传模板</option>
+        </select>
+        <label for="documentFile">选择学生文档（.docx）</label>
+        <input id="documentFile" type="file" accept=".docx" required />
+        <button type="submit">上传并自动修复</button>
+      </form>
+      <div id="documentStatus" class="status" style="display: none"></div>
+    </section>
+
+    <section>
+      <div class="card-title">
+        <h2>3. 下载与支付</h2>
+      </div>
+      <div id="result" class="list" style="display: none">
+        <p><strong>文档 ID：</strong><span id="docId"></span></p>
+        <p><strong>处理状态：</strong><span id="docStatus"></span></p>
+        <p><strong>已付费：</strong><span id="docPaid"></span></p>
+        <div id="changesSummary" style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+          <h3 style="margin-top: 0; color: #1976D2;">📝 格式修改摘要</h3>
+          <div id="changesContent"></div>
+        </div>
+        <div id="figureIssues" style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+          <h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>
+          <div id="figureIssuesContent"></div>
+        </div>
+        <div class="links" id="previewLinks"></div>
+        <hr class="divider" />
+        <button id="mockPay">模拟支付后解锁正式版</button>
+      </div>
+      <div id="resultStatus" class="status" style="display: none"></div>
+    </section>
+
+    <script>
+      const templateForm = document.getElementById("templateForm");
+      const documentForm = document.getElementById("documentForm");
+      const templateStatus = document.getElementById("templateStatus");
+      const documentStatus = document.getElementById("documentStatus");
+      const resultStatus = document.getElementById("resultStatus");
+      const templateSelect = document.getElementById("templateSelect");
+      const resultCard = document.getElementById("result");
+      const docIdSpan = document.getElementById("docId");
+      const docStatusSpan = document.getElementById("docStatus");
+      const docPaidSpan = document.getElementById("docPaid");
+      const previewLinks = document.getElementById("previewLinks");
+      const mockPayBtn = document.getElementById("mockPay");
+      const changesSummary = document.getElementById("changesSummary");
+      const changesContent = document.getElementById("changesContent");
+      const figureIssues = document.getElementById("figureIssues");
+      const figureIssuesContent = document.getElementById("figureIssuesContent");
+
+      let latestDocumentId = null;
+
+      function showMessage(element, message, isError = false) {
+        element.textContent = message;
+        element.classList.toggle("error", isError);
+        element.style.display = "block";
+      }
+
+      function addTemplateOption(templateId, label) {
+        const option = document.createElement("option");
+        option.value = templateId;
+        option.textContent = `${label} (${templateId.slice(0, 8)})`;
+        templateSelect.appendChild(option);
+        templateSelect.value = templateId;
+      }
+
+      templateForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = document.getElementById("templateFile").files[0];
+        if (!file) {
+          showMessage(templateStatus, "请选择模板文件", true);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          showMessage(templateStatus, "上传中...", false);
+          const response = await fetch("/templates", {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) {
+            const detail = await response.json();
+            throw new Error(detail.detail || "模板上传失败");
+          }
+          const data = await response.json();
+          addTemplateOption(data.template_id, data.name);
+          showMessage(templateStatus, `模板上传成功：${data.name}（样式数 ${data.style_count}）`);
+        } catch (error) {
+          showMessage(templateStatus, error.message, true);
+        }
+      });
+
+      documentForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const templateId = templateSelect.value;
+        const file = document.getElementById("documentFile").files[0];
+
+        if (!templateId) {
+          showMessage(documentStatus, "请先选择模板", true);
+          return;
+        }
+        if (!file) {
+          showMessage(documentStatus, "请选择学生文档", true);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          showMessage(documentStatus, "处理中，请稍候...", false);
+          const response = await fetch(`/documents?template_id=${templateId}`, {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) {
+            const detail = await response.json();
+            throw new Error(detail.detail || "文档处理失败");
+          }
+          const data = await response.json();
+          latestDocumentId = data.document_id;
+          showMessage(documentStatus, "文档处理完成");
+          await refreshDocumentStatus();
+        } catch (error) {
+          showMessage(documentStatus, error.message, true);
+        }
+      });
+
+      async function refreshDocumentStatus() {
+        if (!latestDocumentId) return;
+        try {
+          const response = await fetch(`/documents/${latestDocumentId}`);
+          if (!response.ok) {
+            const detail = await response.json();
+            throw new Error(detail.detail || "获取文档信息失败");
+          }
+          const data = await response.json();
+          docIdSpan.textContent = data.document_id;
+          docStatusSpan.textContent = data.status;
+          docPaidSpan.textContent = data.paid ? "是" : "否";
+
+          // 显示修改摘要
+          if (data.summary && data.summary.changes_summary) {
+            const fieldNames = {
+              "font_name": "字体",
+              "font_size": "字号",
+              "bold": "加粗",
+              "alignment": "对齐方式",
+              "line_spacing": "行距",
+              "space_before": "段前间距",
+              "space_after": "段后间距",
+              "first_line_indent": "首行缩进",
+              "left_indent": "左缩进",
+              "right_indent": "右缩进",
+            };
+            
+            let html = "<ul style='list-style: none; padding-left: 0;'>";
+            const sorted = Object.entries(data.summary.changes_summary)
+              .sort((a, b) => b[1] - a[1]);
+            for (const [field, count] of sorted) {
+              const fieldName = fieldNames[field] || field;
+              html += `<li style='padding: 5px 0;'><strong>${fieldName}</strong>: 修改了 <strong style='color: #1976D2;'>${count}</strong> 处</li>`;
+            }
+            html += `</ul><p style='margin-top: 10px; font-weight: bold; color: #1976D2;'>总计修改了 <strong>${data.summary.paragraphs_adjusted || 0}</strong> 个段落</p>`;
+            changesContent.innerHTML = html;
+            changesSummary.style.display = "block";
+          } else {
+            changesSummary.style.display = "none";
+          }
+
+          // 显示图片检测结果
+          if (data.summary && data.summary.figure_issues && data.summary.figure_issues.length > 0) {
+            const issues = data.summary.figure_issues;
+            let html = `<p style="color: #856404; font-weight: bold;">发现 <strong>${issues.length}</strong> 处图片缺少图题：</p><ul style="list-style: none; padding-left: 0;">`;
+            for (const issue of issues.slice(0, 10)) {
+              html += `<li style="padding: 8px 0; border-bottom: 1px solid #ffc107;"><strong>第 ${issue.paragraph_index + 1} 段</strong>: ${issue.message}<br><small style="color: #666;">${issue.suggestion}</small></li>`;
+            }
+            if (issues.length > 10) {
+              html += `<li style="padding: 8px 0; color: #666;">... 还有 ${issues.length - 10} 处问题未显示</li>`;
+            }
+            html += '</ul>';
+            figureIssuesContent.innerHTML = html;
+            figureIssues.style.display = "block";
+          } else {
+            figureIssues.style.display = "none";
+          }
+
+          previewLinks.innerHTML = "";
+          
+          // 预览按钮（仅查看，不可下载）
+          const previewBtn = document.createElement("button");
+          previewBtn.textContent = "预览文档（仅查看，不可下载）";
+          previewBtn.className = "preview-btn";
+          previewBtn.onclick = () => {
+            window.open(`/documents/${data.document_id}/preview`, '_blank', 'width=1200,height=800');
+          };
+          previewLinks.appendChild(previewBtn);
+          
+          // 添加预览区域
+          const previewContainer = document.createElement("div");
+          previewContainer.id = "previewContainer";
+          previewContainer.style.display = "none";
+          previewContainer.style.marginTop = "20px";
+          previewContainer.style.border = "1px solid #ddd";
+          previewContainer.style.height = "800px";
+          previewContainer.style.overflow = "auto";
+          previewContainer.innerHTML = `<iframe src="/documents/${data.document_id}/preview" style="width:100%;height:100%;border:none;"></iframe>`;
+          
+          const inlinePreviewBtn = document.createElement("button");
+          inlinePreviewBtn.textContent = "在页面中预览";
+          inlinePreviewBtn.style.marginLeft = "10px";
+          inlinePreviewBtn.onclick = () => {
+            previewContainer.style.display = previewContainer.style.display === "none" ? "block" : "none";
+          };
+          previewLinks.appendChild(inlinePreviewBtn);
+          previewLinks.appendChild(previewContainer);
+
+          if (data.paid) {
+            const finalLink = document.createElement("a");
+            finalLink.href = `/documents/${data.document_id}/download`;
+            finalLink.textContent = "下载正式版（已付费）";
+            finalLink.target = "_blank";
+            finalLink.className = "download-btn";
+            finalLink.style.marginLeft = "10px";
+            previewLinks.appendChild(finalLink);
+          }
+
+          resultCard.style.display = "block";
+          resultStatus.style.display = "none";
+        } catch (error) {
+          showMessage(resultStatus, error.message, true);
+        }
+      }
+
+      mockPayBtn.addEventListener("click", async () => {
+        if (!latestDocumentId) return;
+        try {
+          const response = await fetch("/payments/mock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ document_id: latestDocumentId }),
+          });
+          if (!response.ok) {
+            const detail = await response.json();
+            throw new Error(detail.detail || "支付失败");
+          }
+          showMessage(resultStatus, "模拟支付成功，正式版已解锁");
+          await refreshDocumentStatus();
+        } catch (error) {
+          showMessage(resultStatus, error.message, true);
+        }
+      });
+    </script>
+  </body>
+</html>
+
+
+
