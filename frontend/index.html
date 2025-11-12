@@ -142,6 +142,10 @@
           <h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>
           <div id="figureIssuesContent"></div>
         </div>
+        <div id="referenceIssues" style="background: #ffe0e0; border: 2px solid #f44336; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+          <h3 style="margin-top: 0; color: #c62828;">📚 参考文献引用检测结果</h3>
+          <div id="referenceIssuesContent"></div>
+        </div>
         <div class="links" id="previewLinks"></div>
         <hr class="divider" />
         <button id="mockPay">模拟支付后解锁正式版</button>
@@ -305,6 +309,38 @@
             figureIssues.style.display = "block";
           } else {
             figureIssues.style.display = "none";
+          }
+
+          // 显示参考文献引用检测结果
+          const referenceIssues = document.getElementById("referenceIssues");
+          const referenceIssuesContent = document.getElementById("referenceIssuesContent");
+          if (data.summary && data.summary.reference_issues && data.summary.reference_issues.length > 0) {
+            const issues = data.summary.reference_issues;
+            let html = "";
+            for (const issue of issues) {
+              if (issue.type === "no_reference_section") {
+                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
+              } else if (issue.type === "no_reference_items") {
+                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
+              } else if (issue.type === "missing_citations") {
+                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
+                if (issue.reference_count) {
+                  html += `<p style="color: #666; margin-top: 5px;">发现 <strong>${issue.reference_count}</strong> 条参考文献，但正文中未找到引用标注。</p>`;
+                }
+                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
+                if (issue.missing_citation_paragraphs && issue.missing_citation_paragraphs.length > 0) {
+                  html += `<p style="color: #666; margin-top: 10px; font-weight: bold;">可能缺少引用的段落：</p><ul style="list-style: none; padding-left: 0; margin-top: 5px;">`;
+                  for (const para of issue.missing_citation_paragraphs) {
+                    html += `<li style="padding: 5px 0; border-bottom: 1px solid #f44336;"><strong>第 ${para.paragraph_index + 1} 段</strong>: ${para.text_preview}</li>`;
+                  }
+                  html += '</ul>';
+                }
+              }
+            }
+            referenceIssuesContent.innerHTML = html;
+            referenceIssues.style.display = "block";
+          } else {
+            referenceIssues.style.display = "none";
           }
 
           previewLinks.innerHTML = "";

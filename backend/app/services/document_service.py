@@ -48,6 +48,11 @@ class DocumentService:
         figure_issues = self._check_figure_captions(final_doc)
         if figure_issues:
             stats["figure_issues"] = figure_issues
+        
+        # 检测参考文献引用标注
+        reference_issues = self._check_reference_citations(final_doc)
+        if reference_issues:
+            stats["reference_issues"] = reference_issues
 
         final_path = task_dir / "final.docx"
         final_doc.save(final_path)
@@ -147,10 +152,11 @@ class DocumentService:
                     (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30)
                 )
                 
-                # 对于正文段落（非标题），强制使用小四（12pt）宋体
+                # 对于正文段落（非标题），强制使用小四（12pt）宋体，且不能是粗体
                 if not is_heading:
                     rule["font_size"] = 12  # 小四字体固定为12磅
                     rule["font_name"] = "宋体"  # 正文固定为宋体
+                    rule["bold"] = False  # 正文不能是粗体
                 # 对于标题，如果当前规则没有字体大小，也使用默认规则的字体大小
                 elif default_rule:
                     if rule.get("font_size") is None and default_rule.get("font_size") is not None:
@@ -310,6 +316,10 @@ class DocumentService:
                 if not has_actual_image_element:
                     has_image = False
             
+            # 如果找到图片，强制设置段落对齐为居中
+            if has_image:
+                paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            
             # 如果找到图片，检查后面几个段落是否有图题
             if has_image:
                 # 检查当前段落及后面最多5个段落是否有图题
@@ -384,6 +394,142 @@ class DocumentService:
             # 解析并插入新段落
             new_para_element = parse_xml(new_para_xml)
             img_paragraph._element.addnext(new_para_element)
+        
+        return issues
+
+    def _check_reference_citations(self, document: Document) -> list:
+        """检测参考文献引用标注，检查正文中是否有引用标注，返回缺失引用的问题列表"""
+        issues = []
+        
+        # 1. 找到参考文献部分的起始位置
+        reference_start_idx = None
+        reference_section_text = ""
+        
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            # 检测参考文献标题（可能包含"参考文献"、"References"、"参考书目"等）
+            if re.search(r'参考(文献|书目)', para_text) or para_text.lower().startswith('references') or para_text.lower().startswith('bibliography'):
+                reference_start_idx = idx
+                # 收集参考文献部分的内容（最多收集50个段落）
+                ref_paragraphs = []
+                for i in range(idx, min(idx + 50, len(document.paragraphs))):
+                    ref_paragraphs.append(document.paragraphs[i].text.strip() if document.paragraphs[i].text else "")
+                reference_section_text = "\n".join(ref_paragraphs)
+                break
+        
+        # 如果没有找到参考文献部分，提示用户
+        if reference_start_idx is None:
+            issues.append({
+                "type": "no_reference_section",
+                "message": "未找到参考文献部分",
+                "suggestion": "请在文档末尾添加参考文献部分，标题为'参考文献'"
+            })
+            return issues
+        
+        # 2. 提取参考文献列表（通常以数字编号开头，如 [1]、1. 等）
+        reference_items = []
+        reference_patterns = [
+            r'^\[\d+\]',  # [1] 格式
+            r'^\d+\.',    # 1. 格式
+            r'^\(\d+\)',  # (1) 格式
+        ]
+        
+        for idx in range(reference_start_idx + 1, min(reference_start_idx + 100, len(document.paragraphs))):
+            para = document.paragraphs[idx]
+            para_text = para.text.strip() if para.text else ""
+            
+            # 如果遇到新的章节标题，停止收集
+            if len(para_text) < 50 and (para_text.startswith("第") or para_text.startswith("Chapter") or 
+                                         para_text.startswith("附录") or para_text.startswith("Appendix")):
+                break
+            
+            # 检查是否符合参考文献格式
+            is_reference = False
+            for pattern in reference_patterns:
+                if re.match(pattern, para_text):
+                    is_reference = True
+                    break
+            
+            # 如果段落较长且包含作者、年份等信息，也可能是参考文献
+            if not is_reference and len(para_text) > 20:
+                # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
+                if re.search(r'\d{4}', para_text) and (len(para_text) > 30):  # 包含年份且较长
+                    is_reference = True
+            
+            if is_reference:
+                reference_items.append({
+                    "index": len(reference_items) + 1,
+                    "text": para_text[:100],  # 只保存前100个字符
+                    "paragraph_index": idx
+                })
+        
+        # 如果没有找到参考文献条目，提示
+        if not reference_items:
+            issues.append({
+                "type": "no_reference_items",
+                "message": "参考文献部分为空或格式不正确",
+                "suggestion": "请确保参考文献部分包含编号的参考文献条目"
+            })
+            return issues
+        
+        # 3. 检查正文中是否有引用标注
+        # 正文部分：从文档开始到参考文献部分之前
+        body_text = ""
+        body_paragraphs = []
+        for idx in range(min(100, reference_start_idx)):  # 只检查前100个段落和参考文献之前的部分
+            para = document.paragraphs[idx]
+            para_text = para.text.strip() if para.text else ""
+            # 只检查较长的段落（正文），跳过标题、目录等短段落
+            if len(para_text) > 50:  # 只检查较长的段落（正文）
+                body_text += para_text + " "
+                body_paragraphs.append((idx, para_text))
+        
+        # 检测引用标注的常见格式
+        citation_patterns = [
+            r'\[\d+\]',           # [1] 格式
+            r'\[\d+[,\-\s]+\d+\]', # [1,2,3] 或 [1-5] 格式
+            r'\(\d{4}[a-z]?\)',   # (2020) 或 (2020a) 格式
+            r'（\d{4}[a-z]?）',   # （2020）格式
+        ]
+        
+        has_citation = False
+        citation_matches = []
+        for pattern in citation_patterns:
+            matches = re.finditer(pattern, body_text)
+            for match in matches:
+                has_citation = True
+                citation_matches.append(match.group())
+        
+        # 如果没有找到引用标注，提示用户
+        if not has_citation and len(reference_items) > 0:
+            # 找到正文段落中可能缺少引用的位置
+            missing_citation_paragraphs = []
+            for para_idx, para_text in body_paragraphs:
+                # 如果段落较长（可能是正文），但没有引用标注，记录
+                if len(para_text) > 100 and not any(re.search(pattern, para_text) for pattern in citation_patterns):
+                    # 检查段落是否包含可能引用的内容（如"研究"、"文献"、"表明"等学术词汇）
+                    academic_keywords = ['研究', '文献', '表明', '发现', '提出', '分析', '方法', '理论', '模型']
+                    if any(keyword in para_text for keyword in academic_keywords):
+                        missing_citation_paragraphs.append({
+                            "paragraph_index": para_idx,
+                            "text_preview": para_text[:80] + "..."
+                        })
+            
+            if missing_citation_paragraphs:
+                issues.append({
+                    "type": "missing_citations",
+                    "message": f"正文中缺少参考文献引用标注（发现 {len(reference_items)} 条参考文献，但正文中未找到引用标注）",
+                    "suggestion": "请在正文中添加引用标注，格式如：[1] 或 [1,2,3] 或 (作者, 年份)",
+                    "reference_count": len(reference_items),
+                    "missing_citation_paragraphs": missing_citation_paragraphs[:10]  # 只显示前10个
+                })
+            else:
+                issues.append({
+                    "type": "missing_citations",
+                    "message": f"正文中缺少参考文献引用标注（发现 {len(reference_items)} 条参考文献，但正文中未找到引用标注）",
+                    "suggestion": "请在正文中添加引用标注，格式如：[1] 或 [1,2,3] 或 (作者, 年份)",
+                    "reference_count": len(reference_items)
+                })
         
         return issues
 

@@ -1,0 +1,18 @@
+# 忽略不需要部署的文件
+storage/
+*.docx
+*.doc
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv
+.git/
+.gitignore
+.DS_Store
+*.log
+*.tmp
+
