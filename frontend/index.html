@@ -204,15 +204,41 @@
             method: "POST",
             body: formData,
           });
+          
+          // 检查响应内容类型
+          const contentType = response.headers.get("content-type");
+          let errorMessage = "模板上传失败";
+          
           if (!response.ok) {
-            const detail = await response.json();
-            throw new Error(detail.detail || "模板上传失败");
+            // 尝试解析 JSON 错误
+            if (contentType && contentType.includes("application/json")) {
+              try {
+                const detail = await response.json();
+                errorMessage = detail.detail || detail.message || `上传失败 (${response.status})`;
+              } catch (e) {
+                // 如果不是 JSON，读取文本
+                const text = await response.text();
+                errorMessage = text || `上传失败 (${response.status} ${response.statusText})`;
+              }
+            } else {
+              // 读取文本响应
+              const text = await response.text();
+              errorMessage = text || `上传失败 (${response.status} ${response.statusText})`;
+            }
+            throw new Error(errorMessage);
           }
-          const data = await response.json();
-          addTemplateOption(data.template_id, data.name);
-          showMessage(templateStatus, `模板上传成功：${data.name}（样式数 ${data.style_count}）`);
+          
+          // 成功响应，解析 JSON
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            addTemplateOption(data.template_id, data.name);
+            showMessage(templateStatus, `模板上传成功：${data.name}（样式数 ${data.style_count}）`);
+          } else {
+            throw new Error("服务器返回了意外的响应格式");
+          }
         } catch (error) {
-          showMessage(templateStatus, error.message, true);
+          console.error("上传错误:", error);
+          showMessage(templateStatus, error.message || "模板上传失败，请稍后重试", true);
         }
       });
 
@@ -239,16 +265,42 @@
             method: "POST",
             body: formData,
           });
+          
+          // 检查响应内容类型
+          const contentType = response.headers.get("content-type");
+          let errorMessage = "文档处理失败";
+          
           if (!response.ok) {
-            const detail = await response.json();
-            throw new Error(detail.detail || "文档处理失败");
+            // 尝试解析 JSON 错误
+            if (contentType && contentType.includes("application/json")) {
+              try {
+                const detail = await response.json();
+                errorMessage = detail.detail || detail.message || `处理失败 (${response.status})`;
+              } catch (e) {
+                // 如果不是 JSON，读取文本
+                const text = await response.text();
+                errorMessage = text || `处理失败 (${response.status} ${response.statusText})`;
+              }
+            } else {
+              // 读取文本响应
+              const text = await response.text();
+              errorMessage = text || `处理失败 (${response.status} ${response.statusText})`;
+            }
+            throw new Error(errorMessage);
           }
-          const data = await response.json();
-          latestDocumentId = data.document_id;
-          showMessage(documentStatus, "文档处理完成");
-          await refreshDocumentStatus();
+          
+          // 成功响应，解析 JSON
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            latestDocumentId = data.document_id;
+            showMessage(documentStatus, "文档处理完成");
+            await refreshDocumentStatus();
+          } else {
+            throw new Error("服务器返回了意外的响应格式");
+          }
         } catch (error) {
-          showMessage(documentStatus, error.message, true);
+          console.error("文档处理错误:", error);
+          showMessage(documentStatus, error.message || "文档处理失败，请稍后重试", true);
         }
       });
 

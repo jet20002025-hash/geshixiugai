@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,17 @@ from ..services.template_service import TemplateService
 
 router = APIRouter()
 
-TEMPLATE_DIR = Path("storage/templates")
+# 在 Vercel 上使用 /tmp 目录，本地使用 storage 目录
+# Vercel 会自动设置 VERCEL 环境变量
+if os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV"):
+    # Vercel 环境：使用 /tmp 临时目录
+    TEMPLATE_DIR = Path("/tmp/storage/templates")
+else:
+    # 本地环境：使用项目目录
+    TEMPLATE_DIR = Path("storage/templates")
+
+# 确保目录存在
+TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.post(
