@@ -18,7 +18,14 @@ class TemplateService:
         self.base_dir = base_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    async def save_template(self, upload: UploadFile) -> str:
+    async def save_template(self, upload: UploadFile, session_id: str) -> str:
+        """
+        保存模板并生成规则库
+        
+        Args:
+            upload: 上传的模板文件
+            session_id: 用户会话ID，用于标识模板所有者
+        """
         template_id = uuid.uuid4().hex
         template_dir = self.base_dir / template_id
         template_dir.mkdir(parents=True, exist_ok=True)
@@ -33,6 +40,7 @@ class TemplateService:
         metadata = {
             "template_id": template_id,
             "name": upload.filename,
+            "session_id": session_id,  # 记录模板所有者
             "styles": rules,
             "default_style": default_style,
             "created_at": datetime.utcnow().isoformat(),
@@ -47,6 +55,60 @@ class TemplateService:
         if not metadata_path.exists():
             return {}
         return json.loads(metadata_path.read_text(encoding="utf-8"))
+    
+    def get_user_templates(self, session_id: str) -> list[Dict]:
+        """
+        获取指定用户的所有模板列表
+        
+        Args:
+            session_id: 用户会话ID
+            
+        Returns:
+            模板列表，每个模板包含 template_id, name, created_at
+        """
+        templates = []
+        
+        if not self.base_dir.exists():
+            return templates
+        
+        # 遍历所有模板目录
+        for template_dir in self.base_dir.iterdir():
+            if not template_dir.is_dir():
+                continue
+            
+            metadata_path = template_dir / "metadata.json"
+            if not metadata_path.exists():
+                continue
+            
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                # 只返回属于当前用户的模板
+                if metadata.get("session_id") == session_id:
+                    templates.append({
+                        "template_id": metadata.get("template_id"),
+                        "name": metadata.get("name", "未命名模板"),
+                        "created_at": metadata.get("created_at"),
+                    })
+            except (json.JSONDecodeError, KeyError):
+                continue
+        
+        # 按创建时间倒序排列（最新的在前）
+        templates.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return templates
+    
+    def is_template_owner(self, template_id: str, session_id: str) -> bool:
+        """
+        检查模板是否属于指定用户
+        
+        Args:
+            template_id: 模板ID
+            session_id: 用户会话ID
+            
+        Returns:
+            True 如果模板属于该用户，否则 False
+        """
+        metadata = self.get_template_metadata(template_id)
+        return metadata.get("session_id") == session_id
 
     def _extract_rules(self, document: Document) -> tuple[Dict[str, Dict], Optional[str]]:
         rules: Dict[str, Dict] = {}

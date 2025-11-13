@@ -30,11 +30,14 @@ async def get_payment_info(document_id: str) -> PaymentInfo:
     service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     try:
         info = service.get_payment_info(document_id)
+        from ..schemas.payments import PaymentAccount
+        
         return PaymentInfo(
             document_id=info["document_id"],
             amount=info["amount"],
             currency=info["currency"],
             payment_methods=info["payment_methods"],
+            payment_account=PaymentAccount(**info["payment_account"]),
         )
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
@@ -63,5 +66,6 @@ async def mock_payment(payload: PaymentRequest) -> PaymentResponse:
         payment_method=metadata.get("payment_method"),
         amount=metadata.get("payment_amount"),
         paid_at=metadata.get("paid_at"),
+        download_token=metadata.get("download_token"),  # 返回下载 token
     )
 

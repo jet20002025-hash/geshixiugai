@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..schemas.documents import (
@@ -10,6 +10,8 @@ from ..schemas.documents import (
     DocumentStatusResponse,
 )
 from ..services.document_service import DocumentService
+from ..services.template_service import TemplateService
+from ..utils.session_utils import get_or_create_session_id
 
 router = APIRouter()
 
@@ -34,7 +36,21 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     response_model=DocumentCreateResponse,
     summary="上传待修复文档",
 )
-async def upload_document(template_id: str, file: UploadFile) -> DocumentCreateResponse:
+async def upload_document(request: Request, template_id: str, file: UploadFile) -> DocumentCreateResponse:
+    """
+    上传待修复文档，只能使用自己上传的模板
+    """
+    # 获取用户 session_id
+    session_id = get_or_create_session_id(request)
+    
+    # 验证模板是否属于当前用户
+    template_service = TemplateService(base_dir=TEMPLATE_DIR)
+    if not template_service.is_template_owner(template_id, session_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权使用此模板，只能使用自己上传的模板"
+        )
+    
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     try:
         doc_id, report = await service.process_document(template_id=template_id, upload=file)
@@ -91,7 +107,14 @@ async def preview_document(document_id: str) -> HTMLResponse:
     "/{document_id}/download",
     summary="下载正式版文档",
 )
-async def download_document(document_id: str) -> FileResponse:
+async def download_document(document_id: str, token: str) -> FileResponse:
+    """
+    下载正式版文档，需要提供下载 token 验证身份
+    
+    Args:
+        document_id: 文档ID
+        token: 下载验证 token（支付成功后获取）
+    """
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     metadata = service.get_document_metadata(document_id)
     if not metadata:
@@ -99,6 +122,14 @@ async def download_document(document_id: str) -> FileResponse:
 
     if not metadata.get("paid"):
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="尚未支付，无法下载正式版")
+
+    # 验证下载 token
+    expected_token = metadata.get("download_token")
+    if not expected_token or token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="下载 token 无效，请使用支付成功后获取的下载链接"
+        )
 
     final_path = Path(metadata["final_path"])
     if not final_path.exists():

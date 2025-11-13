@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>论文格式自动修复 - 本地预览</title>
+    <title>论文格式自动修复</title>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -95,8 +95,8 @@
     </style>
   </head>
   <body>
-    <h1>论文格式自动修复（本地预览版）</h1>
-    <p class="small">流程：上传模板 → 上传学生文档 → 预览水印版 → 模拟支付后下载正式版。</p>
+    <h1>论文格式自动修复</h1>
+    <p class="small">流程：上传模板 → 上传学生文档 → 预览水印版 → 支付后下载正式版。</p>
 
     <section>
       <div class="card-title">
@@ -156,6 +156,12 @@
             <p><strong>支付金额：</strong><span id="paymentAmount" style="color: #f44336; font-size: 24px; font-weight: bold;">¥0.00</span></p>
             <p style="margin-top: 15px;"><strong>支付方式：</strong></p>
             <div id="paymentMethods" style="margin-top: 10px;"></div>
+            
+            <!-- 收款账户信息 -->
+            <div id="paymentAccountInfo" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; display: none;">
+              <p style="margin-bottom: 10px; font-weight: bold; color: #666;">收款账户信息：</p>
+              <div id="accountDetails" style="background: #fff; padding: 15px; border-radius: 5px; font-size: 14px;"></div>
+            </div>
           </div>
         </div>
         
@@ -170,6 +176,14 @@
         </div>
       </div>
       <div id="resultStatus" class="status" style="display: none"></div>
+    </section>
+
+    <!-- 联系方式 -->
+    <section style="text-align: center; padding: 20px; background: #f9fafb; border-radius: 12px; margin-top: 2rem;">
+      <p style="margin: 0; color: #6b7280; font-size: 0.95rem;">
+        如有问题或建议，请联系我们：
+        <a href="mailto:522168878@qq.com" style="color: #2563eb; text-decoration: none; font-weight: 600;">522168878@qq.com</a>
+      </p>
     </section>
 
     <script>
@@ -187,6 +201,8 @@
       const paymentInfo = document.getElementById("paymentInfo");
       const paymentAmount = document.getElementById("paymentAmount");
       const paymentMethods = document.getElementById("paymentMethods");
+      const paymentAccountInfo = document.getElementById("paymentAccountInfo");
+      const accountDetails = document.getElementById("accountDetails");
       const payButton = document.getElementById("payButton");
       const paidNotice = document.getElementById("paidNotice");
       const changesSummary = document.getElementById("changesSummary");
@@ -209,6 +225,40 @@
         templateSelect.appendChild(option);
         templateSelect.value = templateId;
       }
+
+      // 加载用户模板列表
+      async function loadUserTemplates() {
+        try {
+          const response = await fetch("/templates");
+          if (!response.ok) {
+            console.error("加载模板列表失败:", response.status);
+            return;
+          }
+          
+          const templates = await response.json();
+          
+          // 清空现有选项（保留第一个空选项）
+          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
+          
+          if (templates.length === 0) {
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "暂无模板，请先上传";
+            templateSelect.appendChild(option);
+            return;
+          }
+          
+          // 添加用户模板
+          templates.forEach(template => {
+            addTemplateOption(template.template_id, template.name);
+          });
+        } catch (error) {
+          console.error("加载模板列表错误:", error);
+        }
+      }
+
+      // 页面加载时获取用户模板列表
+      loadUserTemplates();
 
       templateForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -254,8 +304,9 @@
           // 成功响应，解析 JSON
           if (contentType && contentType.includes("application/json")) {
             const data = await response.json();
-            addTemplateOption(data.template_id, data.name);
             showMessage(templateStatus, `模板上传成功：${data.name}（样式数 ${data.style_count}）`);
+            // 刷新模板列表
+            await loadUserTemplates();
           } else {
             throw new Error("服务器返回了意外的响应格式");
           }
@@ -315,6 +366,7 @@
           // 成功响应，解析 JSON
           if (contentType && contentType.includes("application/json")) {
             const data = await response.json();
+            console.log("文档上传成功，documentId:", data.document_id);
             latestDocumentId = data.document_id;
             showMessage(documentStatus, "文档处理完成");
             await refreshDocumentStatus();
@@ -328,7 +380,12 @@
       });
 
       async function refreshDocumentStatus() {
-        if (!latestDocumentId) return;
+        if (!latestDocumentId) {
+          console.warn("refreshDocumentStatus: latestDocumentId 为空，无法刷新状态");
+          return;
+        }
+        
+        console.log("刷新文档状态，documentId:", latestDocumentId);
         try {
           const response = await fetch(`/documents/${latestDocumentId}`);
           if (!response.ok) {
@@ -336,6 +393,8 @@
             throw new Error(detail.detail || "获取文档信息失败");
           }
           const data = await response.json();
+          console.log("文档详情数据:", data);
+          
           docIdSpan.textContent = data.document_id;
           docStatusSpan.textContent = data.status;
           docPaidSpan.textContent = data.paid ? "是" : "否";
@@ -428,48 +487,74 @@
             window.open(`/documents/${data.document_id}/preview`, '_blank', 'width=1200,height=800');
           };
           previewLinks.appendChild(previewBtn);
-          
-          // 添加预览区域
-          const previewContainer = document.createElement("div");
-          previewContainer.id = "previewContainer";
-          previewContainer.style.display = "none";
-          previewContainer.style.marginTop = "20px";
-          previewContainer.style.border = "1px solid #ddd";
-          previewContainer.style.height = "800px";
-          previewContainer.style.overflow = "auto";
-          previewContainer.innerHTML = `<iframe src="/documents/${data.document_id}/preview" style="width:100%;height:100%;border:none;"></iframe>`;
-          
-          const inlinePreviewBtn = document.createElement("button");
-          inlinePreviewBtn.textContent = "在页面中预览";
-          inlinePreviewBtn.style.marginLeft = "10px";
-          inlinePreviewBtn.onclick = () => {
-            previewContainer.style.display = previewContainer.style.display === "none" ? "block" : "none";
-          };
-          previewLinks.appendChild(inlinePreviewBtn);
-          previewLinks.appendChild(previewContainer);
 
+          // 处理已支付状态
           if (data.paid) {
-            const finalLink = document.createElement("a");
-            finalLink.href = `/documents/${data.document_id}/download`;
-            finalLink.textContent = "下载正式版（已付费）";
-            finalLink.target = "_blank";
-            finalLink.className = "download-btn";
-            finalLink.style.marginLeft = "10px";
-            previewLinks.appendChild(finalLink);
+            // 隐藏所有支付相关元素
+            paymentInfo.style.display = "none";
+            payButton.style.display = "none";
+            paidNotice.style.display = "block";
+            
+            // 从 localStorage 获取下载 token
+            const downloadToken = localStorage.getItem(`download_token_${data.document_id}`);
+            
+            if (downloadToken) {
+              // 显示下载链接（带 token 验证）
+              const finalLink = document.createElement("a");
+              finalLink.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
+              finalLink.textContent = "下载正式版（已付费）";
+              finalLink.target = "_blank";
+              finalLink.className = "download-btn";
+              finalLink.style.marginLeft = "10px";
+              previewLinks.appendChild(finalLink);
+            } else {
+              // 如果没有 token，提示用户重新支付或刷新页面
+              const noTokenMsg = document.createElement("p");
+              noTokenMsg.textContent = "⚠️ 下载 token 未找到，请刷新页面或重新支付";
+              noTokenMsg.style.color = "#f44336";
+              noTokenMsg.style.marginLeft = "10px";
+              previewLinks.appendChild(noTokenMsg);
+            }
+          } else {
+            // 未支付，确保支付信息显示
+            paidNotice.style.display = "none";
           }
 
           resultCard.style.display = "block";
           resultStatus.style.display = "none";
           
           // 加载支付信息
-          await loadPaymentInfo(data.document_id, data.paid);
+          console.log("准备加载支付信息，documentId:", data.document_id, "paid:", data.paid);
+          try {
+            await loadPaymentInfo(data.document_id, data.paid);
+            console.log("支付信息加载完成");
+          } catch (paymentError) {
+            console.error("加载支付信息时出错:", paymentError);
+            // 即使出错，也显示默认支付信息
+            console.log("使用默认支付信息");
+            showDefaultPaymentInfo(data.document_id);
+          }
+          
+          // 确保支付信息区域可见（双重保险）
+          setTimeout(() => {
+            if (paymentInfo.style.display === "none" && !data.paid) {
+              console.warn("支付信息区域被隐藏，强制显示");
+              showDefaultPaymentInfo(data.document_id);
+            }
+          }, 500);
         } catch (error) {
+          console.error("刷新文档状态时出错:", error);
           showMessage(resultStatus, error.message, true);
         }
       }
 
       // 加载支付信息
       async function loadPaymentInfo(documentId, isPaid) {
+        if (!documentId) {
+          console.error("loadPaymentInfo: documentId 为空");
+          return;
+        }
+
         if (isPaid) {
           // 已支付，显示提示
           paymentInfo.style.display = "none";
@@ -479,11 +564,20 @@
         }
 
         try {
+          console.log("正在加载支付信息，documentId:", documentId);
           const response = await fetch(`/payments/info/${documentId}`);
+          console.log("支付信息 API 响应状态:", response.status);
+          
           if (!response.ok) {
-            throw new Error("获取支付信息失败");
+            const errorText = await response.text();
+            console.error("获取支付信息失败:", response.status, errorText);
+            // 即使失败，也显示默认支付信息
+            showDefaultPaymentInfo(documentId);
+            return;
           }
+          
           const paymentData = await response.json();
+          console.log("支付信息数据:", paymentData);
           
           // 显示支付金额
           paymentAmount.textContent = `¥${paymentData.amount.toFixed(2)}`;
@@ -508,6 +602,7 @@
             
             const radio = document.createElement("input");
             radio.type = "radio";
+            radio.id = `paymentMethod_${method}`;
             radio.name = "paymentMethod";
             radio.value = method;
             radio.style.marginRight = "10px";
@@ -547,6 +642,34 @@
             paymentMethods.appendChild(methodDiv);
           });
           
+          // 显示收款账户信息
+          const account = paymentData.payment_account;
+          let accountHtml = "";
+          
+          if (account.alipay_account) {
+            accountHtml += `<p style="margin: 5px 0;"><strong>支付宝：</strong>${account.alipay_account}</p>`;
+          }
+          if (account.wechat_account) {
+            accountHtml += `<p style="margin: 5px 0;"><strong>微信：</strong>${account.wechat_account}</p>`;
+          }
+          if (account.bank_account) {
+            let bankInfo = `<p style="margin: 5px 0;"><strong>银行账号：</strong>${account.bank_account}</p>`;
+            if (account.bank_name) {
+              bankInfo = `<p style="margin: 5px 0;"><strong>${account.bank_name}：</strong>${account.bank_account}</p>`;
+            }
+            if (account.account_name) {
+              bankInfo += `<p style="margin: 5px 0;"><strong>户名：</strong>${account.account_name}</p>`;
+            }
+            accountHtml += bankInfo;
+          }
+          
+          if (accountHtml) {
+            accountDetails.innerHTML = accountHtml;
+            paymentAccountInfo.style.display = "block";
+          } else {
+            paymentAccountInfo.style.display = "none";
+          }
+          
           // 显示支付界面
           paymentInfo.style.display = "block";
           payButton.style.display = "block";
@@ -559,9 +682,56 @@
           };
         } catch (error) {
           console.error("加载支付信息失败:", error);
-          paymentInfo.style.display = "none";
-          payButton.style.display = "none";
+          // 即使出错，也显示默认支付信息
+          showDefaultPaymentInfo(documentId);
         }
+      }
+
+      // 显示默认支付信息（当 API 失败时使用）
+      function showDefaultPaymentInfo(documentId) {
+        console.log("显示默认支付信息");
+        // 显示默认价格
+        paymentAmount.textContent = "¥9.90";
+        
+        // 显示默认支付方式（模拟支付）
+        paymentMethods.innerHTML = "";
+        const methodDiv = document.createElement("div");
+        methodDiv.style.marginBottom = "10px";
+        
+        const label = document.createElement("label");
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.cursor = "pointer";
+        label.style.padding = "10px";
+        label.style.border = "2px solid #4CAF50";
+        label.style.borderRadius = "5px";
+        label.style.backgroundColor = "#f1f8f4";
+        
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.id = "paymentMethod_mock_default";
+        radio.name = "paymentMethod";
+        radio.value = "mock";
+        radio.checked = true;
+        radio.style.marginRight = "10px";
+        
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode("模拟支付（测试）"));
+        methodDiv.appendChild(label);
+        paymentMethods.appendChild(methodDiv);
+        
+        // 隐藏收款账户信息
+        paymentAccountInfo.style.display = "none";
+        
+        // 显示支付界面
+        paymentInfo.style.display = "block";
+        payButton.style.display = "block";
+        paidNotice.style.display = "none";
+        
+        // 更新支付按钮事件
+        payButton.onclick = () => {
+          handlePayment(documentId, "mock");
+        };
       }
 
       // 处理支付
@@ -590,6 +760,14 @@
               throw new Error(detail.detail || "支付失败");
             }
             
+            const paymentResult = await response.json();
+            
+            // 保存下载 token 到 localStorage，用于后续下载验证
+            if (paymentResult.download_token) {
+              localStorage.setItem(`download_token_${documentId}`, paymentResult.download_token);
+              console.log("已保存下载 token:", paymentResult.download_token);
+            }
+            
             showMessage(resultStatus, "支付成功，正式版已解锁！", false);
             await refreshDocumentStatus();
           } else {
@@ -601,6 +779,7 @@
           showMessage(resultStatus, error.message || "支付失败，请稍后重试", true);
         }
       }
+
     </script>
   </body>
 </html>

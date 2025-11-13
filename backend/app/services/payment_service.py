@@ -6,12 +6,32 @@ from .document_service import DocumentService
 
 
 class PaymentService:
-    # 默认价格（元）
+    # 默认价格（元）- 可以通过环境变量覆盖
     DEFAULT_PRICE = 9.9
     
     def __init__(self, document_dir: Path, template_dir: Path) -> None:
         self.document_dir = document_dir
         self.template_dir = template_dir
+
+    def get_price(self) -> float:
+        """获取配置的价格（从环境变量或使用默认值）"""
+        price_str = os.getenv("PAYMENT_PRICE")
+        if price_str:
+            try:
+                return float(price_str)
+            except ValueError:
+                pass
+        return self.DEFAULT_PRICE
+
+    def get_payment_account(self) -> dict:
+        """获取收款账户信息"""
+        return {
+            "alipay_account": os.getenv("ALIPAY_ACCOUNT", ""),
+            "wechat_account": os.getenv("WECHAT_ACCOUNT", ""),
+            "bank_account": os.getenv("BANK_ACCOUNT", ""),
+            "bank_name": os.getenv("BANK_NAME", ""),
+            "account_name": os.getenv("ACCOUNT_NAME", ""),
+        }
 
     def calculate_price(self, document_id: str) -> float:
         """计算文档处理价格"""
@@ -21,8 +41,8 @@ class PaymentService:
             raise FileNotFoundError("document not found")
         
         # 可以根据文档复杂度、页数等计算价格
-        # 这里使用固定价格
-        return self.DEFAULT_PRICE
+        # 这里使用配置的价格
+        return self.get_price()
 
     def get_payment_info(self, document_id: str) -> dict:
         """获取支付信息"""
@@ -51,12 +71,15 @@ class PaymentService:
         if os.getenv("STRIPE_SECRET_KEY"):
             payment_methods.append("stripe")
         
+        payment_account = self.get_payment_account()
+        
         return {
             "document_id": document_id,
             "amount": self.calculate_price(document_id),
             "currency": "CNY",
             "payment_methods": payment_methods,
             "paid": False,
+            "payment_account": payment_account,
         }
 
     def mark_as_paid(self, document_id: str, payment_method: str = "mock") -> dict:

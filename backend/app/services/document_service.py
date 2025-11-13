@@ -32,6 +32,8 @@ class DocumentService:
 
         template_metadata = self._load_template(template_id)
         document_id = uuid.uuid4().hex
+        # 生成唯一的下载 token，用于验证用户身份
+        download_token = uuid.uuid4().hex
         task_dir = self.document_dir / document_id
         task_dir.mkdir(parents=True, exist_ok=True)
 
@@ -76,6 +78,7 @@ class DocumentService:
             "template_id": template_id,
             "status": "completed",
             "paid": False,
+            "download_token": download_token,  # 下载验证 token
             "summary": stats,
             "report_path": str(report_path),
             "preview_path": str(preview_path),
