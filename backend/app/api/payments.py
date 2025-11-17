@@ -145,7 +145,7 @@ async def create_payjs_payment(payload: PaymentRequest) -> dict:
     
     # 获取回调地址
     base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
-    notify_url = f"{base_url}/api/payments/payjs/notify"
+    notify_url = f"{base_url}/payments/payjs/notify"  # 注意：没有 /api 前缀
     
     # 创建支付订单
     payjs_service = PayJSService()
@@ -233,9 +233,16 @@ async def create_wechat_payment(payload: PaymentRequest, request: Request) -> di
     try:
         from ..services.wechat_pay_service import WeChatPayService
     except ValueError as e:
+        print(f"[WeChat API] 导入服务失败: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"微信支付配置错误: {str(e)}"
+        )
+    except Exception as e:
+        print(f"[WeChat API] 导入服务异常: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"微信支付服务初始化失败: {str(e)}"
         )
     
     service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
@@ -243,37 +250,58 @@ async def create_wechat_payment(payload: PaymentRequest, request: Request) -> di
     # 检查文档是否存在
     try:
         amount = service.calculate_price(payload.document_id)
+        print(f"[WeChat API] 计算价格: {amount} 元")
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     
     # 获取回调地址
     base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
-    notify_url = f"{base_url}/api/payments/wechat/notify"
+    notify_url = f"{base_url}/payments/wechat/notify"  # 注意：没有 /api 前缀
+    print(f"[WeChat API] 回调地址: {notify_url}")
     
     # 获取客户端IP
     client_ip = request.client.host if request.client else None
+    print(f"[WeChat API] 客户端IP: {client_ip}")
     
     # 创建支付订单
-    wechat_service = WeChatPayService()
-    result = await wechat_service.create_h5_payment(
-        out_trade_no=payload.document_id,
-        total_fee=amount,
-        body=f"论文格式修复服务 - {payload.document_id[:8]}",
-        notify_url=notify_url,
-        client_ip=client_ip,
-    )
-    
-    if not result.get("success"):
+    try:
+        wechat_service = WeChatPayService()
+        print(f"[WeChat API] 微信支付服务初始化成功")
+        
+        result = await wechat_service.create_h5_payment(
+            out_trade_no=payload.document_id,
+            total_fee=amount,
+            body=f"论文格式修复服务 - {payload.document_id[:8]}",
+            notify_url=notify_url,
+            client_ip=client_ip,
+        )
+        
+        print(f"[WeChat API] 创建支付订单结果: {result}")
+        
+        if not result.get("success"):
+            error_msg = result.get("message", "创建支付订单失败")
+            print(f"[WeChat API] 创建订单失败: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg
+            )
+        
+        return {
+            "payment_url": result.get("payment_url"),
+            "document_id": payload.document_id,
+            "prepay_id": result.get("prepay_id"),
+            "payment_type": result.get("payment_type", "native"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[WeChat API] 创建支付订单异常: {str(e)}")
+        import traceback
+        print(f"[WeChat API] 异常堆栈: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.get("message", "创建支付订单失败")
+            detail=f"创建支付订单时发生错误: {str(e)}" if os.getenv("VERCEL_ENV") != "production" else "创建支付订单失败，请稍后重试"
         )
-    
-    return {
-        "payment_url": result.get("payment_url"),
-        "document_id": payload.document_id,
-        "prepay_id": result.get("prepay_id"),
-    }
 
 
 @router.post(
