@@ -108,7 +108,7 @@ class WeChatPayService:
         total_fee_cents = int(total_fee * 100)
         
         # 判断使用H5支付还是Native支付
-        # H5支付需要appid，如果没有appid则使用Native支付（扫码支付）
+        # 注意：Native支付也需要appid，如果没有appid，使用商户号作为appid（临时方案）
         use_h5 = bool(self.app_id)
         trade_type = "MWEB" if use_h5 else "NATIVE"
         
@@ -124,9 +124,16 @@ class WeChatPayService:
             "trade_type": trade_type,
         }
         
-        # H5支付需要appid和scene_info
-        if use_h5:
+        # 微信支付API v2要求必须有appid（即使是Native支付）
+        # 如果没有配置appid，使用商户号作为appid（某些情况下可以）
+        if not self.app_id:
+            print(f"[WeChatPay] 警告：未配置WECHAT_APP_ID，使用商户号作为appid")
+            data["appid"] = self.mch_id  # 使用商户号作为appid
+        else:
             data["appid"] = self.app_id
+        
+        # H5支付需要scene_info
+        if use_h5:
             data["scene_info"] = '{"h5_info": {"type":"Wap","wap_url":"https://geshixiugai.org","wap_name":"论文格式修复"}}'
         
         # 生成签名
