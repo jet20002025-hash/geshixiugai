@@ -33,11 +33,12 @@ async def get_payment_info(document_id: str) -> PaymentInfo:
         info = service.get_payment_info(document_id)
         from ..schemas.payments import PaymentAccount
         
-        # 调试信息：检查环境变量（仅在开发环境）
-        if os.getenv("VERCEL_ENV") != "production":
-            print(f"[DEBUG] 支付方式列表: {info['payment_methods']}")
-            print(f"[DEBUG] WECHAT_MCH_ID 存在: {bool(os.getenv('WECHAT_MCH_ID'))}")
-            print(f"[DEBUG] WECHAT_API_KEY 存在: {bool(os.getenv('WECHAT_API_KEY'))}")
+        # 调试信息：检查环境变量（所有环境都记录）
+        print(f"[API] 支付方式列表: {info['payment_methods']}")
+        print(f"[API] WECHAT_MCH_ID 存在: {bool(os.getenv('WECHAT_MCH_ID'))}")
+        print(f"[API] WECHAT_API_KEY 存在: {bool(os.getenv('WECHAT_API_KEY'))}")
+        print(f"[API] WECHAT_MCH_ID 值: {os.getenv('WECHAT_MCH_ID', '')[:4]}****" if os.getenv('WECHAT_MCH_ID') else "None")
+        print(f"[API] WECHAT_API_KEY 长度: {len(os.getenv('WECHAT_API_KEY', ''))}")
         
         return PaymentInfo(
             document_id=info["document_id"],
