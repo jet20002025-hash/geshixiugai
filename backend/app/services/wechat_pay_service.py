@@ -107,13 +107,22 @@ class WeChatPayService:
         # 金额转换为分（整数）
         total_fee_cents = int(total_fee * 100)
         
+        # 微信支付API v2要求必须有appid（无论是H5支付还是Native支付）
+        # 如果没有配置appid，无法创建支付订单
+        if not self.app_id:
+            return {
+                "success": False,
+                "message": "未配置WECHAT_APP_ID。请参考以下方式获取：1) 注册微信公众平台获取公众号AppID；2) 或注册微信开放平台创建移动应用获取AppID。Native支付（扫码支付）和H5支付都需要AppID。",
+            }
+        
         # 判断使用H5支付还是Native支付
-        # 注意：Native支付也需要appid，如果没有appid，使用商户号作为appid（临时方案）
-        use_h5 = bool(self.app_id)
+        # H5支付需要scene_info，Native支付不需要
+        use_h5 = True  # 默认使用H5支付，用户体验更好
         trade_type = "MWEB" if use_h5 else "NATIVE"
         
         # 构造请求参数
         data = {
+            "appid": self.app_id,  # 必须配置appid
             "mch_id": self.mch_id,
             "nonce_str": self._generate_nonce_str(),
             "body": body,
@@ -123,14 +132,6 @@ class WeChatPayService:
             "notify_url": notify_url,
             "trade_type": trade_type,
         }
-        
-        # 微信支付API v2要求必须有appid（即使是Native支付）
-        # 如果没有配置appid，使用商户号作为appid（某些情况下可以）
-        if not self.app_id:
-            print(f"[WeChatPay] 警告：未配置WECHAT_APP_ID，使用商户号作为appid")
-            data["appid"] = self.mch_id  # 使用商户号作为appid
-        else:
-            data["appid"] = self.app_id
         
         # H5支付需要scene_info
         if use_h5:
