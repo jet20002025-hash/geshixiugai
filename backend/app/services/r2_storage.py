@@ -8,9 +8,10 @@ from botocore.config import Config
 from pathlib import Path
 from typing import BinaryIO, Optional
 import io
+from .storage_base import StorageBase
 
 
-class R2Storage:
+class R2Storage(StorageBase):
     """Cloudflare R2 存储类"""
     
     def __init__(self):
