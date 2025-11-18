@@ -57,6 +57,17 @@ async def get_payment_info(document_id: str) -> PaymentInfo:
 )
 async def debug_payment_config() -> dict:
     """调试端点：检查支付相关的环境变量配置"""
+    # 检查支付宝配置
+    alipay_app_id = os.getenv("ALIPAY_APP_ID", "")
+    alipay_private_key = os.getenv("ALIPAY_PRIVATE_KEY", "")
+    alipay_public_key = os.getenv("ALIPAY_PUBLIC_KEY", "")
+    alipay_sign_type = os.getenv("ALIPAY_SIGN_TYPE", "")
+    alipay_gateway = os.getenv("ALIPAY_GATEWAY", "")
+    
+    # 检查支付宝密钥格式
+    alipay_private_key_has_begin = "BEGIN" in alipay_private_key if alipay_private_key else False
+    alipay_public_key_has_begin = "BEGIN" in alipay_public_key if alipay_public_key else False
+    
     config_status = {
         "wechat": {
             "mch_id_exists": bool(os.getenv("WECHAT_MCH_ID")),
@@ -67,6 +78,19 @@ async def debug_payment_config() -> dict:
         "payjs": {
             "mchid_exists": bool(os.getenv("PAYJS_MCHID")),
             "key_exists": bool(os.getenv("PAYJS_KEY")),
+        },
+        "alipay": {
+            "app_id_exists": bool(alipay_app_id),
+            "app_id_preview": alipay_app_id[:4] + "****" if alipay_app_id else None,
+            "private_key_exists": bool(alipay_private_key),
+            "private_key_length": len(alipay_private_key) if alipay_private_key else 0,
+            "private_key_has_begin": alipay_private_key_has_begin,
+            "public_key_exists": bool(alipay_public_key),
+            "public_key_length": len(alipay_public_key) if alipay_public_key else 0,
+            "public_key_has_begin": alipay_public_key_has_begin,
+            "sign_type": alipay_sign_type or "未设置",
+            "gateway": alipay_gateway or "未设置",
+            "configured": bool(alipay_app_id and alipay_private_key and alipay_public_key),
         },
         "payment_price": os.getenv("PAYMENT_PRICE", "未设置"),
         "base_url": os.getenv("BASE_URL", "未设置"),
@@ -79,7 +103,7 @@ async def debug_payment_config() -> dict:
         payment_methods.append("payjs")
     if os.getenv("WECHAT_MCH_ID") and os.getenv("WECHAT_API_KEY"):
         payment_methods.append("wechat")
-    if os.getenv("ALIPAY_APP_ID"):
+    if alipay_app_id and alipay_private_key and alipay_public_key:
         payment_methods.append("alipay")
     
     config_status["available_payment_methods"] = payment_methods
