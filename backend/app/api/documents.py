@@ -109,13 +109,16 @@ async def preview_document(document_id: str) -> HTMLResponse:
     if not metadata:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
 
-    preview_path = Path(metadata["preview_path"])
-    html_path = preview_path.with_suffix('.html')
+    # 尝试从存储或本地获取 HTML 文件
+    preview_path = Path(metadata.get("preview_path", ""))
+    html_path = preview_path.with_suffix('.html') if preview_path else DOCUMENT_DIR / document_id / "preview.html"
     
-    if not html_path.exists():
+    # 从存储或本地加载文件
+    html_file = service._get_file_from_storage_or_local(document_id, "html", "html", html_path)
+    if not html_file or not html_file.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="预览文件不存在，请重新处理文档")
     
-    html_content = html_path.read_text(encoding="utf-8")
+    html_content = html_file.read_text(encoding="utf-8")
     return HTMLResponse(content=html_content)
 
 
@@ -147,12 +150,16 @@ async def download_document(document_id: str, token: str) -> FileResponse:
             detail="下载 token 无效，请使用支付成功后获取的下载链接"
         )
 
-    final_path = Path(metadata["final_path"])
-    if not final_path.exists():
+    # 尝试从存储或本地获取文件
+    final_path = Path(metadata.get("final_path", "")) if metadata.get("final_path") else DOCUMENT_DIR / document_id / "final.docx"
+    
+    # 从存储或本地加载文件
+    final_file = service._get_file_from_storage_or_local(document_id, "final", "docx", final_path)
+    if not final_file or not final_file.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="正式版文件不存在")
 
     return FileResponse(
-        final_path,
+        final_file,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=f"{document_id}.docx",
     )

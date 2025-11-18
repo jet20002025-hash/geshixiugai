@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import re
 import shutil
 import uuid
 import xml.sax.saxutils
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -18,6 +20,7 @@ from docx.oxml.shared import OxmlElement
 from fastapi import UploadFile
 
 from .utils import docx_format_utils
+from .storage_factory import get_storage
 
 
 class DocumentService:
@@ -25,6 +28,9 @@ class DocumentService:
         self.document_dir = document_dir
         self.template_dir = template_dir
         self.document_dir.mkdir(parents=True, exist_ok=True)
+        # 获取存储实例（如果可用）
+        self.storage = get_storage()
+        self.use_storage = self.storage is not None
 
     async def process_document(self, template_id: str, upload: UploadFile) -> Tuple[str, Dict]:
         if not upload.filename or not upload.filename.lower().endswith(".docx"):
@@ -78,6 +84,16 @@ class DocumentService:
         report_path = task_dir / "report.json"
         report_path.write_text(json.dumps(report_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+        # 如果使用云存储，将文件上传到云存储
+        if self.use_storage:
+            self._save_to_storage(document_id, {
+                "original": original_path,
+                "final": final_path,
+                "preview": preview_path,
+                "html": html_path,
+                "report": report_path,
+            })
+
         metadata = {
             "document_id": document_id,
             "template_id": template_id,
@@ -95,23 +111,50 @@ class DocumentService:
 
         metadata_path = task_dir / "metadata.json"
         metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # 如果使用云存储，也上传 metadata
+        if self.use_storage:
+            self._save_file_to_storage(f"documents/{document_id}/metadata.json", metadata_path.read_bytes())
+        
         return document_id, stats
 
     def get_document_metadata(self, document_id: str) -> Dict:
+        # 优先从云存储读取
+        if self.use_storage:
+            metadata_key = f"documents/{document_id}/metadata.json"
+            if self.storage.file_exists(metadata_key):
+                content = self.storage.download_file(metadata_key)
+                if content:
+                    return json.loads(content.decode("utf-8"))
+        
+        # 回退到本地文件系统
         metadata_path = self.document_dir / document_id / "metadata.json"
         if not metadata_path.exists():
             return {}
         return json.loads(metadata_path.read_text(encoding="utf-8"))
 
     def update_metadata(self, document_id: str, **kwargs) -> Dict:
-        task_dir = self.document_dir / document_id
-        metadata_path = task_dir / "metadata.json"
-        if not metadata_path.exists():
+        # 先加载 metadata（优先从存储）
+        data = self.get_document_metadata(document_id)
+        if not data:
             raise FileNotFoundError("metadata not found")
-        data = json.loads(metadata_path.read_text(encoding="utf-8"))
+        
+        # 更新数据
         data.update(kwargs)
         data["updated_at"] = datetime.utcnow().isoformat()
+        
+        # 保存到本地和存储
+        task_dir = self.document_dir / document_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path = task_dir / "metadata.json"
         metadata_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # 如果使用云存储，也更新存储中的 metadata
+        if self.use_storage:
+            metadata_key = f"documents/{document_id}/metadata.json"
+            content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+            self._save_file_to_storage(metadata_key, content)
+        
         return data
 
     def _load_template(self, template_id: str) -> Dict:
@@ -802,6 +845,99 @@ class DocumentService:
             blank_paragraph._element.addnext(new_para_element)
         
         return issues
+
+    def _save_file_to_storage(self, key: str, content: bytes) -> bool:
+        """
+        保存文件到云存储
+        
+        Args:
+            key: 存储键（路径）
+            content: 文件内容（字节）
+        
+        Returns:
+            是否成功
+        """
+        if not self.use_storage:
+            return False
+        try:
+            file_obj = io.BytesIO(content)
+            return self.storage.upload_file(key, file_obj)
+        except Exception as e:
+            print(f"[Storage] Failed to save {key}: {e}")
+            return False
+
+    def _load_file_from_storage(self, key: str) -> Optional[bytes]:
+        """
+        从云存储加载文件
+        
+        Args:
+            key: 存储键（路径）
+        
+        Returns:
+            文件内容（字节），如果不存在则返回 None
+        """
+        if not self.use_storage:
+            return None
+        try:
+            return self.storage.download_file(key)
+        except Exception as e:
+            print(f"[Storage] Failed to load {key}: {e}")
+            return None
+
+    def _save_to_storage(self, document_id: str, files: Dict[str, Path]) -> None:
+        """
+        将文档文件保存到云存储
+        
+        Args:
+            document_id: 文档ID
+            files: 文件路径字典
+        """
+        if not self.use_storage:
+            return
+        
+        prefix = f"documents/{document_id}"
+        
+        # 保存所有文件
+        for file_type, file_path in files.items():
+            if file_path.exists():
+                key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                content = file_path.read_bytes()
+                if self._save_file_to_storage(key, content):
+                    print(f"[Storage] Saved {key}")
+                else:
+                    print(f"[Storage] Failed to save {key}")
+
+    def _get_file_from_storage_or_local(self, document_id: str, file_type: str, extension: str, local_path: Path) -> Optional[Path]:
+        """
+        从云存储或本地文件系统获取文件
+        
+        Args:
+            document_id: 文档ID
+            file_type: 文件类型（original, final, preview, html, report）
+            extension: 文件扩展名（docx, html, json）
+            local_path: 本地文件路径（用于回退）
+        
+        Returns:
+            文件路径（如果找到），否则返回 None
+        """
+        # 优先从云存储读取
+        if self.use_storage:
+            key = f"documents/{document_id}/{file_type}.{extension}"
+            if self.storage.file_exists(key):
+                content = self._load_file_from_storage(key)
+                if content:
+                    # 确保本地目录存在
+                    local_path.parent.mkdir(parents=True, exist_ok=True)
+                    # 写入本地临时文件
+                    local_path.write_bytes(content)
+                    print(f"[Storage] Loaded {key} to {local_path}")
+                    return local_path
+        
+        # 回退到本地文件系统
+        if local_path.exists():
+            return local_path
+        
+        return None
 
     def _generate_watermarked_preview(self, final_path: Path, preview_path: Path) -> None:
         shutil.copy2(final_path, preview_path)
