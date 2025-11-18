@@ -273,11 +273,21 @@
       // 页面加载时获取用户模板列表
       loadUserTemplates();
 
+      // 文件大小限制：4 MB（Vercel 限制）
+      const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
+
       templateForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         const file = document.getElementById("templateFile").files[0];
         if (!file) {
           showMessage(templateStatus, "请选择模板文件", true);
+          return;
+        }
+
+        // 检查文件大小
+        if (file.size > MAX_FILE_SIZE) {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          showMessage(templateStatus, `文件太大（${fileSizeMB} MB），最大支持 4 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
           return;
         }
 
@@ -340,6 +350,13 @@
         }
         if (!file) {
           showMessage(documentStatus, "请选择学生文档", true);
+          return;
+        }
+
+        // 检查文件大小
+        if (file.size > MAX_FILE_SIZE) {
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          showMessage(documentStatus, `文件太大（${fileSizeMB} MB），最大支持 4 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
           return;
         }
 

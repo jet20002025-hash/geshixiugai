@@ -23,6 +23,10 @@ else:
 # 确保目录存在
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Vercel 请求体大小限制：4.5 MB
+# 为了安全，我们设置 4 MB 的限制
+MAX_FILE_SIZE = 4 * 1024 * 1024  # 4 MB
+
 
 @router.post(
     "",
@@ -32,6 +36,8 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 async def upload_template(request: Request, response: Response, file: UploadFile) -> TemplateCreateResponse:
     """
     上传模板并生成规则库，模板与当前用户（session）关联
+    
+    注意：文件大小限制为 4 MB（Vercel 限制）
     """
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件名不能为空")
@@ -40,6 +46,15 @@ async def upload_template(request: Request, response: Response, file: UploadFile
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="仅支持 docx 模板文件，请先将模板转换为 docx 格式",
+        )
+    
+    # 检查文件大小
+    if file.size and file.size > MAX_FILE_SIZE:
+        file_size_mb = file.size / (1024 * 1024)
+        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"文件太大（{file_size_mb:.2f} MB），最大支持 {max_size_mb} MB。请压缩文档中的图片或删除不必要的图片后再上传。"
         )
 
     # 获取或创建用户 session_id

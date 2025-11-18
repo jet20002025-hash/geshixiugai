@@ -31,6 +31,11 @@ DOCUMENT_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# Vercel 请求体大小限制：4.5 MB
+# 为了安全，我们设置 4 MB 的限制
+MAX_FILE_SIZE = 4 * 1024 * 1024  # 4 MB
+
+
 @router.post(
     "",
     response_model=DocumentCreateResponse,
@@ -39,7 +44,18 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 async def upload_document(request: Request, template_id: str, file: UploadFile) -> DocumentCreateResponse:
     """
     上传待修复文档，只能使用自己上传的模板
+    
+    注意：文件大小限制为 4 MB（Vercel 限制）
     """
+    # 检查文件大小
+    if file.size and file.size > MAX_FILE_SIZE:
+        file_size_mb = file.size / (1024 * 1024)
+        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"文件太大（{file_size_mb:.2f} MB），最大支持 {max_size_mb} MB。请压缩文档中的图片或删除不必要的图片后再上传。"
+        )
+    
     # 获取用户 session_id
     session_id = get_or_create_session_id(request)
     
