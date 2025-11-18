@@ -32,3 +32,19 @@ Thumbs.db
 *.tmp
 *.bak
 
+# 敏感配置文件（包含真实密钥的配置说明）
+# 注意：如果配置文件中包含真实密钥，请添加到 .gitignore
+# 以下文件如果包含真实密钥，请添加到 .gitignore：
+# 微信支付配置说明.md
+# 支付宝配置说明.md
+# 安全配置指南.md
+
+# 包含真实密钥的本地配置文件（如果存在）
+config.local.*
+*.local.*
+.env
+.env.local
+.env.production
+secrets.*
+*secrets*
+

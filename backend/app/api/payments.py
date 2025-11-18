@@ -351,3 +351,127 @@ async def wechat_notify(request: Request) -> str:
         # 支付失败
         return '<xml><return_code><![CDATA[FAIL]]></return_code><return_msg><![CDATA[支付失败]]></return_msg></xml>'
 
+
+@router.post(
+    "/alipay/create",
+    summary="创建支付宝支付订单",
+)
+async def create_alipay_payment(payload: PaymentRequest) -> dict:
+    """创建支付宝支付订单，返回支付URL"""
+    try:
+        from ..services.alipay_service import AlipayService
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"支付宝配置错误: {str(e)}"
+        )
+    except Exception as e:
+        print(f"[Alipay API] 导入服务异常: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"支付宝服务初始化失败: {str(e)}"
+        )
+    
+    service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+    
+    # 检查文档是否存在
+    try:
+        amount = service.calculate_price(payload.document_id)
+        print(f"[Alipay API] 计算价格: {amount} 元")
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    
+    # 获取回调地址
+    base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
+    return_url = f"{base_url}/web/"  # 支付成功跳转回网站
+    notify_url = f"{base_url}/payments/alipay/notify"  # 支付回调地址
+    print(f"[Alipay API] 回调地址: {notify_url}")
+    
+    # 创建支付订单
+    try:
+        alipay_service = AlipayService()
+        print(f"[Alipay API] 支付宝服务初始化成功")
+        
+        result = alipay_service.create_payment(
+            out_trade_no=payload.document_id,
+            total_amount=amount,
+            subject=f"论文格式修复服务 - {payload.document_id[:8]}",
+            return_url=return_url,
+            notify_url=notify_url,
+        )
+        
+        print(f"[Alipay API] 创建支付订单结果: {result.get('success')}")
+        
+        if not result.get("success"):
+            error_msg = result.get("message", "创建支付订单失败")
+            print(f"[Alipay API] 创建订单失败: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg
+            )
+        
+        return {
+            "payment_url": result.get("payment_url"),
+            "document_id": payload.document_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Alipay API] 创建支付订单异常: {str(e)}")
+        import traceback
+        print(f"[Alipay API] 异常堆栈: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建支付订单时发生错误: {str(e)}" if os.getenv("VERCEL_ENV") != "production" else "创建支付订单失败，请稍后重试"
+        )
+
+
+@router.post(
+    "/alipay/notify",
+    summary="支付宝支付回调",
+)
+async def alipay_notify(request: Request) -> str:
+    """
+    处理支付宝支付回调通知
+    
+    注意：支付宝回调使用 form-data 格式
+    """
+    try:
+        from ..services.alipay_service import AlipayService
+    except ValueError as e:
+        return "fail"  # 支付宝要求返回 "fail" 表示失败
+    
+    # 获取回调数据（form-data 格式）
+    form_data = await request.form()
+    data = dict(form_data)
+    
+    print(f"[Alipay API] 收到支付回调: {data.get('out_trade_no')}")
+    
+    # 验证签名
+    alipay_service = AlipayService()
+    if not alipay_service.verify_notify(data):
+        print(f"[Alipay API] 签名验证失败")
+        return "fail"  # 支付宝要求返回 "fail" 表示失败
+    
+    # 检查支付状态
+    trade_status = data.get("trade_status")
+    if trade_status == "TRADE_SUCCESS" or trade_status == "TRADE_FINISHED":
+        # 支付成功
+        document_id = data.get("out_trade_no")
+        
+        if document_id:
+            try:
+                payment_service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+                payment_service.mark_as_paid(document_id, payment_method="alipay")
+                print(f"[Alipay API] 订单 {document_id} 已标记为已支付")
+            except Exception as e:
+                # 记录错误但不返回错误给支付宝（避免重复回调）
+                print(f"[Alipay API] 标记订单为已支付失败: {e}")
+        
+        # 返回成功响应（支付宝要求返回 "success"）
+        return "success"
+    else:
+        # 支付失败或其他状态
+        print(f"[Alipay API] 支付状态: {trade_status}")
+        return "fail"
+

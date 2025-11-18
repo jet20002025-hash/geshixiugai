@@ -55,6 +55,11 @@ class DocumentService:
         reference_issues = self._check_reference_citations(final_doc)
         if reference_issues:
             stats["reference_issues"] = reference_issues
+        
+        # 检测大段空白
+        blank_issues = self._check_excessive_blanks(final_doc)
+        if blank_issues:
+            stats["blank_issues"] = blank_issues
 
         final_path = task_dir / "final.docx"
         final_doc.save(final_path)
@@ -533,6 +538,184 @@ class DocumentService:
                     "suggestion": "请在正文中添加引用标注，格式如：[1] 或 [1,2,3] 或 (作者, 年份)",
                     "reference_count": len(reference_items)
                 })
+        
+        return issues
+
+    def _check_excessive_blanks(self, document: Document) -> list:
+        """
+        检测文档中的大段空白
+        
+        规则：
+        - 两个章节之间允许有大段空白
+        - 在同一章节内，不允许有大段空白（连续2个以上空白段落）
+        
+        Returns:
+            问题列表
+        """
+        issues = []
+        blank_paragraph_indices = []  # 记录需要标记的空白段落索引
+        
+        # 识别章节边界的模式
+        chapter_patterns = [
+            r'^第[一二三四五六七八九十\d]+章',  # 第一章、第二章等
+            r'^第[一二三四五六七八九十\d]+节',  # 第一节、第二节等
+            r'^\d+\.\d+',  # 1.1、2.1 等
+            r'^第\d+章',  # 第1章、第2章等
+            r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
+            r'^附录[一二三四五六七八九十\d]',  # 附录一、附录二
+            r'^Abstract',  # 摘要
+            r'^摘要',
+            r'^参考文献',
+            r'^致谢',
+        ]
+        
+        # 判断段落是否为章节标题
+        def is_chapter_title(paragraph) -> bool:
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if not para_text:
+                return False
+            
+            # 检查是否符合章节标题模式
+            for pattern in chapter_patterns:
+                if re.match(pattern, para_text):
+                    return True
+            
+            # 检查是否为标题样式（通常标题样式名称包含"标题"或"Heading"）
+            style_name = paragraph.style.name if paragraph.style else ""
+            if '标题' in style_name or 'Heading' in style_name.lower():
+                # 进一步验证：标题通常较短且格式特殊
+                if len(para_text) < 50:  # 标题通常较短
+                    return True
+            
+            return False
+        
+        # 判断段落是否为空（空白段落）
+        def is_blank_paragraph(paragraph) -> bool:
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            # 空白段落：文本为空或只有空白字符
+            return len(para_text) == 0
+        
+        # 遍历所有段落，识别章节和空白
+        current_chapter_start = 0  # 当前章节的起始段落索引
+        consecutive_blanks = 0  # 连续空白段落计数
+        blank_start_idx = None  # 连续空白段的起始索引
+        
+        for idx, paragraph in enumerate(document.paragraphs):
+            # 检查是否为章节标题
+            if is_chapter_title(paragraph):
+                # 遇到新章节标题
+                # 如果之前有连续空白，检查这些空白是否在章节标题后（允许）还是在章节内（需要标记）
+                if consecutive_blanks >= 2 and blank_start_idx is not None:
+                    # 检查空白段之前是否有章节标题
+                    is_after_chapter = False
+                    if blank_start_idx > 0:
+                        prev_para = document.paragraphs[blank_start_idx - 1]
+                        if is_chapter_title(prev_para):
+                            # 空白段紧跟在章节标题后，这是章节间的空白，允许
+                            is_after_chapter = True
+                    
+                    # 如果空白段不在章节标题后，而是在章节内，标记为问题
+                    if not is_after_chapter:
+                        issues.append({
+                            "type": "excessive_blanks_in_chapter",
+                            "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（章节内）",
+                            "suggestion": "请删除章节内的多余空白，章节之间可以保留适当空白",
+                            "chapter_start": current_chapter_start,
+                            "blank_start": blank_start_idx,
+                            "blank_count": consecutive_blanks,
+                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                        })
+                        # 记录需要标记的段落
+                        blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                
+                # 开始新章节，重置计数（章节标题后的空白是允许的）
+                current_chapter_start = idx
+                consecutive_blanks = 0
+                blank_start_idx = None
+            else:
+                # 检查是否为空白段落
+                if is_blank_paragraph(paragraph):
+                    if consecutive_blanks == 0:
+                        # 开始新的连续空白段
+                        blank_start_idx = idx
+                    consecutive_blanks += 1
+                else:
+                    # 遇到非空白段落
+                    # 如果之前有连续空白且在同一章节内，检查是否需要标记
+                    if consecutive_blanks >= 2 and blank_start_idx is not None:
+                        # 在同一章节内（不是章节边界），标记为问题
+                        # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，可能是章节间的空白，允许）
+                        is_after_chapter = False
+                        if blank_start_idx > 0:
+                            prev_para = document.paragraphs[blank_start_idx - 1]
+                            if is_chapter_title(prev_para):
+                                is_after_chapter = True
+                        
+                        # 如果空白段不在章节标题后，且在同一章节内，标记为问题
+                        if not is_after_chapter:
+                            issues.append({
+                                "type": "excessive_blanks_in_chapter",
+                                "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（章节内）",
+                                "suggestion": "请删除章节内的多余空白，章节之间可以保留适当空白",
+                                "chapter_start": current_chapter_start,
+                                "blank_start": blank_start_idx,
+                                "blank_count": consecutive_blanks,
+                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                            })
+                            # 记录需要标记的段落
+                            blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                    
+                    # 重置计数
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+        
+        # 处理文档末尾的连续空白
+        if consecutive_blanks >= 2 and blank_start_idx is not None:
+            # 检查是否在章节标题后
+            is_after_chapter = False
+            if blank_start_idx > 0:
+                prev_para = document.paragraphs[blank_start_idx - 1]
+                if is_chapter_title(prev_para):
+                    is_after_chapter = True
+            
+            if not is_after_chapter:
+                issues.append({
+                    "type": "excessive_blanks_in_chapter",
+                    "message": f"文档末尾第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落",
+                    "suggestion": "请删除文档末尾的多余空白",
+                    "chapter_start": current_chapter_start,
+                    "blank_start": blank_start_idx,
+                    "blank_count": consecutive_blanks,
+                    "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                })
+                blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+        
+        # 在文档中标记问题（从后往前插入，避免索引变化）
+        for blank_idx in sorted(set(blank_paragraph_indices), reverse=True):
+            blank_paragraph = document.paragraphs[blank_idx]
+            
+            # 创建标记文本
+            marker_text = "⚠️ 【章节内多余空白】请删除此空白段落"
+            escaped_text = xml.sax.saxutils.escape(marker_text)
+            
+            # 创建标记段落（插入在空白段落之后，这样更容易看到）
+            new_para_xml = f'''<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                <w:pPr>
+                    <w:jc w:val="left"/>
+                </w:pPr>
+                <w:r>
+                    <w:rPr>
+                        <w:b/>
+                        <w:color w:val="FF0000"/>
+                        <w:highlight w:val="yellow"/>
+                    </w:rPr>
+                    <w:t xml:space="preserve">{escaped_text}</w:t>
+                </w:r>
+            </w:p>'''
+            
+            # 解析并插入新段落（在空白段落之后）
+            new_para_element = parse_xml(new_para_xml)
+            blank_paragraph._element.addnext(new_para_element)
         
         return issues
 
