@@ -125,14 +125,25 @@ async def debug_payment_config() -> dict:
 )
 async def mock_payment(payload: PaymentRequest) -> PaymentResponse:
     """模拟支付，直接标记为已付费（用于测试）"""
+    print(f"[Mock Payment API] 收到支付请求，document_id: {payload.document_id}")
+    print(f"[Mock Payment API] DOCUMENT_DIR: {DOCUMENT_DIR}")
+    print(f"[Mock Payment API] DOCUMENT_DIR 是否存在: {DOCUMENT_DIR.exists()}")
+    print(f"[Mock Payment API] VERCEL 环境: {os.getenv('VERCEL')}, VERCEL_ENV: {os.getenv('VERCEL_ENV')}")
+    
     service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     try:
         metadata = service.mark_as_paid(
             document_id=payload.document_id,
             payment_method=payload.payment_method or "mock"
         )
-    except FileNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+        print(f"[Mock Payment API] 支付成功，metadata: {metadata}")
+    except FileNotFoundError as e:
+        print(f"[Mock Payment API] 文档不存在错误: {str(e)}")
+        # 列出所有文档目录，用于调试
+        if DOCUMENT_DIR.exists():
+            all_docs = [d.name for d in DOCUMENT_DIR.iterdir() if d.is_dir()]
+            print(f"[Mock Payment API] 所有文档目录: {all_docs}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"文档不存在: {payload.document_id}")
 
     return PaymentResponse(
         document_id=payload.document_id,

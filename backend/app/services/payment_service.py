@@ -99,9 +99,22 @@ class PaymentService:
 
     def mark_as_paid(self, document_id: str, payment_method: str = "mock") -> dict:
         """标记文档为已付费"""
+        print(f"[PaymentService] mark_as_paid 调用，document_id: {document_id}, payment_method: {payment_method}")
+        print(f"[PaymentService] document_dir: {self.document_dir}")
+        print(f"[PaymentService] document_dir 是否存在: {self.document_dir.exists()}")
+        
         document_service = DocumentService(document_dir=self.document_dir, template_dir=self.template_dir)
         metadata = document_service.get_document_metadata(document_id)
+        
+        print(f"[PaymentService] metadata: {metadata}")
+        print(f"[PaymentService] metadata 路径: {self.document_dir / document_id / 'metadata.json'}")
+        print(f"[PaymentService] metadata 文件是否存在: {(self.document_dir / document_id / 'metadata.json').exists()}")
+        
         if not metadata:
+            # 列出所有文档目录，用于调试
+            if self.document_dir.exists():
+                all_docs = [d.name for d in self.document_dir.iterdir() if d.is_dir()]
+                print(f"[PaymentService] 所有文档目录: {all_docs}")
             raise FileNotFoundError("document not found")
         
         if metadata.get("paid"):
