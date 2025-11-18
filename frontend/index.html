@@ -393,9 +393,16 @@
       });
 
       async function refreshDocumentStatus() {
+        // 如果 latestDocumentId 为空，尝试从页面元素恢复
         if (!latestDocumentId) {
-          console.warn("refreshDocumentStatus: latestDocumentId 为空，无法刷新状态");
-          return;
+          const docIdText = docIdSpan ? docIdSpan.textContent : null;
+          if (docIdText && docIdText.trim()) {
+            latestDocumentId = docIdText.trim();
+            console.log("从页面元素恢复 documentId:", latestDocumentId);
+          } else {
+            console.warn("refreshDocumentStatus: latestDocumentId 为空，无法刷新状态");
+            return;
+          }
         }
         
         console.log("刷新文档状态，documentId:", latestDocumentId);
@@ -727,11 +734,27 @@
             e.preventDefault();
             e.stopPropagation();
             console.log("支付按钮onclick事件触发");
+            
+            // 确保 documentId 存在，如果不存在则从页面元素获取
+            let currentDocumentId = documentId;
+            if (!currentDocumentId) {
+              const docIdText = docIdSpan ? docIdSpan.textContent : null;
+              if (docIdText && docIdText.trim()) {
+                currentDocumentId = docIdText.trim();
+                console.log("从页面元素获取 documentId:", currentDocumentId);
+              } else {
+                console.error("无法获取 documentId，支付按钮点击失败");
+                showMessage(resultStatus, "无法获取文档ID，请刷新页面重试", true);
+                return;
+              }
+            }
+            
             const selected = document.querySelector('input[name="paymentMethod"]:checked');
             const methodValue = selected ? selected.value : selectedMethod;
             console.log("支付按钮点击，选中的支付方式:", methodValue, "selected:", selected, "selectedMethod:", selectedMethod);
             console.log("所有支付方式radio:", document.querySelectorAll('input[name="paymentMethod"]'));
-            handlePayment(documentId, methodValue);
+            console.log("使用的 documentId:", currentDocumentId);
+            handlePayment(currentDocumentId, methodValue);
           };
           console.log("支付按钮事件设置完成");
         } catch (error) {
@@ -789,12 +812,41 @@
           e.preventDefault();
           e.stopPropagation();
           console.log("默认支付按钮onclick事件触发（mock支付）");
-          handlePayment(documentId, "mock");
+          
+          // 确保 documentId 存在，如果不存在则从页面元素获取
+          let currentDocumentId = documentId;
+          if (!currentDocumentId) {
+            const docIdText = docIdSpan ? docIdSpan.textContent : null;
+            if (docIdText && docIdText.trim()) {
+              currentDocumentId = docIdText.trim();
+              console.log("从页面元素获取 documentId:", currentDocumentId);
+            } else {
+              console.error("无法获取 documentId，支付按钮点击失败");
+              showMessage(resultStatus, "无法获取文档ID，请刷新页面重试", true);
+              return;
+            }
+          }
+          
+          console.log("使用的 documentId:", currentDocumentId);
+          handlePayment(currentDocumentId, "mock");
         };
       }
 
       // 处理支付
       async function handlePayment(documentId, paymentMethod) {
+        // 如果 documentId 为空，尝试从页面元素获取
+        if (!documentId) {
+          const docIdText = docIdSpan ? docIdSpan.textContent : null;
+          if (docIdText && docIdText.trim()) {
+            documentId = docIdText.trim();
+            console.log("handlePayment: 从页面元素获取 documentId:", documentId);
+          } else {
+            console.error("handlePayment: documentId 为空，无法处理支付");
+            showMessage(resultStatus, "无法获取文档ID，请刷新页面重试", true);
+            return;
+          }
+        }
+        
         if (!paymentMethod) {
           showMessage(resultStatus, "请选择支付方式", true);
           return;
@@ -804,7 +856,7 @@
         if (paymentMethod && typeof paymentMethod === 'string') {
           paymentMethod = paymentMethod.toLowerCase().trim();
         }
-        console.log("选择的支付方式:", paymentMethod, "类型:", typeof paymentMethod);
+        console.log("handlePayment: documentId:", documentId, "paymentMethod:", paymentMethod, "类型:", typeof paymentMethod);
 
         try {
           showMessage(resultStatus, "处理支付中...", false);
