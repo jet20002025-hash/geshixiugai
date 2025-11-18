@@ -27,9 +27,11 @@ class AlipayService:
         
         # 处理私钥格式（确保包含BEGIN/END标记）
         private_key = self._format_private_key(self.app_private_key)
+        print(f"[AlipayService] 私钥格式化完成，长度: {len(private_key)}, 包含BEGIN标记: {'BEGIN' in private_key}")
         
         # 处理支付宝公钥格式（确保包含BEGIN/END标记）
         public_key = self._format_public_key(self.alipay_public_key)
+        print(f"[AlipayService] 公钥格式化完成，长度: {len(public_key)}, 包含BEGIN标记: {'BEGIN' in public_key}")
         
         # 初始化支付宝客户端
         try:
@@ -42,8 +44,11 @@ class AlipayService:
                 debug=False,  # 生产环境
                 config=AliPayConfig(timeout=15)
             )
+            print(f"[AlipayService] 支付宝客户端初始化成功")
         except Exception as e:
             print(f"[AlipayService] 初始化支付宝客户端失败: {str(e)}")
+            import traceback
+            print(f"[AlipayService] 初始化错误堆栈: {traceback.format_exc()}")
             raise ValueError(f"支付宝客户端初始化失败: {str(e)}")
     
     def _format_private_key(self, key: str) -> str:
@@ -135,11 +140,20 @@ class AlipayService:
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"[AlipayService] 创建支付订单失败: {str(e)}")
+            error_msg = str(e)
+            print(f"[AlipayService] 创建支付订单失败: {error_msg}")
             print(f"[AlipayService] 错误堆栈: {error_trace}")
+            
+            # 如果是签名错误，提供更详细的提示
+            if "sign" in error_msg.lower() or "签名" in error_msg or "invalid-signature" in error_msg:
+                return {
+                    "success": False,
+                    "message": f"签名验证失败。请检查：1) 应用私钥(ALIPAY_PRIVATE_KEY)和应用公钥是否匹配（应用公钥需上传到支付宝）；2) 密钥格式是否正确（需包含BEGIN/END标记）。错误详情: {error_msg}",
+                }
+            
             return {
                 "success": False,
-                "message": f"创建支付订单失败: {str(e)}",
+                "message": f"创建支付订单失败: {error_msg}",
             }
     
     def verify_notify(self, data: Dict) -> bool:
