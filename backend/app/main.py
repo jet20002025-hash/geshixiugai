@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .routers import template_router, document_router, payment_router
@@ -28,6 +28,13 @@ def create_app() -> FastAPI:
     app.include_router(template_router, prefix="/templates", tags=["templates"])
     app.include_router(document_router, prefix="/documents", tags=["documents"])
     app.include_router(payment_router, prefix="/payments", tags=["payments"])
+
+    # 处理 favicon 请求，避免 404 错误
+    @app.get("/favicon.ico", include_in_schema=False)
+    @app.get("/favicon.png", include_in_schema=False)
+    async def favicon():
+        """返回空响应，避免浏览器请求 favicon 时出现 404"""
+        return Response(status_code=204)  # No Content
 
     frontend_dir = Path("frontend")
     if frontend_dir.exists():
