@@ -389,9 +389,11 @@ async def create_alipay_payment(payload: PaymentRequest) -> dict:
     
     # 创建支付订单
     try:
+        print(f"[Alipay API] 开始初始化支付宝服务...")
         alipay_service = AlipayService()
         print(f"[Alipay API] 支付宝服务初始化成功")
         
+        print(f"[Alipay API] 准备创建支付订单，订单号: {payload.document_id}, 金额: {amount}")
         result = alipay_service.create_payment(
             out_trade_no=payload.document_id,
             total_amount=amount,
@@ -400,26 +402,44 @@ async def create_alipay_payment(payload: PaymentRequest) -> dict:
             notify_url=notify_url,
         )
         
-        print(f"[Alipay API] 创建支付订单结果: {result.get('success')}")
+        print(f"[Alipay API] 创建支付订单结果: success={result.get('success')}")
         
         if not result.get("success"):
             error_msg = result.get("message", "创建支付订单失败")
             print(f"[Alipay API] 创建订单失败: {error_msg}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_msg
+                detail=error_msg if os.getenv("VERCEL_ENV") != "production" else "创建支付订单失败，请稍后重试"
             )
         
+        payment_url = result.get("payment_url")
+        if not payment_url:
+            print(f"[Alipay API] 警告：未获取到支付URL")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="未获取到支付链接" if os.getenv("VERCEL_ENV") != "production" else "创建支付订单失败，请稍后重试"
+            )
+        
+        print(f"[Alipay API] 支付URL生成成功，长度: {len(payment_url)}")
         return {
-            "payment_url": result.get("payment_url"),
+            "payment_url": payment_url,
             "document_id": payload.document_id,
         }
     except HTTPException:
         raise
+    except ValueError as e:
+        # 配置错误
+        error_msg = str(e)
+        print(f"[Alipay API] 配置错误: {error_msg}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg if os.getenv("VERCEL_ENV") != "production" else "支付宝配置错误，请联系管理员"
+        )
     except Exception as e:
         print(f"[Alipay API] 创建支付订单异常: {str(e)}")
         import traceback
-        print(f"[Alipay API] 异常堆栈: {traceback.format_exc()}")
+        error_trace = traceback.format_exc()
+        print(f"[Alipay API] 异常堆栈: {error_trace}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"创建支付订单时发生错误: {str(e)}" if os.getenv("VERCEL_ENV") != "production" else "创建支付订单失败，请稍后重试"

@@ -28,16 +28,23 @@ class AlipayService:
         # 处理私钥格式（确保包含BEGIN/END标记）
         private_key = self._format_private_key(self.app_private_key)
         
+        # 处理支付宝公钥格式（确保包含BEGIN/END标记）
+        public_key = self._format_public_key(self.alipay_public_key)
+        
         # 初始化支付宝客户端
-        self.alipay = AliPay(
-            appid=self.app_id,
-            app_notify_url=None,  # 在创建订单时指定
-            app_private_key_string=private_key,
-            alipay_public_key_string=self.alipay_public_key,
-            sign_type=self.sign_type,
-            debug=False,  # 生产环境
-            config=AliPayConfig(timeout=15)
-        )
+        try:
+            self.alipay = AliPay(
+                appid=self.app_id,
+                app_notify_url=None,  # 在创建订单时指定
+                app_private_key_string=private_key,
+                alipay_public_key_string=public_key,
+                sign_type=self.sign_type,
+                debug=False,  # 生产环境
+                config=AliPayConfig(timeout=15)
+            )
+        except Exception as e:
+            print(f"[AlipayService] 初始化支付宝客户端失败: {str(e)}")
+            raise ValueError(f"支付宝客户端初始化失败: {str(e)}")
     
     def _format_private_key(self, key: str) -> str:
         """
@@ -61,6 +68,28 @@ class AlipayService:
         formatted_key = "\n".join([key[i:i+64] for i in range(0, len(key), 64)])
         return f"-----BEGIN PRIVATE KEY-----\n{formatted_key}\n-----END PRIVATE KEY-----"
     
+    def _format_public_key(self, key: str) -> str:
+        """
+        格式化支付宝公钥，确保包含BEGIN/END标记
+        
+        Args:
+            key: 原始公钥字符串（可能没有BEGIN/END标记）
+            
+        Returns:
+            格式化后的公钥
+        """
+        key = key.strip()
+        
+        # 如果已经有BEGIN/END标记，直接返回
+        if "BEGIN PUBLIC KEY" in key or "BEGIN RSA PUBLIC KEY" in key:
+            return key
+        
+        # 如果没有标记，添加标记
+        # 支付宝公钥通常是 RSA 格式
+        # 将长字符串按64字符一行格式化
+        formatted_key = "\n".join([key[i:i+64] for i in range(0, len(key), 64)])
+        return f"-----BEGIN PUBLIC KEY-----\n{formatted_key}\n-----END PUBLIC KEY-----"
+    
     def create_payment(
         self,
         out_trade_no: str,
@@ -83,6 +112,7 @@ class AlipayService:
             支付参数，包含支付URL
         """
         try:
+            print(f"[AlipayService] 开始创建支付订单，订单号: {out_trade_no}, 金额: {total_amount}")
             # 调用支付宝接口创建订单
             order_string = self.alipay.api_alipay_trade_wap_pay(
                 out_trade_no=out_trade_no,
@@ -91,6 +121,8 @@ class AlipayService:
                 return_url=return_url,
                 notify_url=notify_url,
             )
+            
+            print(f"[AlipayService] 订单字符串生成成功，长度: {len(order_string) if order_string else 0}")
             
             # 生成支付URL
             payment_url = f"{self.gateway}?{order_string}"
@@ -101,7 +133,10 @@ class AlipayService:
                 "order_string": order_string,
             }
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
             print(f"[AlipayService] 创建支付订单失败: {str(e)}")
+            print(f"[AlipayService] 错误堆栈: {error_trace}")
             return {
                 "success": False,
                 "message": f"创建支付订单失败: {str(e)}",
