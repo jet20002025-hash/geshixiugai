@@ -114,6 +114,8 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             paragraph.alignment = alignment_map.get(alignment, paragraph.alignment)
 
     if (line_spacing := rule.get("line_spacing")) is not None:
+        # 设置固定行距（exact spacing），单位为磅
+        # 使用 Pt() 会自动设置为固定值，而不是倍数
         pf.line_spacing = Pt(line_spacing)
     if (space_before := rule.get("space_before")) is not None:
         pf.space_before = Pt(space_before)

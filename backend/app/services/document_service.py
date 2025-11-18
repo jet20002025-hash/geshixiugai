@@ -163,6 +163,82 @@ class DocumentService:
             raise FileNotFoundError("template not found")
         return json.loads(metadata_path.read_text(encoding="utf-8"))
 
+    def _paragraph_has_image_or_equation(self, paragraph) -> bool:
+        """判断段落是否包含图片或公式"""
+        # 检查是否包含图片
+        has_image = False
+        try:
+            # 方法1: 检查段落中的runs是否包含图片
+            for run in paragraph.runs:
+                if not hasattr(run, 'element'):
+                    continue
+                run_xml = str(run.element.xml)
+                # 排除VML形状的水印
+                if 'v:shape' in run_xml.lower() and 'textpath' in run_xml.lower():
+                    continue
+                # 检查是否包含真正的图片元素
+                if ('pic:pic' in run_xml or 'a:blip' in run_xml) and ('r:embed' in run_xml or 'r:link' in run_xml or 'a:blip' in run_xml):
+                    has_image = True
+                    break
+        except:
+            pass
+        
+        # 方法2: 检查段落元素中是否包含图片
+        if not has_image:
+            try:
+                para_xml = str(paragraph._element.xml)
+                if 'v:shape' in para_xml.lower() and 'textpath' in para_xml.lower():
+                    pass  # 这是水印，跳过
+                elif ('pic:pic' in para_xml or 'a:blip' in para_xml) and ('r:embed' in para_xml or 'r:link' in para_xml or 'a:blip' in para_xml):
+                    has_image = True
+            except:
+                pass
+        
+        # 方法3: 使用xpath查找drawing元素
+        if not has_image:
+            try:
+                from docx.oxml.ns import qn
+                drawings = paragraph._element.xpath('.//w:drawing', namespaces={
+                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+                    'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+                    'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+                })
+                if drawings:
+                    for drawing in drawings:
+                        drawing_xml = str(drawing.xml)
+                        if 'v:shape' in drawing_xml.lower() and 'textpath' in drawing_xml.lower():
+                            continue
+                        if ('pic:pic' in drawing_xml or 'a:blip' in drawing_xml) and ('r:embed' in drawing_xml or 'r:link' in drawing_xml or 'a:blip' in drawing_xml):
+                            has_image = True
+                            break
+            except:
+                pass
+        
+        # 检查是否包含公式（Office Math 或 MathType）
+        has_equation = False
+        try:
+            para_xml = str(paragraph._element.xml)
+            # 检查Office Math (oMath)
+            if 'm:oMath' in para_xml or 'm:oMathPara' in para_xml:
+                has_equation = True
+            # 检查MathType公式（通常包含object标签）
+            elif 'object' in para_xml.lower() and ('mathtype' in para_xml.lower() or 'equation' in para_xml.lower()):
+                has_equation = True
+            # 检查段落中的runs是否包含公式
+            if not has_equation:
+                for run in paragraph.runs:
+                    if not hasattr(run, 'element'):
+                        continue
+                    run_xml = str(run.element.xml)
+                    if 'm:oMath' in run_xml or 'm:oMathPara' in run_xml:
+                        has_equation = True
+                        break
+        except:
+            pass
+        
+        return has_image or has_equation
+
     def _apply_rules(
         self,
         document: Document,
@@ -193,7 +269,7 @@ class DocumentService:
                 rule = default_rule.copy()  # 复制规则
                 applied_rule_name = default_style or "默认样式"
             
-            # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体
+            # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体，固定行距20磅
             if rule:
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
                 # 判断是否是标题（包含"标题"字样，或以数字开头且较短，或是居中对齐的短文本）
@@ -203,11 +279,15 @@ class DocumentService:
                     (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30)
                 )
                 
-                # 对于正文段落（非标题），强制使用小四（12pt）宋体，且不能是粗体
-                if not is_heading:
+                # 判断是否包含图片或公式
+                has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
+                
+                # 对于正文段落（非标题、非图片、非公式），强制使用小四（12pt）宋体，且不能是粗体，固定行距20磅
+                if not is_heading and not has_image_or_equation:
                     rule["font_size"] = 12  # 小四字体固定为12磅
                     rule["font_name"] = "宋体"  # 正文固定为宋体
                     rule["bold"] = False  # 正文不能是粗体
+                    rule["line_spacing"] = 20  # 正文固定行距20磅
                 # 对于标题，如果当前规则没有字体大小，也使用默认规则的字体大小
                 elif default_rule:
                     if rule.get("font_size") is None and default_rule.get("font_size") is not None:
@@ -269,12 +349,86 @@ class DocumentService:
 
         return document, stats
 
+    def _find_body_start_index(self, document: Document) -> int:
+        """找到正文开始的段落索引，跳过封面、目录等前置部分"""
+        # 正文开始的标志关键词（按优先级排序）
+        # 高优先级：明确的章节标题
+        chapter_keywords = [
+            "第一章", "第二章", "第三章", "第四章", "第五章", "第六章", "第七章", "第八章", "第九章", "第十章",
+            "第1章", "第2章", "第3章", "第4章", "第5章", "第6章", "第7章", "第8章", "第9章", "第10章",
+        ]
+        
+        # 中优先级：章节关键词
+        section_keywords = [
+            "引言", "绪论", "前言", "概述", "正文", "正文部分",
+        ]
+        
+        # 低优先级：带编号的章节（需要更严格的匹配）
+        numbered_sections = [
+            "1 引言", "1 绪论", "1 概述", "1 前言",
+            "1.1", "1.2", "2.1", "2.2",  # 小节编号
+        ]
+        
+        # 方法1: 查找明确的章节标题（最高优先级）
+        for idx, paragraph in enumerate(document.paragraphs):
+            paragraph_text = paragraph.text.strip() if paragraph.text else ""
+            if not paragraph_text:
+                continue
+            
+            # 检查是否是明确的章节标题
+            for keyword in chapter_keywords:
+                if keyword in paragraph_text:
+                    # 确保不是目录中的引用（目录通常较短且包含"目录"字样）
+                    if "目录" not in paragraph_text:
+                        # 章节标题通常较短，或者段落开头就是章节标题
+                        if len(paragraph_text) < 100 or paragraph_text.startswith(keyword):
+                            return idx
+        
+        # 方法2: 查找章节关键词（中优先级）
+        for idx, paragraph in enumerate(document.paragraphs):
+            paragraph_text = paragraph.text.strip() if paragraph.text else ""
+            if not paragraph_text:
+                continue
+            
+            # 检查是否是章节关键词，且段落开头包含关键词（避免匹配到正文中的引用）
+            for keyword in section_keywords:
+                if paragraph_text.startswith(keyword) or (keyword in paragraph_text and len(paragraph_text) > 50):
+                    # 确保不是目录中的引用
+                    if "目录" not in paragraph_text and len(paragraph_text) > 20:
+                        return idx
+        
+        # 方法3: 查找带编号的章节（需要更严格的匹配）
+        for idx, paragraph in enumerate(document.paragraphs):
+            paragraph_text = paragraph.text.strip() if paragraph.text else ""
+            if not paragraph_text:
+                continue
+            
+            # 检查是否是带编号的章节（段落开头必须是编号）
+            for keyword in numbered_sections:
+                if paragraph_text.startswith(keyword):
+                    # 确保不是目录中的引用
+                    if "目录" not in paragraph_text and len(paragraph_text) > 20:
+                        return idx
+        
+        # 方法4: 如果找不到关键词，跳过前N个段落（通常是封面和目录）
+        # 跳过前20个段落，或者文档总段落数的10%（取较大值）
+        skip_count = max(20, len(document.paragraphs) // 10)
+        return min(skip_count, len(document.paragraphs) - 1)
+
     def _check_figure_captions(self, document: Document) -> list:
-        """检测文档中的图片，检查是否有图题，返回缺失图题的图片列表，并在文档中标记错误"""
+        """检测文档中的图片，检查是否有图题，返回缺失图题的图片列表，并在文档中标记错误
+        注意：只从正文开始检测，跳过封面、目录等前置部分"""
         issues = []
         missing_caption_indices = []  # 记录缺少图题的图片段落索引
         
+        # 找到正文开始的段落索引
+        body_start_idx = self._find_body_start_index(document)
+        
+        # 只从正文开始检测图片
         for idx, paragraph in enumerate(document.paragraphs):
+            # 跳过正文之前的段落
+            if idx < body_start_idx:
+                continue
             # 检查段落中是否包含图片
             has_image = False
             paragraph_text = paragraph.text.strip() if paragraph.text else ""

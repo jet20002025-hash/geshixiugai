@@ -178,3 +178,91 @@ async def document_status(document_id: str) -> DocumentStatusResponse:
 
     return DocumentStatusResponse(document_id=document_id, status=metadata["status"], paid=metadata["paid"])
 
+
+@router.get(
+    "/debug/storage",
+    summary="调试：检查存储配置",
+)
+async def debug_storage_config() -> dict:
+    """调试端点：检查存储相关的环境变量配置和可用性"""
+    from ..services.storage_factory import get_storage
+    from ..services.r2_storage import get_r2_storage
+    from ..services.supabase_storage import get_supabase_storage
+    from ..services.b2_storage import get_b2_storage
+    
+    # 检查 R2 配置
+    r2_account_id = os.getenv("R2_ACCOUNT_ID", "")
+    r2_access_key_id = os.getenv("R2_ACCESS_KEY_ID", "")
+    r2_secret_access_key = os.getenv("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket_name = os.getenv("R2_BUCKET_NAME", "")
+    r2_endpoint = os.getenv("R2_ENDPOINT", "")
+    
+    # 检查 Supabase 配置
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_KEY", "")
+    supabase_bucket = os.getenv("SUPABASE_BUCKET", "")
+    
+    # 检查 B2 配置
+    b2_key_id = os.getenv("B2_KEY_ID", "")
+    b2_application_key = os.getenv("B2_APPLICATION_KEY", "")
+    b2_bucket_name = os.getenv("B2_BUCKET_NAME", "")
+    
+    # 获取存储实例并检查可用性
+    storage = get_storage()
+    r2_storage = get_r2_storage()
+    supabase_storage = get_supabase_storage()
+    b2_storage = get_b2_storage()
+    
+    # 构建 R2 endpoint（如果未设置但 account_id 存在）
+    r2_endpoint_auto = ""
+    if r2_account_id and not r2_endpoint:
+        r2_endpoint_auto = f"https://{r2_account_id}.r2.cloudflarestorage.com"
+    
+    config_status = {
+        "storage_available": storage is not None,
+        "storage_type": None,
+        "r2": {
+            "account_id_exists": bool(r2_account_id),
+            "account_id_preview": r2_account_id[:8] + "****" if r2_account_id else None,
+            "access_key_id_exists": bool(r2_access_key_id),
+            "access_key_id_preview": r2_access_key_id[:8] + "****" if r2_access_key_id else None,
+            "secret_access_key_exists": bool(r2_secret_access_key),
+            "secret_access_key_length": len(r2_secret_access_key) if r2_secret_access_key else 0,
+            "bucket_name": r2_bucket_name or "未设置",
+            "endpoint": r2_endpoint or r2_endpoint_auto or "未设置",
+            "configured": bool(r2_access_key_id and r2_secret_access_key),
+            "available": r2_storage.is_available() if r2_storage else False,
+        },
+        "supabase": {
+            "url_exists": bool(supabase_url),
+            "key_exists": bool(supabase_key),
+            "bucket_exists": bool(supabase_bucket),
+            "bucket_name": supabase_bucket or "未设置",
+            "configured": bool(supabase_url and supabase_key and supabase_bucket),
+            "available": supabase_storage.is_available() if supabase_storage else False,
+        },
+        "b2": {
+            "key_id_exists": bool(b2_key_id),
+            "application_key_exists": bool(b2_application_key),
+            "bucket_name": b2_bucket_name or "未设置",
+            "configured": bool(b2_key_id and b2_application_key and b2_bucket_name),
+            "available": b2_storage.is_available() if b2_storage else False,
+        },
+        "vercel_env": os.getenv("VERCEL_ENV", "未设置"),
+    }
+    
+    # 确定当前使用的存储类型
+    if storage:
+        if supabase_storage.is_available() and storage == supabase_storage:
+            config_status["storage_type"] = "Supabase"
+        elif b2_storage.is_available() and storage == b2_storage:
+            config_status["storage_type"] = "Backblaze B2"
+        elif r2_storage.is_available() and storage == r2_storage:
+            config_status["storage_type"] = "Cloudflare R2"
+        else:
+            config_status["storage_type"] = "Unknown"
+    else:
+        config_status["storage_type"] = "None (使用本地文件系统)"
+    
+    return config_status
+
