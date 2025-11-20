@@ -29,7 +29,6 @@ from .thesis_format_standard import (
     HEADER_SETTINGS,
     PAGE_NUMBER_FORMAT,
 )
-import re
 
 
 class DocumentService:
