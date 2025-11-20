@@ -493,6 +493,22 @@
                 html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
               } else if (issue.type === "no_reference_items") {
                 html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
+              } else if (issue.type === "uncited_references") {
+                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
+                if (issue.uncited_count) {
+                  html += `<p style="color: #666; margin-top: 5px;">发现 <strong style="color: #c62828;">${issue.uncited_count}</strong> 条参考文献在正文中未被引用，已在文档中标记为<strong style="color: #c62828;">红色</strong>。</p>`;
+                }
+                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
+                if (issue.uncited_references && issue.uncited_references.length > 0) {
+                  html += `<p style="color: #666; margin-top: 10px; font-weight: bold;">未被引用的参考文献：</p><ul style="list-style: none; padding-left: 0; margin-top: 5px;">`;
+                  for (const ref of issue.uncited_references) {
+                    html += `<li style="padding: 5px 0; border-bottom: 1px solid #f44336;"><strong style="color: #c62828;">[${ref.number}]</strong>: ${ref.text_preview}</li>`;
+                  }
+                  if (issue.uncited_count > issue.uncited_references.length) {
+                    html += `<li style="padding: 5px 0; color: #666;">... 还有 ${issue.uncited_count - issue.uncited_references.length} 条未被引用的参考文献</li>`;
+                  }
+                  html += '</ul>';
+                }
               } else if (issue.type === "missing_citations") {
                 html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
                 if (issue.reference_count) {
