@@ -273,8 +273,8 @@
       // 页面加载时获取用户模板列表
       loadUserTemplates();
 
-      // 文件大小限制：4 MB（Vercel 限制）
-      const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
+      // 文件大小限制：20 MB（支持毕业论文等大文件）
+      const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
       templateForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -287,7 +287,7 @@
         // 检查文件大小
         if (file.size > MAX_FILE_SIZE) {
           const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-          showMessage(templateStatus, `文件太大（${fileSizeMB} MB），最大支持 4 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
+          showMessage(templateStatus, `文件太大（${fileSizeMB} MB），最大支持 20 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
           return;
         }
 
@@ -356,7 +356,7 @@
         // 检查文件大小
         if (file.size > MAX_FILE_SIZE) {
           const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-          showMessage(documentStatus, `文件太大（${fileSizeMB} MB），最大支持 4 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
+          showMessage(documentStatus, `文件太大（${fileSizeMB} MB），最大支持 20 MB。请压缩文档中的图片或删除不必要的图片后再上传。`, true);
           return;
         }
 

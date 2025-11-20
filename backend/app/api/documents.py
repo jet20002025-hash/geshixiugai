@@ -31,9 +31,9 @@ DOCUMENT_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# Vercel 请求体大小限制：4.5 MB
-# 为了安全，我们设置 4 MB 的限制
-MAX_FILE_SIZE = 4 * 1024 * 1024  # 4 MB
+# 文件大小限制：20 MB（支持毕业论文等大文件）
+# 注意：如果使用 Vercel，标准计划限制为 4.5 MB，可能需要使用 Enterprise 计划或直接上传到对象存储
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 @router.post(
@@ -45,7 +45,7 @@ async def upload_document(request: Request, template_id: str, file: UploadFile) 
     """
     上传待修复文档，只能使用自己上传的模板
     
-    注意：文件大小限制为 4 MB（Vercel 限制）
+    注意：文件大小限制为 20 MB
     """
     # 检查文件大小
     if file.size and file.size > MAX_FILE_SIZE:

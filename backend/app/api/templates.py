@@ -23,9 +23,9 @@ else:
 # 确保目录存在
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Vercel 请求体大小限制：4.5 MB
-# 为了安全，我们设置 4 MB 的限制
-MAX_FILE_SIZE = 4 * 1024 * 1024  # 4 MB
+# 文件大小限制：20 MB（支持毕业论文等大文件）
+# 注意：如果使用 Vercel，标准计划限制为 4.5 MB，可能需要使用 Enterprise 计划或直接上传到对象存储
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 @router.post(
@@ -37,7 +37,7 @@ async def upload_template(request: Request, response: Response, file: UploadFile
     """
     上传模板并生成规则库，模板与当前用户（session）关联
     
-    注意：文件大小限制为 4 MB（Vercel 限制）
+    注意：文件大小限制为 20 MB
     """
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件名不能为空")
