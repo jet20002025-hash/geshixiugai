@@ -429,12 +429,15 @@ async def create_alipay_payment(payload: PaymentRequest) -> dict:
         print(f"[Alipay API] 支付宝服务初始化成功")
         
         print(f"[Alipay API] 准备创建支付订单，订单号: {payload.document_id}, 金额: {amount}")
+        # 使用电脑网站支付（适用于网页应用）
+        # 如果应用类型是移动应用，可以改为 payment_type="wap"
         result = alipay_service.create_payment(
             out_trade_no=payload.document_id,
             total_amount=amount,
             subject=f"论文格式修复服务 - {payload.document_id[:8]}",
             return_url=return_url,
             notify_url=notify_url,
+            payment_type="page",  # "page" 电脑网站支付（网页应用），"wap" 手机网站支付（移动应用）
         )
         
         print(f"[Alipay API] 创建支付订单结果: success={result.get('success')}")

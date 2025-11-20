@@ -102,9 +102,10 @@ class AlipayService:
         subject: str,
         return_url: str,
         notify_url: str,
+        payment_type: str = "page",  # "page" 电脑网站支付, "wap" 手机网站支付
     ) -> Dict:
         """
-        创建支付订单（手机网站支付）
+        创建支付订单
         
         Args:
             out_trade_no: 商户订单号（使用 document_id）
@@ -112,22 +113,57 @@ class AlipayService:
             subject: 订单标题
             return_url: 支付成功跳转地址
             notify_url: 支付回调地址
+            payment_type: 支付类型，"page" 电脑网站支付（网页应用），"wap" 手机网站支付（移动应用）
             
         Returns:
             支付参数，包含支付URL
         """
         try:
             print(f"[AlipayService] 开始创建支付订单，订单号: {out_trade_no}, 金额: {total_amount}")
-            # 调用支付宝接口创建订单
-            order_string = self.alipay.api_alipay_trade_wap_pay(
-                out_trade_no=out_trade_no,
-                total_amount=str(total_amount),
-                subject=subject,
-                return_url=return_url,
-                notify_url=notify_url,
-            )
+            print(f"[AlipayService] 使用网关: {self.gateway}")
+            print(f"[AlipayService] AppID: {self.app_id[:4]}****" if len(self.app_id) > 4 else f"[AlipayService] AppID: {self.app_id}")
+            print(f"[AlipayService] 支付类型: {payment_type} ({'电脑网站支付' if payment_type == 'page' else '手机网站支付'})")
+            
+            # 根据支付类型选择接口
+            # 网页应用使用电脑网站支付，移动应用使用手机网站支付
+            if payment_type == "page":
+                # 电脑网站支付（适用于网页应用）
+                order_string = self.alipay.api_alipay_trade_page_pay(
+                    out_trade_no=out_trade_no,
+                    total_amount=str(total_amount),
+                    subject=subject,
+                    return_url=return_url,
+                    notify_url=notify_url,
+                )
+            else:
+                # 手机网站支付（适用于移动应用）
+                order_string = self.alipay.api_alipay_trade_wap_pay(
+                    out_trade_no=out_trade_no,
+                    total_amount=str(total_amount),
+                    subject=subject,
+                    return_url=return_url,
+                    notify_url=notify_url,
+                )
             
             print(f"[AlipayService] 订单字符串生成成功，长度: {len(order_string) if order_string else 0}")
+            
+            # 检查返回的字符串是否包含错误信息
+            if order_string and ("error_response" in order_string.lower() or "code" in order_string.lower()):
+                # 尝试解析错误信息
+                import urllib.parse
+                parsed = urllib.parse.parse_qs(order_string)
+                error_info = {}
+                for key, value in parsed.items():
+                    if "error" in key.lower() or "code" in key.lower() or "msg" in key.lower():
+                        error_info[key] = value
+                
+                if error_info:
+                    error_msg = f"支付宝返回错误: {error_info}"
+                    print(f"[AlipayService] {error_msg}")
+                    return {
+                        "success": False,
+                        "message": error_msg,
+                    }
             
             # 生成支付URL
             payment_url = f"{self.gateway}?{order_string}"
@@ -149,6 +185,17 @@ class AlipayService:
                 return {
                     "success": False,
                     "message": f"签名验证失败。请检查：1) 应用私钥(ALIPAY_PRIVATE_KEY)和应用公钥是否匹配（应用公钥需上传到支付宝）；2) 密钥格式是否正确（需包含BEGIN/END标记）。错误详情: {error_msg}",
+                }
+            
+            # 如果是 ISV 权限不足错误，提供详细的解决步骤
+            if "insufficient-isv-permissions" in error_msg.lower() or "isv权限不足" in error_msg or "ISV权限不足" in error_msg:
+                # 根据当前使用的支付类型，提供针对性的解决方案
+                current_type = "电脑网站支付" if payment_type == "page" else "手机网站支付"
+                alternative_type = "手机网站支付" if payment_type == "page" else "电脑网站支付"
+                
+                return {
+                    "success": False,
+                    "message": f"ISV权限不足（当前使用{current_type}接口）。请检查：1) 应用是否已通过审核（状态应为'已上线'）；2) 是否已签约'{current_type}'产品（产品状态应为'已上线'）；3) 如果应用类型是'网页应用'，需要签约'电脑网站支付'产品；4) 如果应用类型是'移动应用'，需要签约'手机网站支付'产品。详细排查步骤请参考：支付宝ISV权限不足问题排查.md 和 支付宝网页应用接口修复说明.md。错误详情: {error_msg}",
                 }
             
             return {
