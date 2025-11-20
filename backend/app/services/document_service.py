@@ -14,13 +14,22 @@ from typing import Dict, Tuple, Optional
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import parse_xml
-from docx.shared import RGBColor
+from docx.shared import RGBColor, Pt
 from docx.oxml.ns import qn
 from docx.oxml.shared import OxmlElement
 from fastapi import UploadFile
 
 from .utils import docx_format_utils
 from .storage_factory import get_storage
+from .thesis_format_standard import (
+    FONT_STANDARDS,
+    STYLE_MAPPING_RULES,
+    DEFAULT_STYLE,
+    PAGE_SETTINGS,
+    HEADER_SETTINGS,
+    PAGE_NUMBER_FORMAT,
+)
+import re
 
 
 class DocumentService:
@@ -46,10 +55,23 @@ class DocumentService:
         original_path = task_dir / "original.docx"
         original_path.write_bytes(await upload.read())
 
+        # 加载文档
+        document = Document(original_path)
+        
+        # 应用页面设置（优先使用标准）
+        self._apply_page_settings(document)
+        
+        # 应用页眉页脚（优先使用标准）
+        self._apply_header_footer(document)
+        
+        # 合并模板规则和标准规则（标准优先）
+        template_rules = template_metadata.get("styles", {})
+        merged_rules = self._merge_rules_with_standard(template_rules)
+        
         final_doc, stats = self._apply_rules(
-            document=Document(original_path),
-            rules=template_metadata.get("styles", {}),
-            default_style=template_metadata.get("default_style"),
+            document=document,
+            rules=merged_rules,
+            default_style=template_metadata.get("default_style") or DEFAULT_STYLE,
         )
         
         # 检测图片并检查图题
@@ -239,6 +261,106 @@ class DocumentService:
         
         return has_image or has_equation
 
+    def _apply_page_settings(self, document: Document) -> None:
+        """应用页面设置（页边距等）"""
+        margins = PAGE_SETTINGS["margins"]
+        for section in document.sections:
+            # 设置页边距（单位：厘米转磅，1厘米=28.35磅）
+            section.top_margin = Pt(margins["top"] * 28.35)
+            section.bottom_margin = Pt(margins["bottom"] * 28.35)
+            section.left_margin = Pt(margins["left"] * 28.35)
+            section.right_margin = Pt(margins["right"] * 28.35)
+            section.gutter = Pt(margins["gutter"] * 28.35)
+            section.header_distance = Pt(PAGE_SETTINGS["header_distance"] * 28.35)
+            section.footer_distance = Pt(PAGE_SETTINGS["footer_distance"] * 28.35)
+    
+    def _apply_header_footer(self, document: Document) -> None:
+        """应用页眉页脚设置"""
+        header_text = HEADER_SETTINGS["text"]
+        for section in document.sections:
+            header = section.header
+            if header.is_linked_to_previous:
+                header.is_linked_to_previous = False
+            
+            # 清空现有页眉内容
+            for para in header.paragraphs:
+                para.clear()
+            
+            # 添加标准页眉
+            para = header.add_paragraph()
+            para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            run = para.add_run(header_text)
+            run.font.name = HEADER_SETTINGS["font_name"]
+            run.font.size = Pt(HEADER_SETTINGS["font_size"])
+    
+    def _merge_rules_with_standard(self, template_rules: Dict[str, Dict]) -> Dict[str, Dict]:
+        """
+        合并模板规则和标准规则
+        优先级：标准规则 > 模板规则
+        如果模板规则中有标准规则没有的样式，保留模板规则
+        """
+        merged = {}
+        
+        # 首先添加标准规则
+        for style_name, style_config in FONT_STANDARDS.items():
+            merged[style_name] = style_config.copy()
+        
+        # 然后添加模板规则（如果模板规则中的样式名不在标准中，则添加）
+        for style_name, style_config in template_rules.items():
+            # 如果模板样式名不在标准中，保留模板样式
+            if style_name not in merged:
+                merged[style_name] = style_config.copy()
+            else:
+                # 如果模板样式在标准中，但标准中没有某些字段，则补充模板的字段
+                standard_style = merged[style_name]
+                for key, value in style_config.items():
+                    if key not in standard_style or standard_style[key] is None:
+                        standard_style[key] = value
+        
+        return merged
+    
+    def _detect_paragraph_style(self, paragraph: Paragraph) -> str:
+        """
+        根据段落内容自动检测应该应用的样式
+        返回样式名称（对应FONT_STANDARDS中的key）
+        """
+        text = paragraph.text.strip() if paragraph.text else ""
+        if not text:
+            return DEFAULT_STYLE
+        
+        # 根据样式映射规则检测
+        for rule in STYLE_MAPPING_RULES:
+            if re.match(rule["pattern"], text, re.IGNORECASE):
+                return rule["style"]
+        
+        # 检查是否是标题
+        style_name = paragraph.style.name if paragraph.style else None
+        if style_name:
+            style_lower = style_name.lower()
+            if "标题" in style_name or "heading" in style_lower:
+                # 根据标题级别判断
+                if "1" in style_name or "一" in style_name or "heading 1" in style_lower:
+                    return "title_level_1"
+                elif "2" in style_name or "二" in style_name or "heading 2" in style_lower:
+                    return "title_level_2"
+                elif "3" in style_name or "三" in style_name or "heading 3" in style_lower:
+                    return "title_level_3"
+        
+        # 检查段落内容特征
+        if text.startswith("图") and len(text) < 100:
+            return "figure_caption"
+        if text.startswith("表") and len(text) < 100:
+            return "table_caption"
+        if re.match(r"^第[一二三四五六七八九十\d]+章|^第\d+章|^Chapter\s+\d+", text):
+            return "title_level_1"
+        if re.match(r"^\d+\.\d+|^第[一二三四五六七八九十\d]+节", text):
+            return "title_level_2"
+        if re.match(r"^\d+\.\d+\.\d+", text):
+            return "title_level_3"
+        
+        # 默认返回正文样式
+        return DEFAULT_STYLE
+
     def _apply_rules(
         self,
         document: Document,
@@ -257,17 +379,28 @@ class DocumentService:
             rule = None
             applied_rule_name = None
             
-            if style_name and style_name in rules:
-                rule = rules[style_name].copy()  # 复制规则，避免修改原规则
+            # 优先使用标准格式检测
+            detected_style = self._detect_paragraph_style(paragraph)
+            if detected_style in rules:
+                rule = rules[detected_style].copy()
+                applied_rule_name = detected_style
+            # 如果标准格式中没有，尝试使用模板中的样式名
+            elif style_name and style_name in rules:
+                rule = rules[style_name].copy()
                 applied_rule_name = style_name
+            # 如果都没有，使用默认规则
             elif default_rule:
-                rule = default_rule.copy()  # 复制规则
+                rule = default_rule.copy()
                 applied_rule_name = default_style or "默认样式"
             
-            # 如果没有规则但有默认规则，使用默认规则（确保所有段落都应用规则）
-            if not rule and default_rule:
-                rule = default_rule.copy()  # 复制规则
-                applied_rule_name = default_style or "默认样式"
+            # 如果仍然没有规则，使用标准默认样式
+            if not rule:
+                if DEFAULT_STYLE in rules:
+                    rule = rules[DEFAULT_STYLE].copy()
+                    applied_rule_name = DEFAULT_STYLE
+                elif default_rule:
+                    rule = default_rule.copy()
+                    applied_rule_name = default_style or "默认样式"
             
             # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体，固定行距20磅
             if rule:
@@ -282,12 +415,17 @@ class DocumentService:
                 # 判断是否包含图片或公式
                 has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
                 
-                # 对于正文段落（非标题、非图片、非公式），强制使用小四（12pt）宋体，且不能是粗体，固定行距20磅
+                # 对于正文段落（非标题、非图片、非公式），如果使用的是标准默认样式，确保格式正确
                 if not is_heading and not has_image_or_equation:
-                    rule["font_size"] = 12  # 小四字体固定为12磅
-                    rule["font_name"] = "宋体"  # 正文固定为宋体
-                    rule["bold"] = False  # 正文不能是粗体
-                    rule["line_spacing"] = 20  # 正文固定行距20磅
+                    # 如果使用的是标准默认样式，确保格式符合标准
+                    if applied_rule_name == DEFAULT_STYLE or applied_rule_name == "body_text":
+                        if DEFAULT_STYLE in FONT_STANDARDS:
+                            standard_body = FONT_STANDARDS[DEFAULT_STYLE]
+                            rule["font_size"] = standard_body.get("font_size", 12)
+                            rule["font_name"] = standard_body.get("font_name", "宋体")
+                            rule["bold"] = standard_body.get("bold", False)
+                            rule["line_spacing"] = standard_body.get("line_spacing", 20)
+                            rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
                 # 对于标题，如果当前规则没有字体大小，也使用默认规则的字体大小
                 elif default_rule:
                     if rule.get("font_size") is None and default_rule.get("font_size") is not None:
