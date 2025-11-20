@@ -741,7 +741,9 @@ class DocumentService:
         return issues
 
     def _check_reference_citations(self, document: Document) -> list:
-        """检测参考文献引用标注，检查正文中是否有引用标注，返回缺失引用的问题列表"""
+        """检测参考文献引用标注，检查正文中是否有引用标注，返回缺失引用的问题列表
+        同时标记未被引用的参考文献（标红并添加提示）
+        """
         issues = []
         
         # 1. 找到参考文献部分的起始位置
@@ -788,9 +790,15 @@ class DocumentService:
             
             # 检查是否符合参考文献格式
             is_reference = False
+            ref_number = None
             for pattern in reference_patterns:
-                if re.match(pattern, para_text):
+                match = re.match(pattern, para_text)
+                if match:
                     is_reference = True
+                    # 提取参考文献编号
+                    number_match = re.search(r'\d+', match.group())
+                    if number_match:
+                        ref_number = int(number_match.group())
                     break
             
             # 如果段落较长且包含作者、年份等信息，也可能是参考文献
@@ -798,12 +806,18 @@ class DocumentService:
                 # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
                 if re.search(r'\d{4}', para_text) and (len(para_text) > 30):  # 包含年份且较长
                     is_reference = True
+                    # 尝试从段落开头提取编号
+                    number_match = re.search(r'^\d+', para_text)
+                    if number_match:
+                        ref_number = int(number_match.group())
             
             if is_reference:
                 reference_items.append({
-                    "index": len(reference_items) + 1,
+                    "index": ref_number if ref_number else len(reference_items) + 1,
+                    "number": ref_number if ref_number else len(reference_items) + 1,
                     "text": para_text[:100],  # 只保存前100个字符
-                    "paragraph_index": idx
+                    "paragraph_index": idx,
+                    "paragraph": para,  # 保存段落对象，用于后续修改
                 })
         
         # 如果没有找到参考文献条目，提示
@@ -815,7 +829,7 @@ class DocumentService:
             })
             return issues
         
-        # 3. 检查正文中是否有引用标注
+        # 3. 检查正文中是否有引用标注，并找出被引用的参考文献编号
         # 正文部分：从文档开始到参考文献部分之前
         body_text = ""
         body_paragraphs = []
@@ -827,29 +841,105 @@ class DocumentService:
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
         
-        # 检测引用标注的常见格式
+        # 检测引用标注的常见格式，并提取被引用的参考文献编号
         citation_patterns = [
-            r'\[\d+\]',           # [1] 格式
-            r'\[\d+[,\-\s]+\d+\]', # [1,2,3] 或 [1-5] 格式
-            r'\(\d{4}[a-z]?\)',   # (2020) 或 (2020a) 格式
-            r'（\d{4}[a-z]?）',   # （2020）格式
+            (r'\[(\d+)\]', 'single'),           # [1] 格式
+            (r'\[(\d+)[,\-\s]+(\d+)\]', 'range'), # [1,2,3] 或 [1-5] 格式
+            (r'\((\d{4})[a-z]?\)', 'year'),   # (2020) 或 (2020a) 格式
+            (r'（(\d{4})[a-z]?）', 'year'),   # （2020）格式
         ]
         
-        has_citation = False
-        citation_matches = []
-        for pattern in citation_patterns:
+        cited_reference_numbers = set()  # 被引用的参考文献编号集合
+        
+        for pattern, pattern_type in citation_patterns:
             matches = re.finditer(pattern, body_text)
             for match in matches:
-                has_citation = True
-                citation_matches.append(match.group())
+                if pattern_type == 'single':
+                    # [1] 格式，提取单个编号
+                    cited_reference_numbers.add(int(match.group(1)))
+                elif pattern_type == 'range':
+                    # [1,2,3] 或 [1-5] 格式，提取所有编号
+                    numbers_str = match.group(0).strip('[]')
+                    # 处理逗号分隔或连字符分隔的编号
+                    if ',' in numbers_str:
+                        for num_str in numbers_str.split(','):
+                            try:
+                                cited_reference_numbers.add(int(num_str.strip()))
+                            except ValueError:
+                                pass
+                    elif '-' in numbers_str:
+                        parts = numbers_str.split('-')
+                        if len(parts) == 2:
+                            try:
+                                start = int(parts[0].strip())
+                                end = int(parts[1].strip())
+                                for num in range(start, end + 1):
+                                    cited_reference_numbers.add(num)
+                            except ValueError:
+                                pass
+        
+        # 4. 找出未被引用的参考文献
+        uncited_references = []
+        for ref_item in reference_items:
+            ref_num = ref_item["number"]
+            if ref_num not in cited_reference_numbers:
+                uncited_references.append(ref_item)
+        
+        # 5. 在文档中标记未被引用的参考文献（标红并添加提示）
+        for ref_item in uncited_references:
+            para = ref_item["paragraph"]
+            ref_num = ref_item["number"]
+            
+            # 将参考文献段落标红
+            for run in para.runs:
+                run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
+                run.font.bold = True  # 加粗
+            
+            # 在参考文献后添加提示段落
+            marker_text = f"⚠️ 【该文献未被引用】参考文献 [{ref_num}] 在正文中未被引用，请检查是否需要删除或添加引用"
+            escaped_text = xml.sax.saxutils.escape(marker_text)
+            
+            new_para_xml = f'''<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                <w:pPr>
+                    <w:jc w:val="left"/>
+                </w:pPr>
+                <w:r>
+                    <w:rPr>
+                        <w:b/>
+                        <w:color w:val="FF0000"/>
+                        <w:highlight w:val="yellow"/>
+                    </w:rPr>
+                    <w:t xml:space="preserve">{escaped_text}</w:t>
+                </w:r>
+            </w:p>'''
+            
+            # 解析并插入新段落（在参考文献段落之后）
+            new_para_element = parse_xml(new_para_xml)
+            para._element.addnext(new_para_element)
+        
+        # 6. 生成问题报告
+        if uncited_references:
+            issues.append({
+                "type": "uncited_references",
+                "message": f"发现 {len(uncited_references)} 条参考文献在正文中未被引用",
+                "suggestion": "请在正文中添加引用标注，或删除未被引用的参考文献",
+                "uncited_count": len(uncited_references),
+                "uncited_references": [
+                    {
+                        "number": ref["number"],
+                        "text_preview": ref["text"][:80] + "..."
+                    }
+                    for ref in uncited_references[:10]  # 只显示前10个
+                ]
+            })
         
         # 如果没有找到引用标注，提示用户
-        if not has_citation and len(reference_items) > 0:
+        if not cited_reference_numbers and len(reference_items) > 0:
             # 找到正文段落中可能缺少引用的位置
             missing_citation_paragraphs = []
             for para_idx, para_text in body_paragraphs:
                 # 如果段落较长（可能是正文），但没有引用标注，记录
-                if len(para_text) > 100 and not any(re.search(pattern, para_text) for pattern in citation_patterns):
+                if len(para_text) > 100:
                     # 检查段落是否包含可能引用的内容（如"研究"、"文献"、"表明"等学术词汇）
                     academic_keywords = ['研究', '文献', '表明', '发现', '提出', '分析', '方法', '理论', '模型']
                     if any(keyword in para_text for keyword in academic_keywords):
