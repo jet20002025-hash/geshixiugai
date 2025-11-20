@@ -17,6 +17,7 @@ from docx.oxml import parse_xml
 from docx.shared import RGBColor, Pt
 from docx.oxml.ns import qn
 from docx.oxml.shared import OxmlElement
+from docx.text.paragraph import Paragraph
 from fastapi import UploadFile
 
 from .utils import docx_format_utils
