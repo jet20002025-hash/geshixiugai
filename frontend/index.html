@@ -94,6 +94,13 @@
         color: #2563eb;
         text-decoration: none;
       }
+      /* 确保收款账户信息区域始终隐藏 */
+      #paymentAccountInfo,
+      #accountDetails,
+      [id*="account"],
+      [class*="account"] {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
