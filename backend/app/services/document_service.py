@@ -938,21 +938,25 @@ class DocumentService:
         body_text = ""
         body_paragraphs = []
         
-        # 从正文开始到参考文献之前的所有段落
+        # 从正文开始到参考文献之前的所有段落（包括短段落，因为引用可能在图片说明等短段落中）
         for idx in range(body_start_idx, reference_start_idx):
             para = document.paragraphs[idx]
             para_text = para.text.strip() if para.text else ""
-            # 只检查较长的段落（正文），跳过标题等短段落
-            if len(para_text) > 30:  # 正文段落通常较长
+            # 检查所有段落（包括短段落），因为引用可能在图片说明、表格说明等短段落中
+            if len(para_text) > 0:  # 只要有内容就检查
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
         
         # 检测引用标注的常见格式，并提取被引用的参考文献编号
         citation_patterns = [
-            (r'\[(\d+)\]', 'single'),           # [1] 格式
-            (r'\[(\d+)[,\-\s]+(\d+)\]', 'range'), # [1,2,3] 或 [1-5] 格式
-            (r'\((\d{4})[a-z]?\)', 'year'),   # (2020) 或 (2020a) 格式
-            (r'（(\d{4})[a-z]?）', 'year'),   # （2020）格式
+            (r'\[(\d+)\]', 'single'),                    # [1] 格式
+            (r'\[(\d+)[,\s]+(\d+)\]', 'range_comma'),   # [1,2,3] 格式（逗号分隔）
+            (r'\[(\d+)[\-\s]+(\d+)\]', 'range_dash'),   # [1-5] 或 [1 5] 格式（连字符或空格分隔）
+            (r'\((\d+)\)', 'paren_single'),              # (1) 格式（圆括号）
+            (r'（(\d+)）', 'paren_single_cn'),          # （1）格式（中文圆括号）
+            (r'\((\d+)[,\s]+(\d+)\)', 'paren_range'),  # (1,2,3) 格式
+            (r'（(\d+)[,\s]+(\d+)）', 'paren_range_cn'), # （1,2,3）格式
+            # 注意：年份格式 (2020) 不提取为参考文献编号，因为可能是作者-年份引用格式
         ]
         
         cited_reference_numbers = set()  # 被引用的参考文献编号集合
@@ -963,26 +967,77 @@ class DocumentService:
                 if pattern_type == 'single':
                     # [1] 格式，提取单个编号
                     cited_reference_numbers.add(int(match.group(1)))
-                elif pattern_type == 'range':
-                    # [1,2,3] 或 [1-5] 格式，提取所有编号
-                    numbers_str = match.group(0).strip('[]')
-                    # 处理逗号分隔或连字符分隔的编号
+                elif pattern_type == 'paren_single':
+                    # (1) 格式，提取单个编号
+                    cited_reference_numbers.add(int(match.group(1)))
+                elif pattern_type == 'paren_single_cn':
+                    # （1）格式，提取单个编号
+                    cited_reference_numbers.add(int(match.group(1)))
+                elif pattern_type in ['range_comma', 'range_dash', 'paren_range', 'paren_range_cn']:
+                    # [1,2,3] 或 [1-5] 或 (1,2,3) 格式，提取所有编号
+                    numbers_str = match.group(0).strip('[]()（）')
+                    # 处理逗号分隔的编号
                     if ',' in numbers_str:
                         for num_str in numbers_str.split(','):
                             try:
-                                cited_reference_numbers.add(int(num_str.strip()))
+                                num = int(num_str.strip())
+                                if 1 <= num <= 1000:  # 合理的参考文献编号范围
+                                    cited_reference_numbers.add(num)
                             except ValueError:
                                 pass
-                    elif '-' in numbers_str:
-                        parts = numbers_str.split('-')
+                    # 处理连字符或空格分隔的编号范围
+                    elif '-' in numbers_str or ' ' in numbers_str:
+                        separator = '-' if '-' in numbers_str else ' '
+                        parts = numbers_str.split(separator, 1)
                         if len(parts) == 2:
                             try:
                                 start = int(parts[0].strip())
                                 end = int(parts[1].strip())
-                                for num in range(start, end + 1):
+                                # 限制范围，避免误匹配
+                                if 1 <= start <= end <= 1000:
+                                    for num in range(start, end + 1):
+                                        cited_reference_numbers.add(num)
+                            except ValueError:
+                                pass
+                    else:
+                        # 单个数字
+                        try:
+                            num = int(numbers_str.strip())
+                            if 1 <= num <= 1000:
+                                cited_reference_numbers.add(num)
+                        except ValueError:
+                            pass
+        
+        # 额外检查：检测Word中的上标格式引用（通过检查runs的格式）
+        for idx in range(body_start_idx, reference_start_idx):
+            para = document.paragraphs[idx]
+            for run in para.runs:
+                # 检查是否是上标格式（可能是引用标注）
+                if run.font.superscript:
+                    run_text = run.text.strip()
+                    # 检查上标文本是否是数字或数字组合
+                    if re.match(r'^\d+([,\-\s]+\d+)*$', run_text):
+                        # 提取数字
+                        numbers = re.findall(r'\d+', run_text)
+                        for num_str in numbers:
+                            try:
+                                num = int(num_str)
+                                if 1 <= num <= 1000:
                                     cited_reference_numbers.add(num)
                             except ValueError:
                                 pass
+                # 也检查普通文本中的数字（可能是引用）
+                run_text = run.text
+                # 检查是否包含 [数字] 或 (数字) 格式
+                for pattern in [r'\[(\d+)\]', r'\((\d+)\)', r'（(\d+)）']:
+                    matches = re.finditer(pattern, run_text)
+                    for match in matches:
+                        try:
+                            num = int(match.group(1))
+                            if 1 <= num <= 1000:
+                                cited_reference_numbers.add(num)
+                        except ValueError:
+                            pass
         
         # 4. 找出未被引用的参考文献
         uncited_references = []
