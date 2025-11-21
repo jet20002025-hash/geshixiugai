@@ -162,12 +162,6 @@
             <p><strong>支付金额：</strong><span id="paymentAmount" style="color: #f44336; font-size: 24px; font-weight: bold;">¥0.00</span></p>
             <p style="margin-top: 15px;"><strong>支付方式：</strong></p>
             <div id="paymentMethods" style="margin-top: 10px;"></div>
-            
-            <!-- 收款账户信息 -->
-            <div id="paymentAccountInfo" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; display: none;">
-              <p style="margin-bottom: 10px; font-weight: bold; color: #666;">收款账户信息：</p>
-              <div id="accountDetails" style="background: #fff; padding: 15px; border-radius: 5px; font-size: 14px;"></div>
-            </div>
           </div>
         </div>
         
@@ -207,8 +201,6 @@
       const paymentInfo = document.getElementById("paymentInfo");
       const paymentAmount = document.getElementById("paymentAmount");
       const paymentMethods = document.getElementById("paymentMethods");
-      const paymentAccountInfo = document.getElementById("paymentAccountInfo");
-      const accountDetails = document.getElementById("accountDetails");
       const payButton = document.getElementById("payButton");
       const paidNotice = document.getElementById("paidNotice");
       
@@ -726,9 +718,6 @@
             paymentMethods.appendChild(methodDiv);
           });
           
-          // 不显示收款账户信息
-          paymentAccountInfo.style.display = "none";
-          
           // 显示支付界面
           console.log("准备显示支付界面");
           paymentInfo.style.display = "block";
@@ -805,9 +794,6 @@
         label.appendChild(document.createTextNode("模拟支付（测试）"));
         methodDiv.appendChild(label);
         paymentMethods.appendChild(methodDiv);
-        
-        // 隐藏收款账户信息
-        paymentAccountInfo.style.display = "none";
         
         // 显示支付界面
         paymentInfo.style.display = "block";
