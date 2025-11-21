@@ -415,6 +415,17 @@ class DocumentService:
                 # 判断是否包含图片或公式
                 has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
                 
+                # 对于标题，移除行距设置，保持标题的原始行距
+                if is_heading:
+                    rule.pop("line_spacing", None)
+                
+                # 对于包含图片或公式的段落，移除行距设置，避免图片被压缩看不见
+                if has_image_or_equation:
+                    # 移除行距设置，保持图片段落的原始行距
+                    rule.pop("line_spacing", None)
+                    # 也移除首行缩进，图片段落通常不需要缩进
+                    rule.pop("first_line_indent", None)
+                
                 # 对于正文段落（非标题、非图片、非公式），如果使用的是标准默认样式，确保格式正确
                 if not is_heading and not has_image_or_equation:
                     # 如果使用的是标准默认样式，确保格式符合标准
@@ -885,37 +896,41 @@ class DocumentService:
             if ref_num not in cited_reference_numbers:
                 uncited_references.append(ref_item)
         
-        # 5. 在文档中标记未被引用的参考文献（标红并添加提示）
+        # 5. 在参考文献段落中标记未被引用的参考文献（标红并在文本后添加提示）
         for ref_item in uncited_references:
             para = ref_item["paragraph"]
             ref_num = ref_item["number"]
             
             # 将参考文献段落标红
-            for run in para.runs:
-                run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
-                run.font.bold = True  # 加粗
-            
-            # 在参考文献后添加提示段落
-            marker_text = f"⚠️ 【该文献未被引用】参考文献 [{ref_num}] 在正文中未被引用，请检查是否需要删除或添加引用"
-            escaped_text = xml.sax.saxutils.escape(marker_text)
-            
-            new_para_xml = f'''<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                <w:pPr>
-                    <w:jc w:val="left"/>
-                </w:pPr>
-                <w:r>
-                    <w:rPr>
-                        <w:b/>
-                        <w:color w:val="FF0000"/>
-                        <w:highlight w:val="yellow"/>
-                    </w:rPr>
-                    <w:t xml:space="preserve">{escaped_text}</w:t>
-                </w:r>
-            </w:p>'''
-            
-            # 解析并插入新段落（在参考文献段落之后）
-            new_para_element = parse_xml(new_para_xml)
-            para._element.addnext(new_para_element)
+            try:
+                if para.runs:
+                    # 如果段落有 runs，直接设置颜色
+                    for run in para.runs:
+                        run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
+                        run.font.bold = True  # 加粗
+                else:
+                    # 如果段落没有 runs，尝试添加一个 run（处理空段落或特殊格式）
+                    # 注意：如果段落已有文本，add_run 会追加，不会重复
+                    para_text = para.text if para.text else ""
+                    if para_text:
+                        # 清空段落内容，然后添加带格式的 run
+                        para.clear()
+                        run = para.add_run(para_text)
+                    else:
+                        run = para.add_run("")
+                    run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
+                    run.font.bold = True  # 加粗
+                
+                # 在参考文献文本后添加提示（不插入新段落，直接在段落末尾添加）
+                marker_text = "（本篇文献没在正文中应用）"
+                # 在段落末尾添加红色提示文本
+                new_run = para.add_run(marker_text)
+                new_run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
+                new_run.font.bold = True  # 加粗
+            except Exception as e:
+                # 如果处理失败，记录错误但不中断流程
+                print(f"[DocumentService] 标记参考文献失败: {e}")
+                # 继续处理下一个参考文献
         
         # 6. 生成问题报告
         if uncited_references:

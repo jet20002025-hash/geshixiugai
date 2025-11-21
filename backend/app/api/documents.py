@@ -31,9 +31,12 @@ DOCUMENT_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# 文件大小限制：20 MB（支持毕业论文等大文件）
-# 注意：如果使用 Vercel，标准计划限制为 4.5 MB，可能需要使用 Enterprise 计划或直接上传到对象存储
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+# Vercel 平台限制：4.5 MB（无法通过代码修改）
+# 如果文件超过 4.5MB，需要：
+# 1. 配置对象存储（R2/Supabase/B2），使用预签名URL直接上传
+# 2. 或压缩文件中的图片
+VERCEL_LIMIT = 4.5 * 1024 * 1024  # 4.5 MB（Vercel 平台限制）
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB（代码限制，但受 Vercel 限制）
 
 
 @router.post(
@@ -48,13 +51,23 @@ async def upload_document(request: Request, template_id: str, file: UploadFile) 
     注意：文件大小限制为 20 MB
     """
     # 检查文件大小
-    if file.size and file.size > MAX_FILE_SIZE:
+    if file.size and file.size > VERCEL_LIMIT:
         file_size_mb = file.size / (1024 * 1024)
-        max_size_mb = MAX_FILE_SIZE / (1024 * 1024)
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"文件太大（{file_size_mb:.2f} MB），最大支持 {max_size_mb} MB。请压缩文档中的图片或删除不必要的图片后再上传。"
-        )
+        # 检查是否配置了对象存储
+        from ..services.storage_factory import get_storage
+        storage = get_storage()
+        if storage and storage.is_available():
+            # 如果配置了对象存储，提示使用直接上传
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"文件太大（{file_size_mb:.2f} MB），超过 Vercel 限制（4.5 MB）。系统已配置对象存储，请使用直接上传功能，或压缩文档中的图片后再上传。"
+            )
+        else:
+            # 如果未配置对象存储，提示压缩文件
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"文件太大（{file_size_mb:.2f} MB），超过 Vercel 限制（4.5 MB）。请压缩文档中的图片（Word → 图片格式 → 压缩图片 → 压缩文档中的所有图片）或配置对象存储后再上传。"
+            )
     
     # 获取用户 session_id
     session_id = get_or_create_session_id(request)

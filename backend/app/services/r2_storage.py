@@ -100,6 +100,21 @@ class R2Storage(StorageBase):
         except Exception as e:
             print(f"R2 list error: {e}")
             return []
+    
+    def get_presigned_upload_url(self, key: str, expires_in: int = 3600) -> Optional[str]:
+        """获取预签名上传URL（用于前端直接上传）"""
+        if not self.is_available():
+            return None
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': self.bucket_name, 'Key': key},
+                ExpiresIn=expires_in
+            )
+            return url
+        except Exception as e:
+            print(f"R2 presigned URL error: {e}")
+            return None
 
 
 # 全局存储实例

@@ -33,4 +33,11 @@ class StorageBase(ABC):
     def delete_file(self, key: str) -> bool:
         """删除文件"""
         pass
+    
+    def get_presigned_upload_url(self, key: str, expires_in: int = 3600) -> Optional[str]:
+        """
+        获取预签名上传URL（用于前端直接上传）
+        如果存储后端不支持，返回None
+        """
+        return None
 

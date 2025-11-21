@@ -8,8 +8,7 @@
   ],
   "functions": {
     "api/index.py": {
-      "maxDuration": 30,
-      "maxRequestSize": "20mb"
+      "maxDuration": 30
     }
   }
 }
