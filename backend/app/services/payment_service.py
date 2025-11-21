@@ -24,13 +24,14 @@ class PaymentService:
         return self.DEFAULT_PRICE
 
     def get_payment_account(self) -> dict:
-        """获取收款账户信息"""
+        """获取收款账户信息（已禁用，不再返回账户信息）"""
+        # 不再返回收款账户信息
         return {
-            "alipay_account": os.getenv("ALIPAY_ACCOUNT", ""),
-            "wechat_account": os.getenv("WECHAT_ACCOUNT", ""),
-            "bank_account": os.getenv("BANK_ACCOUNT", ""),
-            "bank_name": os.getenv("BANK_NAME", ""),
-            "account_name": os.getenv("ACCOUNT_NAME", ""),
+            "alipay_account": "",
+            "wechat_account": "",
+            "bank_account": "",
+            "bank_name": "",
+            "account_name": "",
         }
 
     def calculate_price(self, document_id: str) -> float:
