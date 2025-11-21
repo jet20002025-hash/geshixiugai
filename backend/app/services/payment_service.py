@@ -60,15 +60,27 @@ class PaymentService:
                 "paid": True,
             }
         
-        # 可用的支付方式（只保留模拟支付，不显示支付宝和微信）
+        # 可用的支付方式
         payment_methods = ["mock"]  # 默认只有模拟支付
         
-        # 不再添加支付宝和微信支付方式
+        # 检查环境变量（添加调试日志）
+        wechat_mch_id = os.getenv("WECHAT_MCH_ID", "")
+        wechat_api_key = os.getenv("WECHAT_API_KEY", "")
+        
         # 如果配置了 PayJS，添加 PayJS 支付
         if os.getenv("PAYJS_MCHID") and os.getenv("PAYJS_KEY"):
             payment_methods.append("payjs")
         
-        # 如果配置了其他支付方式，可以添加（但不包括支付宝和微信）
+        # 如果配置了微信支付，添加微信支付
+        if wechat_mch_id and wechat_api_key:
+            payment_methods.append("wechat")
+            print(f"[PaymentService] 微信支付已配置，mch_id长度: {len(wechat_mch_id)}, api_key长度: {len(wechat_api_key)}")
+        else:
+            print(f"[PaymentService] 微信支付未配置 - mch_id存在: {bool(wechat_mch_id)}, api_key存在: {bool(wechat_api_key)}")
+        
+        # 如果配置了其他真实支付，添加相应方式
+        if os.getenv("ALIPAY_APP_ID"):
+            payment_methods.append("alipay")
         if os.getenv("STRIPE_SECRET_KEY"):
             payment_methods.append("stripe")
         

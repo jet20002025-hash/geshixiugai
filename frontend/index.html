@@ -667,13 +667,8 @@
             paymentData.payment_methods = ["mock"];
           }
           
-          // 过滤掉支付宝和微信支付方式
-          const filteredMethods = paymentData.payment_methods.filter(method => 
-            method !== "alipay" && method !== "wechat"
-          );
-          
-          console.log("开始渲染支付方式，数量:", filteredMethods.length);
-          filteredMethods.forEach(method => {
+          console.log("开始渲染支付方式，数量:", paymentData.payment_methods.length);
+          paymentData.payment_methods.forEach(method => {
             console.log("渲染支付方式:", method);
             const methodDiv = document.createElement("div");
             methodDiv.style.marginBottom = "10px";
@@ -695,9 +690,8 @@
             radio.value = method;
             radio.style.marginRight = "10px";
             
-            if (method === selectedMethod || (filteredMethods.length > 0 && method === filteredMethods[0])) {
+            if (method === selectedMethod) {
               radio.checked = true;
-              selectedMethod = method;
               label.style.borderColor = "#4CAF50";
               label.style.backgroundColor = "#f1f8f4";
             }
@@ -705,6 +699,8 @@
              const methodName = {
                "mock": "模拟支付（测试）",
                "payjs": "PayJS 支付（支付宝/微信）",
+               "alipay": "支付宝",
+               "wechat": "微信支付",
                "stripe": "Stripe（国际支付）"
              }[method] || method;
             
@@ -949,13 +945,99 @@
               throw new Error("未获取到支付链接");
             }
           } else if (paymentMethod === "wechat") {
-            // 微信支付已禁用
-            showMessage(resultStatus, "微信支付已禁用，请使用其他支付方式", true);
-            return;
+            // 微信支付（H5支付或扫码支付）
+            const response = await fetch("/payments/wechat/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                document_id: documentId,
+                payment_method: "wechat"
+              }),
+            });
+            
+            if (!response.ok) {
+              const detail = await response.json();
+              throw new Error(detail.detail || "创建支付订单失败");
+            }
+            
+            const paymentData = await response.json();
+            
+            if (paymentData.payment_url) {
+              if (paymentData.payment_type === "native") {
+                // Native支付（扫码支付）- 显示二维码
+                showMessage(resultStatus, "请使用微信扫码支付", false);
+                
+                // 创建二维码显示区域
+                const qrCodeDiv = document.createElement("div");
+                qrCodeDiv.style.cssText = "text-align: center; padding: 20px; background: #fff; border-radius: 5px; margin: 20px 0;";
+                qrCodeDiv.innerHTML = `
+                  <p style="margin-bottom: 15px; font-weight: bold; color: #1976D2;">请使用微信扫码支付</p>
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentData.payment_url)}" 
+                       alt="微信支付二维码" 
+                       style="max-width: 300px; border: 2px solid #ddd; padding: 10px; background: #fff;">
+                  <p style="margin-top: 15px; color: #666; font-size: 14px;">支付完成后，系统会自动更新订单状态</p>
+                `;
+                
+                // 将二维码插入到支付信息区域
+                const paymentInfo = document.getElementById("paymentInfo");
+                if (paymentInfo) {
+                  paymentInfo.appendChild(qrCodeDiv);
+                }
+                
+                // 轮询检查支付状态
+                const checkInterval = setInterval(async () => {
+                  try {
+                    const statusResponse = await fetch(`/documents/${documentId}/status`);
+                    const statusData = await statusResponse.json();
+                    
+                    if (statusData.paid) {
+                      clearInterval(checkInterval);
+                      qrCodeDiv.remove();
+                      showMessage(resultStatus, "支付成功，正式版已解锁！", false);
+                      await refreshDocumentStatus();
+                    }
+                  } catch (error) {
+                    console.error("检查支付状态失败:", error);
+                  }
+                }, 3000); // 每3秒检查一次
+                
+                // 30分钟后停止检查
+                setTimeout(() => {
+                  clearInterval(checkInterval);
+                }, 30 * 60 * 1000);
+              } else {
+                // H5支付 - 直接跳转
+                window.location.href = paymentData.payment_url;
+              }
+            } else {
+              throw new Error("未获取到支付链接");
+            }
           } else if (paymentMethod === "alipay" || paymentMethod === "支付宝" || (paymentMethod && paymentMethod.includes && paymentMethod.includes("alipay"))) {
-            // 支付宝支付已禁用
-            showMessage(resultStatus, "支付宝支付已禁用，请使用其他支付方式", true);
-            return;
+            // 支付宝支付（手机网站支付）
+            console.log("开始创建支付宝支付订单...", "paymentMethod:", paymentMethod);
+            const response = await fetch("/payments/alipay/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                document_id: documentId,
+                payment_method: "alipay"
+              }),
+            });
+            
+            if (!response.ok) {
+              const detail = await response.json();
+              throw new Error(detail.detail || "创建支付订单失败");
+            }
+            
+            const paymentData = await response.json();
+            
+            if (paymentData.payment_url) {
+              // 支付宝支付 - 直接跳转到支付页面
+              showMessage(resultStatus, "正在跳转到支付宝支付页面...", false);
+              window.location.href = paymentData.payment_url;
+            } else {
+              throw new Error("未获取到支付链接");
+            }
           } else {
             // 其他支付方式（待实现）
             console.error("未匹配的支付方式:", paymentMethod, "类型:", typeof paymentMethod);
