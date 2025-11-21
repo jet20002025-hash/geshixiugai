@@ -450,9 +450,19 @@ class DocumentService:
             if rule:
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
                 # 判断是否是标题（包含"标题"字样，或以数字开头且较短，或是居中对齐的短文本）
+                # 改进：检测章节标题格式（如"3.5"、"1.2.1"、"第一章"等）
                 is_heading = (
                     (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
                     (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
+                    # 检测章节标题格式：数字.数字 或 数字.数字.数字（如"3.5"、"1.2.1"）
+                    (paragraph_text and re.match(r'^\d+\.\d+', paragraph_text)) or
+                    (paragraph_text and re.match(r'^\d+\.\d+\.\d+', paragraph_text)) or
+                    # 检测中文章节标题（如"第一章"、"第1章"等）
+                    (paragraph_text and re.match(r'^第[一二三四五六七八九十\d]+章', paragraph_text)) or
+                    (paragraph_text and re.match(r'^第\d+章', paragraph_text)) or
+                    # 检测英文章节标题（如"Chapter 1"）
+                    (paragraph_text and re.match(r'^Chapter\s+\d+', paragraph_text, re.IGNORECASE)) or
+                    # 检测其他标题格式（以数字开头且较短）
                     (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30)
                 )
                 
