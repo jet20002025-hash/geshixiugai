@@ -726,33 +726,8 @@
             paymentMethods.appendChild(methodDiv);
           });
           
-          // 显示收款账户信息
-          const account = paymentData.payment_account;
-          let accountHtml = "";
-          
-          if (account.alipay_account) {
-            accountHtml += `<p style="margin: 5px 0;"><strong>支付宝：</strong>${account.alipay_account}</p>`;
-          }
-          if (account.wechat_account) {
-            accountHtml += `<p style="margin: 5px 0;"><strong>微信：</strong>${account.wechat_account}</p>`;
-          }
-          if (account.bank_account) {
-            let bankInfo = `<p style="margin: 5px 0;"><strong>银行账号：</strong>${account.bank_account}</p>`;
-            if (account.bank_name) {
-              bankInfo = `<p style="margin: 5px 0;"><strong>${account.bank_name}：</strong>${account.bank_account}</p>`;
-            }
-            if (account.account_name) {
-              bankInfo += `<p style="margin: 5px 0;"><strong>户名：</strong>${account.account_name}</p>`;
-            }
-            accountHtml += bankInfo;
-          }
-          
-          if (accountHtml) {
-            accountDetails.innerHTML = accountHtml;
-            paymentAccountInfo.style.display = "block";
-          } else {
-            paymentAccountInfo.style.display = "none";
-          }
+          // 不显示收款账户信息
+          paymentAccountInfo.style.display = "none";
           
           // 显示支付界面
           console.log("准备显示支付界面");
