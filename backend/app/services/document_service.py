@@ -1072,7 +1072,7 @@ class DocumentService:
                     run.font.bold = True  # 加粗
                 
                 # 在参考文献文本后添加提示（不插入新段落，直接在段落末尾添加）
-                marker_text = "（本篇文献没在正文中应用）"
+                marker_text = "（该文献没有被正文引用）"
                 # 在段落末尾添加红色提示文本
                 new_run = para.add_run(marker_text)
                 new_run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
