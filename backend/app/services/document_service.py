@@ -361,6 +361,31 @@ class DocumentService:
         # 默认返回正文样式
         return DEFAULT_STYLE
 
+    def _find_cover_end_index(self, document: Document) -> int:
+        """找到封面结束的段落索引，跳过封面部分"""
+        # 封面的结束标志：通常是"摘要"、"目录"、"引言"、"第一章"等
+        cover_end_keywords = [
+            "摘要", "ABSTRACT", "目录", "Contents", 
+            "引言", "绪论", "前言", "第一章", "第1章", "Chapter 1",
+            "1 引言", "1 绪论", "1 概述"
+        ]
+        
+        # 从前往后查找，找到第一个封面结束标志
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if not para_text:
+                continue
+            
+            # 检查是否是封面结束标志
+            for keyword in cover_end_keywords:
+                if para_text.startswith(keyword) or keyword in para_text:
+                    # 确保不是封面中的文字（封面通常较短）
+                    if len(para_text) < 200:  # 封面中的文字通常较短
+                        return idx
+        
+        # 如果找不到，跳过前20个段落（通常是封面）
+        return min(20, len(document.paragraphs) - 1)
+
     def _apply_rules(
         self,
         document: Document,
@@ -373,8 +398,14 @@ class DocumentService:
         changes_log = []  # 记录详细修改日志
 
         default_rule = rules.get(default_style) if default_style else None
+        
+        # 找到封面结束位置，跳过封面部分
+        cover_end_idx = self._find_cover_end_index(document)
 
         for idx, paragraph in enumerate(document.paragraphs):
+            # 跳过封面部分，不修改封面内容
+            if idx < cover_end_idx:
+                continue
             style_name = paragraph.style.name if paragraph.style else None
             rule = None
             applied_rule_name = None
@@ -757,21 +788,25 @@ class DocumentService:
         """
         issues = []
         
-        # 1. 找到参考文献部分的起始位置
+        # 1. 找到参考文献部分的起始位置（从后往前查找，找到最后一个"参考文献"标题）
         reference_start_idx = None
         reference_section_text = ""
         
-        for idx, paragraph in enumerate(document.paragraphs):
+        # 从后往前查找，找到最后一个"参考文献"标题（避免匹配到目录中的"参考文献"）
+        for idx in range(len(document.paragraphs) - 1, -1, -1):
+            paragraph = document.paragraphs[idx]
             para_text = paragraph.text.strip() if paragraph.text else ""
             # 检测参考文献标题（可能包含"参考文献"、"References"、"参考书目"等）
             if re.search(r'参考(文献|书目)', para_text) or para_text.lower().startswith('references') or para_text.lower().startswith('bibliography'):
-                reference_start_idx = idx
-                # 收集参考文献部分的内容（最多收集50个段落）
-                ref_paragraphs = []
-                for i in range(idx, min(idx + 50, len(document.paragraphs))):
-                    ref_paragraphs.append(document.paragraphs[i].text.strip() if document.paragraphs[i].text else "")
-                reference_section_text = "\n".join(ref_paragraphs)
-                break
+                # 确保是标题格式（通常较短，且可能是居中或单独一行）
+                if len(para_text) < 50 or para_text in ["参考文献", "References", "参考书目", "Bibliography"]:
+                    reference_start_idx = idx
+                    # 收集参考文献部分的内容（最多收集100个段落）
+                    ref_paragraphs = []
+                    for i in range(idx, min(idx + 100, len(document.paragraphs))):
+                        ref_paragraphs.append(document.paragraphs[i].text.strip() if document.paragraphs[i].text else "")
+                    reference_section_text = "\n".join(ref_paragraphs)
+                    break
         
         # 如果没有找到参考文献部分，提示用户
         if reference_start_idx is None:
@@ -841,14 +876,17 @@ class DocumentService:
             return issues
         
         # 3. 检查正文中是否有引用标注，并找出被引用的参考文献编号
-        # 正文部分：从文档开始到参考文献部分之前
+        # 正文部分：从封面结束到参考文献部分之前
+        body_start_idx = self._find_body_start_index(document)
         body_text = ""
         body_paragraphs = []
-        for idx in range(min(100, reference_start_idx)):  # 只检查前100个段落和参考文献之前的部分
+        
+        # 从正文开始到参考文献之前的所有段落
+        for idx in range(body_start_idx, reference_start_idx):
             para = document.paragraphs[idx]
             para_text = para.text.strip() if para.text else ""
-            # 只检查较长的段落（正文），跳过标题、目录等短段落
-            if len(para_text) > 50:  # 只检查较长的段落（正文）
+            # 只检查较长的段落（正文），跳过标题等短段落
+            if len(para_text) > 30:  # 正文段落通常较长
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
         
