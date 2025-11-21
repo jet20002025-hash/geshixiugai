@@ -858,7 +858,9 @@ class DocumentService:
         
         for idx in range(reference_start_idx + 1, min(reference_start_idx + 100, len(document.paragraphs))):
             para = document.paragraphs[idx]
-            para_text = para.text.strip() if para.text else ""
+            # 获取原始文本，不strip，以便检查开头格式
+            para_text_raw = para.text if para.text else ""
+            para_text = para_text_raw.strip()
             
             # 如果遇到新的章节标题，停止收集
             if len(para_text) < 50 and (para_text.startswith("第") or para_text.startswith("Chapter") or 
@@ -890,38 +892,47 @@ class DocumentService:
             # 首先尝试从段落开头提取编号（更准确）
             # 检查常见的参考文献编号格式
             # 注意：参考文献格式可能是 [1]  作者名...（[1]后面有多个空格）
+            # 改进：使用 search 而不是 match，允许前面有少量空格
             number_match = None
-            if re.match(r'^\[\d+\]', para_text):  # [1] 格式（后面可能有空格）
-                number_match = re.search(r'\d+', para_text)
-                if number_match:
+            
+            # 检查 [数字] 格式（优先检查，因为这是最常见的格式）
+            # 使用 search 查找，但检查是否在段落开头（允许前面有少量空格）
+            bracket_match = re.search(r'\[(\d+)\]', para_text)
+            if bracket_match:
+                # 检查 [数字] 是否在段落开头（允许前面有少量空格）
+                bracket_pos = para_text.find(bracket_match.group(0))
+                if bracket_pos <= 5:  # [数字] 在段落开头5个字符内
                     is_reference = True
-                    ref_number = int(number_match.group())
-                    print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number}")
-            elif re.match(r'^\d+\.', para_text):  # 1. 格式
-                number_match = re.search(r'^\d+', para_text)
-                if number_match:
-                    is_reference = True
-                    ref_number = int(number_match.group())
-                    print(f"[DocumentService] 通过 数字. 格式识别参考文献: {ref_number}")
-            elif re.match(r'^\(\d+\)', para_text):  # (1) 格式
-                number_match = re.search(r'\d+', para_text)
-                if number_match:
-                    is_reference = True
-                    ref_number = int(number_match.group())
-                    print(f"[DocumentService] 通过 (数字) 格式识别参考文献: {ref_number}")
-            else:
-                # 尝试其他格式：可能是空格分隔的编号，如 "1 作者名..."
-                number_match = re.match(r'^(\d+)\s+', para_text)
-                if number_match:
-                    # 检查后面是否有参考文献特征
-                    remaining_text = para_text[len(number_match.group(0)):].strip()
-                    # 如果后面有作者名、年份等特征，可能是参考文献
-                    has_year = re.search(r'\d{4}', remaining_text)
-                    has_author = re.search(r'[，,]\s*\d{4}|[A-Z][a-z]+\s+[A-Z]', remaining_text)
-                    if has_year or (has_author and len(remaining_text) > 20):
+                    ref_number = int(bracket_match.group(1))
+                    print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number} (位置: {bracket_pos})")
+            
+            # 如果还没有识别，继续检查其他格式
+            if not is_reference:
+                if re.match(r'^\d+\.', para_text):  # 1. 格式
+                    number_match = re.search(r'^\d+', para_text)
+                    if number_match:
                         is_reference = True
-                        ref_number = int(number_match.group(1))
-                        print(f"[DocumentService] 通过 数字空格 格式识别参考文献: {ref_number}")
+                        ref_number = int(number_match.group())
+                        print(f"[DocumentService] 通过 数字. 格式识别参考文献: {ref_number}")
+                elif re.match(r'^\(\d+\)', para_text):  # (1) 格式
+                    number_match = re.search(r'\d+', para_text)
+                    if number_match:
+                        is_reference = True
+                        ref_number = int(number_match.group())
+                        print(f"[DocumentService] 通过 (数字) 格式识别参考文献: {ref_number}")
+                else:
+                    # 尝试其他格式：可能是空格分隔的编号，如 "1 作者名..."
+                    number_match = re.match(r'^(\d+)\s+', para_text)
+                    if number_match:
+                        # 检查后面是否有参考文献特征
+                        remaining_text = para_text[len(number_match.group(0)):].strip()
+                        # 如果后面有作者名、年份等特征，可能是参考文献
+                        has_year = re.search(r'\d{4}', remaining_text)
+                        has_author = re.search(r'[，,]\s*\d{4}|[A-Z][a-z]+\s+[A-Z]', remaining_text)
+                        if has_year or (has_author and len(remaining_text) > 20):
+                            is_reference = True
+                            ref_number = int(number_match.group(1))
+                            print(f"[DocumentService] 通过 数字空格 格式识别参考文献: {ref_number}")
             
             # 如果还没有识别为参考文献，但段落较长且包含作者、年份等信息，也可能是参考文献
             # 但必须排除章节标题
