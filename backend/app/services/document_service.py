@@ -1049,20 +1049,33 @@ class DocumentService:
         cited_reference_numbers = set()  # 被引用的参考文献编号集合
         
         # 首先检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
-        multi_citation_pattern = r'\[(\d+(?:[,\s]+\d+)+)\]'  # [1,2,3,4,5] 格式
-        multi_matches = re.finditer(multi_citation_pattern, body_text)
-        for match in multi_matches:
-            numbers_str = match.group(1)  # 提取括号内的内容
-            # 处理逗号或空格分隔的多个编号
-            numbers = re.findall(r'\d+', numbers_str)
-            for num_str in numbers:
-                try:
-                    num = int(num_str.strip())
-                    if 1 <= num <= 1000:
-                        cited_reference_numbers.add(num)
-                        print(f"[DocumentService] 从多个编号格式中检测到引用: {num}")
-                except ValueError:
-                    pass
+        # 改进：使用更宽松的模式，确保能匹配 [4,5] 等格式
+        # 模式说明：\[(\d+(?:[,\s]+\d+)+)\] 要求至少两个数字，但可能遗漏某些格式
+        # 改用更全面的检测：先检测所有 [数字,数字] 或 [数字 数字] 格式
+        multi_citation_patterns = [
+            r'\[(\d+(?:[,\s]+\d+)+)\]',  # [1,2,3,4,5] 或 [1 2 3] 格式（至少两个数字）
+            r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 或 [4 5] 格式（两个数字）
+        ]
+        for pattern in multi_citation_patterns:
+            multi_matches = re.finditer(pattern, body_text)
+            for match in multi_matches:
+                # 提取所有数字
+                if len(match.groups()) == 1:
+                    # 单个组，包含所有数字（可能用逗号或空格分隔）
+                    numbers_str = match.group(1)
+                    numbers = re.findall(r'\d+', numbers_str)
+                else:
+                    # 多个组，每个组是一个数字
+                    numbers = [g for g in match.groups() if g]
+                
+                for num_str in numbers:
+                    try:
+                        num = int(num_str.strip())
+                        if 1 <= num <= 1000:
+                            cited_reference_numbers.add(num)
+                            print(f"[DocumentService] 从多个编号格式中检测到引用: {num} (模式: {pattern})")
+                    except ValueError:
+                        pass
         
         # 然后检测其他格式
         for pattern, pattern_type in citation_patterns:
@@ -1214,6 +1227,30 @@ class DocumentService:
                             num = int(match.group(1))
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
+                                print(f"[DocumentService] 从普通文本中检测到引用: {num} (格式: {pattern})")
+                        except ValueError:
+                            pass
+                
+                # 额外检查：检测普通文本中的多个编号格式 [4,5]（非上标）
+                multi_patterns = [
+                    r'\[(\d+(?:[,\s]+\d+)+)\]',  # [4,5,6] 格式
+                    r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 格式
+                ]
+                for pattern in multi_patterns:
+                    matches = re.finditer(pattern, run_text)
+                    for match in matches:
+                        try:
+                            if len(match.groups()) == 1:
+                                numbers_str = match.group(1)
+                                numbers = re.findall(r'\d+', numbers_str)
+                            else:
+                                numbers = [g for g in match.groups() if g]
+                            
+                            for num_str in numbers:
+                                num = int(num_str.strip())
+                                if 1 <= num <= 1000:
+                                    cited_reference_numbers.add(num)
+                                    print(f"[DocumentService] 从普通文本多个编号格式中检测到引用: {num}")
                         except ValueError:
                             pass
         
@@ -1222,6 +1259,16 @@ class DocumentService:
         print(f"[DocumentService] 检测到 {len(reference_items)} 条参考文献")
         print(f"[DocumentService] 参考文献编号: {[ref['number'] for ref in reference_items]}")
         print(f"[DocumentService] 正文中引用的编号: {sorted(cited_reference_numbers)}")
+        print(f"[DocumentService] 正文文本长度: {len(body_text)} 字符")
+        print(f"[DocumentService] 正文段落数量: {len(body_paragraphs)}")
+        
+        # 额外调试：检查正文中是否包含 [4] 和 [5]
+        if '[4]' in body_text:
+            print(f"[DocumentService] 调试：正文中包含 [4]")
+        if '[5]' in body_text:
+            print(f"[DocumentService] 调试：正文中包含 [5]")
+        if '[4,5]' in body_text or '[4, 5]' in body_text:
+            print(f"[DocumentService] 调试：正文中包含 [4,5] 格式")
         
         uncited_references = []
         for ref_item in reference_items:
