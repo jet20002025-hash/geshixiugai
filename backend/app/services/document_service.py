@@ -876,7 +876,7 @@ class DocumentService:
             if re.match(r'^第[一二三四五六七八九十\d]+章|^第\d+章|^Chapter\s+\d+', para_text):
                 is_section_title = True
             # 检查是否是标题样式
-            if paragraph.style and ("标题" in paragraph.style.name or "heading" in paragraph.style.name.lower()):
+            if para.style and ("标题" in para.style.name or "heading" in para.style.name.lower()):
                 is_section_title = True
             
             # 如果确定是章节标题，跳过
@@ -889,22 +889,26 @@ class DocumentService:
             
             # 首先尝试从段落开头提取编号（更准确）
             # 检查常见的参考文献编号格式
+            # 注意：参考文献格式可能是 [1]  作者名...（[1]后面有多个空格）
             number_match = None
-            if re.match(r'^\[\d+\]', para_text):  # [1] 格式
+            if re.match(r'^\[\d+\]', para_text):  # [1] 格式（后面可能有空格）
                 number_match = re.search(r'\d+', para_text)
                 if number_match:
                     is_reference = True
                     ref_number = int(number_match.group())
+                    print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number}")
             elif re.match(r'^\d+\.', para_text):  # 1. 格式
                 number_match = re.search(r'^\d+', para_text)
                 if number_match:
                     is_reference = True
                     ref_number = int(number_match.group())
+                    print(f"[DocumentService] 通过 数字. 格式识别参考文献: {ref_number}")
             elif re.match(r'^\(\d+\)', para_text):  # (1) 格式
                 number_match = re.search(r'\d+', para_text)
                 if number_match:
                     is_reference = True
                     ref_number = int(number_match.group())
+                    print(f"[DocumentService] 通过 (数字) 格式识别参考文献: {ref_number}")
             else:
                 # 尝试其他格式：可能是空格分隔的编号，如 "1 作者名..."
                 number_match = re.match(r'^(\d+)\s+', para_text)
@@ -917,6 +921,7 @@ class DocumentService:
                     if has_year or (has_author and len(remaining_text) > 20):
                         is_reference = True
                         ref_number = int(number_match.group(1))
+                        print(f"[DocumentService] 通过 数字空格 格式识别参考文献: {ref_number}")
             
             # 如果还没有识别为参考文献，但段落较长且包含作者、年份等信息，也可能是参考文献
             # 但必须排除章节标题
@@ -924,7 +929,7 @@ class DocumentService:
                 # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
                 # 参考文献通常包含：作者、年份、期刊名、出版社等
                 has_author_pattern = re.search(r'[，,]\s*\d{4}[，,]', para_text)  # 年份前后有逗号
-                has_journal_pattern = re.search(r'[\[\(]J[\]\)]|期刊|学报|Journal', para_text, re.IGNORECASE)  # 期刊标识
+                has_journal_pattern = re.search(r'[\[\(][JC][\]\)]|期刊|学报|Journal|Conference', para_text, re.IGNORECASE)  # 期刊标识 [J] 或 [C]
                 has_publisher_pattern = re.search(r'出版社|Press|Publishing', para_text, re.IGNORECASE)  # 出版社
                 has_year = re.search(r'\d{4}', para_text)  # 年份
                 
@@ -932,13 +937,20 @@ class DocumentService:
                 if has_year and (has_author_pattern or has_journal_pattern or has_publisher_pattern) and len(para_text) > 30:
                     is_reference = True
                     # 尝试从段落开头提取编号（更宽松的匹配）
-                    # 可能格式：数字开头，后面跟空格或标点
-                    number_match = re.search(r'^(\d+)', para_text)
-                    if number_match:
-                        ref_number = int(number_match.group(1))
+                    # 可能格式：数字开头，后面跟空格或标点，或者 [数字] 格式
+                    # 先尝试 [数字] 格式
+                    bracket_match = re.search(r'\[(\d+)\]', para_text)
+                    if bracket_match:
+                        ref_number = int(bracket_match.group(1))
                     else:
-                        # 如果没有找到编号，使用序号（但这种情况应该很少）
-                        ref_number = len(reference_items) + 1
+                        # 尝试数字开头格式
+                        number_match = re.search(r'^(\d+)', para_text)
+                        if number_match:
+                            ref_number = int(number_match.group(1))
+                        else:
+                            # 如果没有找到编号，使用序号（但这种情况应该很少）
+                            ref_number = len(reference_items) + 1
+                    print(f"[DocumentService] 通过内容特征识别参考文献: {ref_number}")
             
             if is_reference:
                 # 如果还是没有编号，尝试从段落开头提取（更宽松的匹配）
