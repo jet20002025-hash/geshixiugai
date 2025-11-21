@@ -1021,6 +1021,8 @@ class DocumentService:
         # 3. 检查正文中是否有引用标注，并找出被引用的参考文献编号
         # 正文部分：从封面结束到参考文献部分之前
         body_start_idx = self._find_body_start_index(document)
+        print(f"[DocumentService] 正文开始位置: {body_start_idx}, 参考文献开始位置: {reference_start_idx}")
+        
         body_text = ""
         body_paragraphs = []
         
@@ -1035,6 +1037,21 @@ class DocumentService:
             if not para_text:
                 para_text = "".join([run.text for run in para.runs if run.text]).strip()
             
+            # 方法3：如果还是为空，尝试从 XML 中提取文本（最后的手段）
+            if not para_text:
+                try:
+                    para_xml = str(para._element.xml)
+                    # 提取所有文本节点
+                    import xml.etree.ElementTree as ET
+                    root = ET.fromstring(para_xml)
+                    texts = []
+                    for elem in root.iter():
+                        if elem.text:
+                            texts.append(elem.text)
+                    para_text = "".join(texts).strip()
+                except:
+                    pass
+            
             # 检查所有段落（包括短段落），因为引用可能在图片说明、表格说明等短段落中
             if len(para_text) > 0:  # 只要有内容就检查
                 body_text += para_text + " "
@@ -1042,7 +1059,48 @@ class DocumentService:
                 
                 # 调试：如果段落包含 [4] 或 [5]，打印详细信息
                 if '[4]' in para_text or '[5]' in para_text:
-                    print(f"[DocumentService] 调试：段落 {idx} 包含引用: {para_text[:100]}")
+                    print(f"[DocumentService] 调试：段落 {idx} 包含引用")
+                    print(f"[DocumentService] 段落文本: {para_text}")
+                    print(f"[DocumentService] para.text: {para.text if para.text else 'None'}")
+                    print(f"[DocumentService] runs数量: {len(para.runs)}")
+                    for run_idx, run in enumerate(para.runs):
+                        print(f"[DocumentService]   run {run_idx}: '{run.text}' (上标: {run.font.superscript if run.font else 'N/A'})")
+        
+        # 调试：检查 body_text 中是否包含 [4] 和 [5]
+        print(f"[DocumentService] 正文文本总长度: {len(body_text)} 字符")
+        if '[4]' in body_text:
+            # 找到所有 [4] 的位置
+            positions = []
+            start = 0
+            while True:
+                pos = body_text.find('[4]', start)
+                if pos == -1:
+                    break
+                positions.append(pos)
+                start = pos + 1
+            print(f"[DocumentService] 在正文中找到 {len(positions)} 个 [4]，位置: {positions}")
+            for pos in positions[:3]:  # 只显示前3个
+                context = body_text[max(0, pos-30):min(len(body_text), pos+30)]
+                print(f"[DocumentService]   [4] 上下文: ...{context}...")
+        else:
+            print(f"[DocumentService] 警告：正文文本中未找到 [4]")
+        
+        if '[5]' in body_text:
+            # 找到所有 [5] 的位置
+            positions = []
+            start = 0
+            while True:
+                pos = body_text.find('[5]', start)
+                if pos == -1:
+                    break
+                positions.append(pos)
+                start = pos + 1
+            print(f"[DocumentService] 在正文中找到 {len(positions)} 个 [5]，位置: {positions}")
+            for pos in positions[:3]:  # 只显示前3个
+                context = body_text[max(0, pos-30):min(len(body_text), pos+30)]
+                print(f"[DocumentService]   [5] 上下文: ...{context}...")
+        else:
+            print(f"[DocumentService] 警告：正文文本中未找到 [5]")
         
         # 检测引用标注的常见格式，并提取被引用的参考文献编号
         # 改进：支持更多格式，包括多个编号的完整提取
@@ -1061,22 +1119,48 @@ class DocumentService:
         
         # 改进：先检测单个编号格式 [1], [2], [3], [4], [5] 等
         # 这样可以确保单个引用不会被多个编号的模式遗漏
+        # 使用更简单直接的方法：直接搜索所有 [数字] 格式
+        print(f"[DocumentService] 开始检测引用，正文文本长度: {len(body_text)}")
+        
+        # 方法1：使用正则表达式搜索所有 [数字] 格式
         single_citation_pattern = r'\[(\d+)\]'
-        single_matches = re.finditer(single_citation_pattern, body_text)
+        single_matches = list(re.finditer(single_citation_pattern, body_text))
+        print(f"[DocumentService] 正则表达式找到 {len(single_matches)} 个 [数字] 格式的匹配")
+        
         for match in single_matches:
             try:
                 num = int(match.group(1))
                 if 1 <= num <= 1000:
                     cited_reference_numbers.add(num)
-                    # 获取匹配的上下文（前后各20个字符），便于调试
+                    # 获取匹配的上下文（前后各30个字符），便于调试
                     match_start = match.start()
                     match_end = match.end()
-                    context_start = max(0, match_start - 20)
-                    context_end = min(len(body_text), match_end + 20)
+                    context_start = max(0, match_start - 30)
+                    context_end = min(len(body_text), match_end + 30)
                     context = body_text[context_start:context_end].replace('\n', ' ').replace('\r', ' ')
-                    print(f"[DocumentService] 从单个编号格式中检测到引用: [{num}] (上下文: ...{context}...)")
-            except ValueError:
-                pass
+                    print(f"[DocumentService] 从单个编号格式中检测到引用: [{num}] (位置: {match_start}, 上下文: ...{context}...)")
+            except ValueError as e:
+                print(f"[DocumentService] 提取编号失败: {e}")
+        
+        # 方法2：直接使用字符串搜索作为备用（更可靠）
+        for num in range(1, 1001):
+            search_str = f'[{num}]'
+            if search_str in body_text:
+                if num not in cited_reference_numbers:
+                    cited_reference_numbers.add(num)
+                    # 找到所有位置
+                    positions = []
+                    start = 0
+                    while True:
+                        pos = body_text.find(search_str, start)
+                        if pos == -1:
+                            break
+                        positions.append(pos)
+                        start = pos + 1
+                    print(f"[DocumentService] 通过字符串搜索检测到引用: [{num}] (找到 {len(positions)} 处)")
+                    for pos in positions[:2]:  # 只显示前2个
+                        context = body_text[max(0, pos-30):min(len(body_text), pos+30)].replace('\n', ' ').replace('\r', ' ')
+                        print(f"[DocumentService]   位置 {pos}: ...{context}...")
         
         # 然后检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
         # 改进：使用更宽松的模式，确保能匹配 [4,5] 等格式
