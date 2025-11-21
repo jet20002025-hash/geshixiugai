@@ -364,12 +364,30 @@ class DocumentService:
             return "figure_caption"
         if text.startswith("表") and len(text) < 100:
             return "table_caption"
-        if re.match(r"^第[一二三四五六七八九十\d]+章|^第\d+章|^Chapter\s+\d+", text):
-            return "title_level_1"
-        if re.match(r"^\d+\.\d+|^第[一二三四五六七八九十\d]+节", text):
-            return "title_level_2"
-        if re.match(r"^\d+\.\d+\.\d+", text):
-            return "title_level_3"
+        
+        # 章节标题检测：必须是独立的、较短的段落
+        # 避免将正文中的"第二章的方案"等误识别为标题
+        chapter_match = re.match(r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$", text)
+        if chapter_match:
+            # 如果匹配到章节标题，且段落较短（标题通常是独立的短段落）
+            # 或者后面只有标点符号，则认为是标题
+            remaining_text = text[len(chapter_match.group(0)):].strip()
+            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                return "title_level_1"
+        
+        # 二级标题检测：必须是独立的、较短的段落
+        section_match = re.match(r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
+        if section_match:
+            remaining_text = text[len(section_match.group(0)):].strip()
+            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                return "title_level_2"
+        
+        # 三级标题检测：必须是独立的、较短的段落
+        subsection_match = re.match(r"^(\d+\.\d+\.\d+)([，,。.：:；;]?)$", text)
+        if subsection_match:
+            remaining_text = text[len(subsection_match.group(0)):].strip()
+            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                return "title_level_3"
         
         # 默认返回正文样式
         return DEFAULT_STYLE
@@ -450,19 +468,9 @@ class DocumentService:
             if rule:
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
                 # 判断是否是标题（包含"标题"字样，或以数字开头且较短，或是居中对齐的短文本）
-                # 改进：检测章节标题格式（如"3.5"、"1.2.1"、"第一章"等）
                 is_heading = (
                     (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
                     (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
-                    # 检测章节标题格式：数字.数字 或 数字.数字.数字（如"3.5"、"1.2.1"）
-                    (paragraph_text and re.match(r'^\d+\.\d+', paragraph_text)) or
-                    (paragraph_text and re.match(r'^\d+\.\d+\.\d+', paragraph_text)) or
-                    # 检测中文章节标题（如"第一章"、"第1章"等）
-                    (paragraph_text and re.match(r'^第[一二三四五六七八九十\d]+章', paragraph_text)) or
-                    (paragraph_text and re.match(r'^第\d+章', paragraph_text)) or
-                    # 检测英文章节标题（如"Chapter 1"）
-                    (paragraph_text and re.match(r'^Chapter\s+\d+', paragraph_text, re.IGNORECASE)) or
-                    # 检测其他标题格式（以数字开头且较短）
                     (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30)
                 )
                 

@@ -211,16 +211,18 @@ STYLE_MAPPING_RULES = [
         "pattern": r"^表\s*\d+",
         "style": "table_caption",
     },
+    # 注意：章节标题的检测在 _detect_paragraph_style 中有更严格的逻辑
+    # 这里只保留简单的模式匹配，实际检测会检查段落长度和内容
     {
-        "pattern": r"^第[一二三四五六七八九十\d]+章|^第\d+章|^Chapter\s+\d+",
+        "pattern": r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$",
         "style": "title_level_1",
     },
     {
-        "pattern": r"^\d+\.\d+|^第[一二三四五六七八九十\d]+节",
+        "pattern": r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$",
         "style": "title_level_2",
     },
     {
-        "pattern": r"^\d+\.\d+\.\d+",
+        "pattern": r"^(\d+\.\d+\.\d+)([，,。.：:；;]?)$",
         "style": "title_level_3",
     },
 ]
