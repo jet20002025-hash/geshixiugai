@@ -834,6 +834,24 @@ class DocumentService:
                                          para_text.startswith("附录") or para_text.startswith("Appendix")):
                 break
             
+            # 排除章节标题（如"1.2"、"1.2.1"、"第一章"等）
+            is_section_title = False
+            # 检查是否是章节标题格式
+            if re.match(r'^\d+\.\d+', para_text) or re.match(r'^\d+\.\d+\.\d+', para_text):  # 1.2 或 1.2.1 格式
+                # 如果段落较短（通常是标题），且不包含参考文献特征，则不是参考文献
+                if len(para_text) < 100:
+                    is_section_title = True
+            # 检查是否是章节标题（如"第一章"、"第1章"等）
+            if re.match(r'^第[一二三四五六七八九十\d]+章|^第\d+章|^Chapter\s+\d+', para_text):
+                is_section_title = True
+            # 检查是否是标题样式
+            if paragraph.style and ("标题" in paragraph.style.name or "heading" in paragraph.style.name.lower()):
+                is_section_title = True
+            
+            # 如果确定是章节标题，跳过
+            if is_section_title:
+                continue
+            
             # 检查是否符合参考文献格式
             is_reference = False
             ref_number = None
@@ -848,9 +866,17 @@ class DocumentService:
                     break
             
             # 如果段落较长且包含作者、年份等信息，也可能是参考文献
+            # 但必须排除章节标题
             if not is_reference and len(para_text) > 20:
                 # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
-                if re.search(r'\d{4}', para_text) and (len(para_text) > 30):  # 包含年份且较长
+                # 参考文献通常包含：作者、年份、期刊名、出版社等
+                has_author_pattern = re.search(r'[，,]\s*\d{4}[，,]', para_text)  # 年份前后有逗号
+                has_journal_pattern = re.search(r'[\[\(]J[\]\)]|期刊|学报|Journal', para_text, re.IGNORECASE)  # 期刊标识
+                has_publisher_pattern = re.search(r'出版社|Press|Publishing', para_text, re.IGNORECASE)  # 出版社
+                has_year = re.search(r'\d{4}', para_text)  # 年份
+                
+                # 参考文献必须同时满足：有年份，且（有作者模式或期刊标识或出版社），且段落较长
+                if has_year and (has_author_pattern or has_journal_pattern or has_publisher_pattern) and len(para_text) > 30:
                     is_reference = True
                     # 尝试从段落开头提取编号
                     number_match = re.search(r'^\d+', para_text)
