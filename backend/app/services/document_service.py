@@ -998,9 +998,10 @@ class DocumentService:
                 body_paragraphs.append((idx, para_text))
         
         # 检测引用标注的常见格式，并提取被引用的参考文献编号
+        # 改进：支持更多格式，包括多个编号的完整提取
         citation_patterns = [
             (r'\[(\d+)\]', 'single'),                    # [1] 格式
-            (r'\[(\d+)[,\s]+(\d+)\]', 'range_comma'),   # [1,2,3] 格式（逗号分隔）
+            (r'\[(\d+)[,\s]+(\d+)\]', 'range_comma'),   # [1,2,3] 格式（逗号分隔，但只匹配两个数字）
             (r'\[(\d+)[\-\s]+(\d+)\]', 'range_dash'),   # [1-5] 或 [1 5] 格式（连字符或空格分隔）
             (r'\((\d+)\)', 'paren_single'),              # (1) 格式（圆括号）
             (r'（(\d+)）', 'paren_single_cn'),          # （1）格式（中文圆括号）
@@ -1011,28 +1012,52 @@ class DocumentService:
         
         cited_reference_numbers = set()  # 被引用的参考文献编号集合
         
+        # 首先检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
+        multi_citation_pattern = r'\[(\d+(?:[,\s]+\d+)+)\]'  # [1,2,3,4,5] 格式
+        multi_matches = re.finditer(multi_citation_pattern, body_text)
+        for match in multi_matches:
+            numbers_str = match.group(1)  # 提取括号内的内容
+            # 处理逗号或空格分隔的多个编号
+            numbers = re.findall(r'\d+', numbers_str)
+            for num_str in numbers:
+                try:
+                    num = int(num_str.strip())
+                    if 1 <= num <= 1000:
+                        cited_reference_numbers.add(num)
+                        print(f"[DocumentService] 从多个编号格式中检测到引用: {num}")
+                except ValueError:
+                    pass
+        
+        # 然后检测其他格式
         for pattern, pattern_type in citation_patterns:
             matches = re.finditer(pattern, body_text)
             for match in matches:
                 if pattern_type == 'single':
                     # [1] 格式，提取单个编号
-                    cited_reference_numbers.add(int(match.group(1)))
+                    num = int(match.group(1))
+                    cited_reference_numbers.add(num)
+                    print(f"[DocumentService] 检测到单个引用: [{num}]")
                 elif pattern_type == 'paren_single':
                     # (1) 格式，提取单个编号
-                    cited_reference_numbers.add(int(match.group(1)))
+                    num = int(match.group(1))
+                    cited_reference_numbers.add(num)
+                    print(f"[DocumentService] 检测到单个引用: ({num})")
                 elif pattern_type == 'paren_single_cn':
                     # （1）格式，提取单个编号
-                    cited_reference_numbers.add(int(match.group(1)))
+                    num = int(match.group(1))
+                    cited_reference_numbers.add(num)
+                    print(f"[DocumentService] 检测到单个引用: （{num}）")
                 elif pattern_type in ['range_comma', 'range_dash', 'paren_range', 'paren_range_cn']:
                     # [1,2,3] 或 [1-5] 或 (1,2,3) 格式，提取所有编号
                     numbers_str = match.group(0).strip('[]()（）')
-                    # 处理逗号分隔的编号
+                    # 处理逗号分隔的编号（改进：支持多个编号）
                     if ',' in numbers_str:
                         for num_str in numbers_str.split(','):
                             try:
                                 num = int(num_str.strip())
                                 if 1 <= num <= 1000:  # 合理的参考文献编号范围
                                     cited_reference_numbers.add(num)
+                                    print(f"[DocumentService] 从逗号分隔格式中检测到引用: {num}")
                             except ValueError:
                                 pass
                     # 处理连字符或空格分隔的编号范围
@@ -1047,6 +1072,7 @@ class DocumentService:
                                 if 1 <= start <= end <= 1000:
                                     for num in range(start, end + 1):
                                         cited_reference_numbers.add(num)
+                                    print(f"[DocumentService] 从范围格式中检测到引用: {start}-{end}")
                             except ValueError:
                                 pass
                     else:
@@ -1055,6 +1081,7 @@ class DocumentService:
                             num = int(numbers_str.strip())
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
+                                print(f"[DocumentService] 从格式中检测到引用: {num}")
                         except ValueError:
                             pass
         
@@ -1085,18 +1112,36 @@ class DocumentService:
                         except ValueError:
                             pass
                     
-                    # 检查多个编号的上标引用 [1,2,3] 或 [1-5]
+                    # 检查多个编号的上标引用 [1,2,3,4,5] 或 [1-5]（改进：支持任意数量的编号）
+                    # 先检测多个编号格式 [1,2,3,4,5]
+                    multi_bracket_pattern = r'\[(\d+(?:[,\s]+\d+)+)\]'
+                    multi_matches = re.finditer(multi_bracket_pattern, run_text)
+                    for match in multi_matches:
+                        try:
+                            numbers_str = match.group(1)  # 提取括号内的内容
+                            # 提取所有数字
+                            numbers = re.findall(r'\d+', numbers_str)
+                            for num_str in numbers:
+                                num = int(num_str.strip())
+                                if 1 <= num <= 1000:
+                                    cited_reference_numbers.add(num)
+                                    print(f"[DocumentService] 检测到上标格式多个编号引用 [{num}]")
+                        except ValueError:
+                            pass
+                    
+                    # 再检测范围格式 [1-5] 或两个编号 [1,2]
                     range_matches = re.finditer(r'\[(\d+)[,\-\s]+(\d+)\]', run_text)
                     for match in range_matches:
                         try:
                             # 提取所有数字
                             numbers_str = match.group(0).strip('[]')
                             if ',' in numbers_str:
-                                # 逗号分隔：[1,2,3]
+                                # 逗号分隔：[1,2] 或 [1,2,3]
                                 for num_str in numbers_str.split(','):
                                     num = int(num_str.strip())
                                     if 1 <= num <= 1000:
                                         cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式逗号分隔引用 [{num}]")
                             elif '-' in numbers_str:
                                 # 连字符分隔：[1-5]
                                 parts = numbers_str.split('-')
@@ -1106,6 +1151,7 @@ class DocumentService:
                                     if 1 <= start <= end <= 1000:
                                         for num in range(start, end + 1):
                                             cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式范围引用 [{start}-{end}]")
                         except ValueError:
                             pass
                     
