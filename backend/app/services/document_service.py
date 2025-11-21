@@ -1047,25 +1047,71 @@ class DocumentService:
                             pass
         
         # 额外检查：检测Word中的上标格式引用（通过检查runs的格式）
+        # 毕业论文中，引用通常是在文字上方加入 [1], [2] 这种格式，通常是上标格式
         for idx in range(body_start_idx, reference_start_idx):
             para = document.paragraphs[idx]
             for run in para.runs:
+                run_text = run.text.strip() if run.text else ""
+                if not run_text:
+                    continue
+                
                 # 检查是否是上标格式（可能是引用标注）
                 if run.font.superscript:
-                    run_text = run.text.strip()
-                    # 检查上标文本是否是数字或数字组合
-                    if re.match(r'^\d+([,\-\s]+\d+)*$', run_text):
-                        # 提取数字
-                        numbers = re.findall(r'\d+', run_text)
-                        for num_str in numbers:
-                            try:
-                                num = int(num_str)
-                                if 1 <= num <= 1000:
-                                    cited_reference_numbers.add(num)
-                            except ValueError:
-                                pass
-                # 也检查普通文本中的数字（可能是引用）
-                run_text = run.text
+                    # 上标格式的引用可能是：
+                    # 1. 纯数字：1, 2, 3
+                    # 2. 方括号数字：[1], [2], [3]
+                    # 3. 多个数字：[1,2,3] 或 [1-5]
+                    
+                    # 检查方括号格式的上标引用 [1], [2] 等
+                    bracket_matches = re.finditer(r'\[(\d+)\]', run_text)
+                    for match in bracket_matches:
+                        try:
+                            num = int(match.group(1))
+                            if 1 <= num <= 1000:
+                                cited_reference_numbers.add(num)
+                                print(f"[DocumentService] 检测到上标格式引用 [{num}]")
+                        except ValueError:
+                            pass
+                    
+                    # 检查多个编号的上标引用 [1,2,3] 或 [1-5]
+                    range_matches = re.finditer(r'\[(\d+)[,\-\s]+(\d+)\]', run_text)
+                    for match in range_matches:
+                        try:
+                            # 提取所有数字
+                            numbers_str = match.group(0).strip('[]')
+                            if ',' in numbers_str:
+                                # 逗号分隔：[1,2,3]
+                                for num_str in numbers_str.split(','):
+                                    num = int(num_str.strip())
+                                    if 1 <= num <= 1000:
+                                        cited_reference_numbers.add(num)
+                            elif '-' in numbers_str:
+                                # 连字符分隔：[1-5]
+                                parts = numbers_str.split('-')
+                                if len(parts) == 2:
+                                    start = int(parts[0].strip())
+                                    end = int(parts[1].strip())
+                                    if 1 <= start <= end <= 1000:
+                                        for num in range(start, end + 1):
+                                            cited_reference_numbers.add(num)
+                        except ValueError:
+                            pass
+                    
+                    # 检查纯数字格式的上标引用（如果还没有匹配到方括号格式）
+                    if not re.search(r'\[', run_text):
+                        # 纯数字：1, 2, 3 或 1,2,3
+                        if re.match(r'^\d+([,\-\s]+\d+)*$', run_text):
+                            numbers = re.findall(r'\d+', run_text)
+                            for num_str in numbers:
+                                try:
+                                    num = int(num_str)
+                                    if 1 <= num <= 1000:
+                                        cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式引用 {num}")
+                                except ValueError:
+                                    pass
+                
+                # 也检查普通文本中的引用格式（非上标，但可能是引用）
                 # 检查是否包含 [数字] 或 (数字) 格式
                 for pattern in [r'\[(\d+)\]', r'\((\d+)\)', r'（(\d+)）']:
                     matches = re.finditer(pattern, run_text)
