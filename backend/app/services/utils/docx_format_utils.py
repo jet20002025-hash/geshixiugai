@@ -114,22 +114,20 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             paragraph.alignment = alignment_map.get(alignment, paragraph.alignment)
 
     if (line_spacing := rule.get("line_spacing")) is not None:
-        # 区分单倍行距（1.0）和固定磅值行距（如20）
-        # 如果值为1.0，表示单倍行距，使用WD_LINE_SPACING.SINGLE
-        # 如果值大于等于2，表示固定磅值行距，使用Pt()
-        if line_spacing == 1.0:
-            # 单倍行距：使用枚举值，不设置固定值
+        # 处理行距设置
+        # 如果 line_spacing 是字符串 "single"，设置为单倍行距
+        if line_spacing == "single" or line_spacing == 1.0:
+            # 单倍行距：使用 WD_LINE_SPACING.SINGLE
             pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
-            # 清除固定行距值
-            pf.line_spacing = None
-        elif line_spacing >= 2:
-            # 固定磅值行距：使用Pt()设置固定值
+            # 不设置 line_spacing 值，让Word使用默认
+        elif isinstance(line_spacing, (int, float)) and line_spacing > 1.0:
+            # 固定行距（exact spacing），单位为磅
+            # 使用 Pt() 会自动设置为固定值，而不是倍数
             pf.line_spacing = Pt(line_spacing)
         else:
-            # 小于2的值（如1.5）可能是倍数行距，但这里统一处理为固定值
-            # 如果值在1-2之间且不等于1.0，可能是1.5倍行距，但为了安全，也使用固定值
-            # 但这种情况不应该出现，因为标准中只有1.0（单倍）和20（固定磅值）
-            pf.line_spacing = Pt(line_spacing)
+            # 其他情况（如倍数行距），使用默认处理
+            # 如果值小于等于1.0且不是"single"，可能是误设置，使用单倍行距
+            pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
     if (space_before := rule.get("space_before")) is not None:
         pf.space_before = Pt(space_before)
     if (space_after := rule.get("space_after")) is not None:

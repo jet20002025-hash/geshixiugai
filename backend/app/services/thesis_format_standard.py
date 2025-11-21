@@ -35,7 +35,7 @@ FONT_STANDARDS = {
         "alignment": "center",
         "space_before": 24,  # 段前2行（12pt * 2）
         "space_after": 24,  # 段后2行
-        # 不设置行距，使用Word默认单倍行距
+        "line_spacing": "single",  # 单倍行距
     },
     "title_level_2": {
         "font_name": "黑体",
