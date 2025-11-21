@@ -61,8 +61,8 @@ class DocumentService:
         # 应用页面设置（优先使用标准）
         self._apply_page_settings(document)
         
-        # 应用页眉页脚（优先使用标准）
-        self._apply_header_footer(document)
+        # 检测页眉（不修改，只检测）
+        # 不再自动应用页眉，只检测是否存在
         
         # 合并模板规则和标准规则（标准优先）
         template_rules = template_metadata.get("styles", {})
@@ -88,6 +88,11 @@ class DocumentService:
         blank_issues = self._check_excessive_blanks(final_doc)
         if blank_issues:
             stats["blank_issues"] = blank_issues
+        
+        # 检测页眉
+        header_issues = self._check_header(final_doc)
+        if header_issues:
+            stats["header_issues"] = header_issues
 
         final_path = task_dir / "final.docx"
         final_doc.save(final_path)
@@ -274,24 +279,32 @@ class DocumentService:
             section.header_distance = Pt(PAGE_SETTINGS["header_distance"] * 28.35)
             section.footer_distance = Pt(PAGE_SETTINGS["footer_distance"] * 28.35)
     
-    def _apply_header_footer(self, document: Document) -> None:
-        """应用页眉页脚设置"""
-        header_text = HEADER_SETTINGS["text"]
+    def _check_header(self, document: Document) -> list:
+        """检测页眉是否存在，如果不存在则提示添加"""
+        issues = []
+        
+        # 检查所有节的页眉
+        has_header = False
         for section in document.sections:
             header = section.header
-            if header.is_linked_to_previous:
-                header.is_linked_to_previous = False
-            
-            # 清空现有页眉内容
+            # 检查页眉是否有内容
             for para in header.paragraphs:
-                para.clear()
-            
-            # 添加标准页眉
-            para = header.add_paragraph()
-            para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            run = para.add_run(header_text)
-            run.font.name = HEADER_SETTINGS["font_name"]
-            run.font.size = Pt(HEADER_SETTINGS["font_size"])
+                if para.text and para.text.strip():
+                    has_header = True
+                    break
+            if has_header:
+                break
+        
+        # 如果没有任何页眉，添加提示
+        if not has_header:
+            issues.append({
+                "type": "missing_header",
+                "severity": "warning",
+                "message": "文档缺少页眉",
+                "suggestion": f"请在文档中添加页眉，建议内容：{HEADER_SETTINGS['text']}"
+            })
+        
+        return issues
     
     def _merge_rules_with_standard(self, template_rules: Dict[str, Dict]) -> Dict[str, Dict]:
         """
