@@ -886,17 +886,39 @@ class DocumentService:
             # 检查是否符合参考文献格式
             is_reference = False
             ref_number = None
-            for pattern in reference_patterns:
-                match = re.match(pattern, para_text)
-                if match:
-                    is_reference = True
-                    # 提取参考文献编号
-                    number_match = re.search(r'\d+', match.group())
-                    if number_match:
-                        ref_number = int(number_match.group())
-                    break
             
-            # 如果段落较长且包含作者、年份等信息，也可能是参考文献
+            # 首先尝试从段落开头提取编号（更准确）
+            # 检查常见的参考文献编号格式
+            number_match = None
+            if re.match(r'^\[\d+\]', para_text):  # [1] 格式
+                number_match = re.search(r'\d+', para_text)
+                if number_match:
+                    is_reference = True
+                    ref_number = int(number_match.group())
+            elif re.match(r'^\d+\.', para_text):  # 1. 格式
+                number_match = re.search(r'^\d+', para_text)
+                if number_match:
+                    is_reference = True
+                    ref_number = int(number_match.group())
+            elif re.match(r'^\(\d+\)', para_text):  # (1) 格式
+                number_match = re.search(r'\d+', para_text)
+                if number_match:
+                    is_reference = True
+                    ref_number = int(number_match.group())
+            else:
+                # 尝试其他格式：可能是空格分隔的编号，如 "1 作者名..."
+                number_match = re.match(r'^(\d+)\s+', para_text)
+                if number_match:
+                    # 检查后面是否有参考文献特征
+                    remaining_text = para_text[len(number_match.group(0)):].strip()
+                    # 如果后面有作者名、年份等特征，可能是参考文献
+                    has_year = re.search(r'\d{4}', remaining_text)
+                    has_author = re.search(r'[，,]\s*\d{4}|[A-Z][a-z]+\s+[A-Z]', remaining_text)
+                    if has_year or (has_author and len(remaining_text) > 20):
+                        is_reference = True
+                        ref_number = int(number_match.group(1))
+            
+            # 如果还没有识别为参考文献，但段落较长且包含作者、年份等信息，也可能是参考文献
             # 但必须排除章节标题
             if not is_reference and len(para_text) > 20:
                 # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
@@ -909,19 +931,35 @@ class DocumentService:
                 # 参考文献必须同时满足：有年份，且（有作者模式或期刊标识或出版社），且段落较长
                 if has_year and (has_author_pattern or has_journal_pattern or has_publisher_pattern) and len(para_text) > 30:
                     is_reference = True
-                    # 尝试从段落开头提取编号
-                    number_match = re.search(r'^\d+', para_text)
+                    # 尝试从段落开头提取编号（更宽松的匹配）
+                    # 可能格式：数字开头，后面跟空格或标点
+                    number_match = re.search(r'^(\d+)', para_text)
                     if number_match:
-                        ref_number = int(number_match.group())
+                        ref_number = int(number_match.group(1))
+                    else:
+                        # 如果没有找到编号，使用序号（但这种情况应该很少）
+                        ref_number = len(reference_items) + 1
             
             if is_reference:
+                # 如果还是没有编号，尝试从段落开头提取（更宽松的匹配）
+                if ref_number is None:
+                    # 尝试匹配：数字开头，后面跟空格、点、方括号、圆括号等
+                    number_match = re.match(r'^(\d+)', para_text)
+                    if number_match:
+                        ref_number = int(number_match.group(1))
+                    else:
+                        # 如果还是没有，使用序号（确保每个参考文献都有编号）
+                        ref_number = len(reference_items) + 1
+                        print(f"[DocumentService] 警告：参考文献没有明确编号，使用序号 {ref_number}: {para_text[:50]}")
+                
                 reference_items.append({
-                    "index": ref_number if ref_number else len(reference_items) + 1,
-                    "number": ref_number if ref_number else len(reference_items) + 1,
+                    "index": ref_number,
+                    "number": ref_number,  # 确保编号一致
                     "text": para_text[:100],  # 只保存前100个字符
                     "paragraph_index": idx,
                     "paragraph": para,  # 保存段落对象，用于后续修改
                 })
+                print(f"[DocumentService] 识别参考文献 {ref_number}: {para_text[:50]}")
         
         # 如果没有找到参考文献条目，提示
         if not reference_items:
@@ -1040,11 +1078,19 @@ class DocumentService:
                             pass
         
         # 4. 找出未被引用的参考文献
+        # 调试信息：打印检测到的参考文献编号和引用编号
+        print(f"[DocumentService] 检测到 {len(reference_items)} 条参考文献")
+        print(f"[DocumentService] 参考文献编号: {[ref['number'] for ref in reference_items]}")
+        print(f"[DocumentService] 正文中引用的编号: {sorted(cited_reference_numbers)}")
+        
         uncited_references = []
         for ref_item in reference_items:
             ref_num = ref_item["number"]
             if ref_num not in cited_reference_numbers:
                 uncited_references.append(ref_item)
+                print(f"[DocumentService] 未引用的参考文献: {ref_num} - {ref_item['text'][:50]}")
+        
+        print(f"[DocumentService] 未引用的参考文献数量: {len(uncited_references)}")
         
         # 5. 在参考文献段落中标记未被引用的参考文献（标红并在文本后添加提示）
         for ref_item in uncited_references:
