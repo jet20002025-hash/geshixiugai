@@ -1025,13 +1025,24 @@ class DocumentService:
         body_paragraphs = []
         
         # 从正文开始到参考文献之前的所有段落（包括短段落，因为引用可能在图片说明等短段落中）
+        # 改进：确保能正确提取段落文本，包括所有 runs 的文本
         for idx in range(body_start_idx, reference_start_idx):
             para = document.paragraphs[idx]
+            # 方法1：使用 para.text（这是最可靠的方法，会自动合并所有 runs）
             para_text = para.text.strip() if para.text else ""
+            
+            # 方法2：如果 para.text 为空，尝试手动合并所有 runs 的文本
+            if not para_text:
+                para_text = "".join([run.text for run in para.runs if run.text]).strip()
+            
             # 检查所有段落（包括短段落），因为引用可能在图片说明、表格说明等短段落中
             if len(para_text) > 0:  # 只要有内容就检查
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
+                
+                # 调试：如果段落包含 [4] 或 [5]，打印详细信息
+                if '[4]' in para_text or '[5]' in para_text:
+                    print(f"[DocumentService] 调试：段落 {idx} 包含引用: {para_text[:100]}")
         
         # 检测引用标注的常见格式，并提取被引用的参考文献编号
         # 改进：支持更多格式，包括多个编号的完整提取
@@ -1048,7 +1059,26 @@ class DocumentService:
         
         cited_reference_numbers = set()  # 被引用的参考文献编号集合
         
-        # 首先检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
+        # 改进：先检测单个编号格式 [1], [2], [3], [4], [5] 等
+        # 这样可以确保单个引用不会被多个编号的模式遗漏
+        single_citation_pattern = r'\[(\d+)\]'
+        single_matches = re.finditer(single_citation_pattern, body_text)
+        for match in single_matches:
+            try:
+                num = int(match.group(1))
+                if 1 <= num <= 1000:
+                    cited_reference_numbers.add(num)
+                    # 获取匹配的上下文（前后各20个字符），便于调试
+                    match_start = match.start()
+                    match_end = match.end()
+                    context_start = max(0, match_start - 20)
+                    context_end = min(len(body_text), match_end + 20)
+                    context = body_text[context_start:context_end].replace('\n', ' ').replace('\r', ' ')
+                    print(f"[DocumentService] 从单个编号格式中检测到引用: [{num}] (上下文: ...{context}...)")
+            except ValueError:
+                pass
+        
+        # 然后检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
         # 改进：使用更宽松的模式，确保能匹配 [4,5] 等格式
         # 模式说明：\[(\d+(?:[,\s]+\d+)+)\] 要求至少两个数字，但可能遗漏某些格式
         # 改用更全面的检测：先检测所有 [数字,数字] 或 [数字 数字] 格式
@@ -1077,16 +1107,16 @@ class DocumentService:
                     except ValueError:
                         pass
         
-        # 然后检测其他格式
+        # 然后检测其他格式（圆括号格式等）
+        # 注意：单个 [数字] 格式已经在上面检测过了，这里只检测其他格式
         for pattern, pattern_type in citation_patterns:
+            # 跳过单个 [数字] 格式，因为已经在上面检测过了
+            if pattern_type == 'single':
+                continue
+                
             matches = re.finditer(pattern, body_text)
             for match in matches:
-                if pattern_type == 'single':
-                    # [1] 格式，提取单个编号
-                    num = int(match.group(1))
-                    cited_reference_numbers.add(num)
-                    print(f"[DocumentService] 检测到单个引用: [{num}]")
-                elif pattern_type == 'paren_single':
+                if pattern_type == 'paren_single':
                     # (1) 格式，提取单个编号
                     num = int(match.group(1))
                     cited_reference_numbers.add(num)
