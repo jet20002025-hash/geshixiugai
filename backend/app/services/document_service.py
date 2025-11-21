@@ -901,10 +901,16 @@ class DocumentService:
             if bracket_match:
                 # 检查 [数字] 是否在段落开头（允许前面有少量空格）
                 bracket_pos = para_text.find(bracket_match.group(0))
-                if bracket_pos <= 5:  # [数字] 在段落开头5个字符内
-                    is_reference = True
-                    ref_number = int(bracket_match.group(1))
-                    print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number} (位置: {bracket_pos})")
+                # 改进：允许 [数字] 在段落开头10个字符内，提高容错性
+                if bracket_pos <= 10:  # [数字] 在段落开头10个字符内
+                    # 进一步验证：确保 [数字] 后面有内容（不是单独的 [2]）
+                    bracket_end = bracket_pos + len(bracket_match.group(0))
+                    remaining_after_bracket = para_text[bracket_end:].strip()
+                    # 如果 [数字] 后面有内容（至少5个字符），认为是参考文献
+                    if len(remaining_after_bracket) >= 5:
+                        is_reference = True
+                        ref_number = int(bracket_match.group(1))
+                        print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number} (位置: {bracket_pos}, 后续文本长度: {len(remaining_after_bracket)})")
             
             # 如果还没有识别，继续检查其他格式
             if not is_reference:
@@ -939,20 +945,39 @@ class DocumentService:
             if not is_reference and len(para_text) > 20:
                 # 检查是否包含常见的参考文献特征（作者名、年份、期刊名等）
                 # 参考文献通常包含：作者、年份、期刊名、出版社等
-                has_author_pattern = re.search(r'[，,]\s*\d{4}[，,]', para_text)  # 年份前后有逗号
-                has_journal_pattern = re.search(r'[\[\(][JC][\]\)]|期刊|学报|Journal|Conference', para_text, re.IGNORECASE)  # 期刊标识 [J] 或 [C]
+                # 改进：支持更多年份格式（中文和英文）
+                has_author_pattern_cn = re.search(r'[，,]\s*\d{4}[，,]', para_text)  # 中文格式：年份前后有逗号
+                has_author_pattern_en = re.search(r'[A-Z][a-z]+\.[A-Z]', para_text)  # 英文格式：作者名（如 A. I.）
+                has_journal_pattern = re.search(r'\[[JC]\]|期刊|学报|Journal|Conference', para_text, re.IGNORECASE)  # 期刊标识 [J] 或 [C]
                 has_publisher_pattern = re.search(r'出版社|Press|Publishing', para_text, re.IGNORECASE)  # 出版社
-                has_year = re.search(r'\d{4}', para_text)  # 年份
+                has_year = re.search(r'\d{4}', para_text)  # 年份（4位数字）
                 
+                # 改进识别逻辑：支持英文参考文献格式
                 # 参考文献必须同时满足：有年份，且（有作者模式或期刊标识或出版社），且段落较长
-                if has_year and (has_author_pattern or has_journal_pattern or has_publisher_pattern) and len(para_text) > 30:
+                # 或者：有 [数字] 格式在开头，且有年份和期刊标识
+                has_bracket_at_start = False
+                bracket_match_at_start = re.search(r'\[(\d+)\]', para_text)
+                if bracket_match_at_start:
+                    bracket_pos = para_text.find(bracket_match_at_start.group(0))
+                    if bracket_pos <= 10:  # [数字] 在段落开头10个字符内
+                        has_bracket_at_start = True
+                
+                # 如果段落开头有 [数字] 格式，且有年份和期刊标识，认为是参考文献
+                if has_bracket_at_start and has_year and has_journal_pattern:
+                    is_reference = True
+                    ref_number = int(bracket_match_at_start.group(1))
+                    print(f"[DocumentService] 通过 [数字]+年份+期刊标识 识别参考文献: {ref_number}")
+                # 或者满足传统的识别条件
+                elif has_year and (has_author_pattern_cn or has_author_pattern_en or has_journal_pattern or has_publisher_pattern) and len(para_text) > 30:
                     is_reference = True
                     # 尝试从段落开头提取编号（更宽松的匹配）
                     # 可能格式：数字开头，后面跟空格或标点，或者 [数字] 格式
                     # 先尝试 [数字] 格式
                     bracket_match = re.search(r'\[(\d+)\]', para_text)
                     if bracket_match:
-                        ref_number = int(bracket_match.group(1))
+                        bracket_pos = para_text.find(bracket_match.group(0))
+                        if bracket_pos <= 10:  # 在段落开头10个字符内
+                            ref_number = int(bracket_match.group(1))
                     else:
                         # 尝试数字开头格式
                         number_match = re.search(r'^(\d+)', para_text)
@@ -961,7 +986,7 @@ class DocumentService:
                         else:
                             # 如果没有找到编号，使用序号（但这种情况应该很少）
                             ref_number = len(reference_items) + 1
-                    print(f"[DocumentService] 通过内容特征识别参考文献: {ref_number}")
+                    print(f"[DocumentService] 通过内容特征识别参考文献: {ref_number} (年份: {has_year is not None}, 期刊: {has_journal_pattern is not None}, 作者: {has_author_pattern_cn is not None or has_author_pattern_en is not None})")
             
             if is_reference:
                 # 如果还是没有编号，尝试从段落开头提取（更宽松的匹配）
