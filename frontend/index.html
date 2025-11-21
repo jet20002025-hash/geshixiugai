@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>论文格式自动修复</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -101,9 +104,76 @@
       [class*="account"] {
         display: none !important;
       }
+      /* 广告语样式 - 草书风格但清晰 */
+      .slogan {
+        text-align: center;
+        margin: 2rem 0 1.5rem 0;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        position: relative;
+        overflow: hidden;
+      }
+      .slogan::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        animation: shine 3s infinite;
+      }
+      @keyframes shine {
+        0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+        100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+      }
+      .slogan-text {
+        font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'STKaiti', 'KaiTi', '楷体', cursive;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #ffffff;
+        text-shadow: 
+          2px 2px 4px rgba(0, 0, 0, 0.3),
+          0 0 20px rgba(255, 255, 255, 0.5);
+        letter-spacing: 0.1em;
+        position: relative;
+        z-index: 1;
+        display: inline-block;
+        transform: rotate(-1deg);
+        animation: float 2s ease-in-out infinite;
+        text-stroke: 1px rgba(255, 255, 255, 0.3);
+        -webkit-text-stroke: 1px rgba(255, 255, 255, 0.3);
+      }
+      @keyframes float {
+        0%, 100% { transform: rotate(-1deg) translateY(0px); }
+        50% { transform: rotate(1deg) translateY(-5px); }
+      }
+      .slogan-text::after {
+        content: '⚡';
+        display: inline-block;
+        margin-left: 0.3em;
+        animation: flash 1.5s ease-in-out infinite;
+        font-size: 1.2em;
+      }
+      @keyframes flash {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.2); }
+      }
+      @media (max-width: 768px) {
+        .slogan-text {
+          font-size: 1.8rem;
+        }
+      }
     </style>
   </head>
   <body>
+    <!-- 广告语 -->
+    <div class="slogan">
+      <div class="slogan-text">一秒解决你的论文格式问题！</div>
+    </div>
+    
     <h1>论文格式自动修复</h1>
     <p class="small">流程：上传模板 → 上传学生文档 → 预览水印版 → 支付后下载正式版。</p>
 
