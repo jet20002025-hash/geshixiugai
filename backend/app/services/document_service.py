@@ -654,12 +654,33 @@ class DocumentService:
             # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体，固定行距20磅
             if rule:
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
-                # 判断是否是标题（包含"标题"字样，或以数字开头且较短，或是居中对齐的短文本）
-                is_heading = (
-                    (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
-                    (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
-                    (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30)
-                )
+                # 判断是否是标题
+                # 优先使用检测到的样式来判断
+                is_heading = False
+                if applied_rule_name:
+                    # 如果应用的规则是标题样式，则认为是标题
+                    if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3", "abstract_title", "toc_title", "reference_title", "acknowledgment_title"]:
+                        is_heading = True
+                    # 或者检查样式名称
+                    elif style_name and ("标题" in style_name.lower() or "heading" in style_name.lower()):
+                        is_heading = True
+                    # 或者检查段落内容特征（居中对齐的短文本，或"绪论"、"概述"等）
+                    elif paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50:
+                        is_heading = True
+                    # 或者检查是否是"绪论"、"概述"等标题
+                    elif paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"):
+                        is_heading = True
+                    # 或者检查是否以数字开头且较短
+                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30:
+                        is_heading = True
+                # 如果没有应用规则名称，使用备用判断逻辑
+                if not is_heading:
+                    is_heading = (
+                        (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
+                        (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
+                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30) or
+                        (paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"))
+                    )
                 
                 # 判断是否包含图片或公式
                 has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
@@ -1893,7 +1914,17 @@ class DocumentService:
                 if is_chapter_title(prev_para):
                     is_after_chapter = True
             
-            if not is_after_chapter:
+            # 检查空白段之后是否有章节标题（虽然已经到文档末尾，但也要检查）
+            is_before_chapter = False
+            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 5, len(document.paragraphs))):
+                if next_idx < len(document.paragraphs):
+                    next_para = document.paragraphs[next_idx]
+                    if is_chapter_title(next_para):
+                        is_before_chapter = True
+                        break
+            
+            # 只有当空白段既不在章节标题前，也不在章节标题后时，才标记为问题
+            if not is_after_chapter and not is_before_chapter:
                 issues.append({
                     "type": "excessive_blanks_in_chapter",
                     "message": f"正文末尾第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落",
