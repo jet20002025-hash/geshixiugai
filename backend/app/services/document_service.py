@@ -416,6 +416,83 @@ class DocumentService:
         
         # 如果找不到，跳过前20个段落（通常是封面）
         return min(20, len(document.paragraphs) - 1)
+    
+    def _find_section_ranges(self, document: Document) -> Dict[str, Tuple[int, int]]:
+        """
+        识别文档各个部分的段落范围
+        返回: {
+            "cover": (0, cover_end),
+            "abstract_zh": (start, end),  # 中文摘要
+            "abstract_en": (start, end),  # 英文摘要
+            "toc": (start, end),  # 目录
+            "body": (start, end),  # 正文
+        }
+        """
+        ranges = {}
+        cover_end = self._find_cover_end_index(document)
+        ranges["cover"] = (0, cover_end)
+        
+        abstract_zh_start = None
+        abstract_zh_end = None
+        abstract_en_start = None
+        abstract_en_end = None
+        toc_start = None
+        toc_end = None
+        body_start = None
+        
+        # 查找中文摘要
+        for idx in range(cover_end, len(document.paragraphs)):
+            para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+            if para_text.startswith("摘要") and abstract_zh_start is None:
+                abstract_zh_start = idx
+            elif abstract_zh_start is not None and (para_text.startswith("关键词") or para_text.startswith("ABSTRACT") or para_text.startswith("目录")):
+                abstract_zh_end = idx
+                break
+        
+        # 如果没找到结束标志，假设摘要到"ABSTRACT"或"目录"之前
+        if abstract_zh_start is not None and abstract_zh_end is None:
+            for idx in range(abstract_zh_start + 1, len(document.paragraphs)):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                if para_text.startswith("ABSTRACT") or para_text.startswith("目录"):
+                    abstract_zh_end = idx
+                    break
+        
+        # 查找英文摘要
+        for idx in range(cover_end, len(document.paragraphs)):
+            para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+            if para_text.startswith("ABSTRACT") and abstract_en_start is None:
+                abstract_en_start = idx
+            elif abstract_en_start is not None and (para_text.startswith("Keywords") or para_text.startswith("目录") or para_text.startswith("Contents") or para_text.startswith("第一章") or para_text.startswith("第1章")):
+                abstract_en_end = idx
+                break
+        
+        # 查找目录
+        for idx in range(cover_end, len(document.paragraphs)):
+            para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+            if (para_text.startswith("目录") or para_text.startswith("Contents")) and toc_start is None:
+                toc_start = idx
+            elif toc_start is not None and (para_text.startswith("第一章") or para_text.startswith("第1章") or para_text.startswith("Chapter 1") or para_text.startswith("1 引言") or para_text.startswith("1 绪论")):
+                toc_end = idx
+                break
+        
+        # 查找正文开始
+        for idx in range(cover_end, len(document.paragraphs)):
+            para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+            if (para_text.startswith("第一章") or para_text.startswith("第1章") or para_text.startswith("Chapter 1") or 
+                para_text.startswith("1 引言") or para_text.startswith("1 绪论") or para_text.startswith("引言") or para_text.startswith("绪论")):
+                body_start = idx
+                break
+        
+        if abstract_zh_start is not None:
+            ranges["abstract_zh"] = (abstract_zh_start, abstract_zh_end if abstract_zh_end else (abstract_en_start if abstract_en_start else (toc_start if toc_start else len(document.paragraphs))))
+        if abstract_en_start is not None:
+            ranges["abstract_en"] = (abstract_en_start, abstract_en_end if abstract_en_end else (toc_start if toc_start else (body_start if body_start else len(document.paragraphs))))
+        if toc_start is not None:
+            ranges["toc"] = (toc_start, toc_end if toc_end else (body_start if body_start else len(document.paragraphs)))
+        if body_start is not None:
+            ranges["body"] = (body_start, len(document.paragraphs))
+        
+        return ranges
 
     def _apply_rules(
         self,
@@ -441,28 +518,117 @@ class DocumentService:
             rule = None
             applied_rule_name = None
             
-            # 优先使用标准格式检测
-            detected_style = self._detect_paragraph_style(paragraph)
-            if detected_style in rules:
-                rule = rules[detected_style].copy()
-                applied_rule_name = detected_style
-            # 如果标准格式中没有，尝试使用模板中的样式名
-            elif style_name and style_name in rules:
-                rule = rules[style_name].copy()
-                applied_rule_name = style_name
-            # 如果都没有，使用默认规则
-            elif default_rule:
-                rule = default_rule.copy()
-                applied_rule_name = default_style or "默认样式"
+            # 根据当前部分应用特定格式规则
+            paragraph_text = paragraph.text.strip() if paragraph.text else ""
             
-            # 如果仍然没有规则，使用标准默认样式
-            if not rule:
-                if DEFAULT_STYLE in rules:
-                    rule = rules[DEFAULT_STYLE].copy()
-                    applied_rule_name = DEFAULT_STYLE
+            # 处理中文摘要部分
+            if current_section == "abstract_zh":
+                # 摘要标题
+                if paragraph_text.startswith("摘要"):
+                    if "abstract_title" in rules:
+                        rule = rules["abstract_title"].copy()
+                        applied_rule_name = "abstract_title"
+                    else:
+                        rule = FONT_STANDARDS.get("abstract_title", {}).copy()
+                        applied_rule_name = "abstract_title"
+                # 关键词标签
+                elif paragraph_text.startswith("关键词"):
+                    if "keywords_label" in rules:
+                        rule = rules["keywords_label"].copy()
+                        applied_rule_name = "keywords_label"
+                    else:
+                        rule = FONT_STANDARDS.get("keywords_label", {}).copy()
+                        applied_rule_name = "keywords_label"
+                # 摘要正文内容
+                else:
+                    if "abstract_content" in rules:
+                        rule = rules["abstract_content"].copy()
+                        applied_rule_name = "abstract_content"
+                    else:
+                        rule = FONT_STANDARDS.get("abstract_content", {}).copy()
+                        applied_rule_name = "abstract_content"
+                    # 确保摘要正文：宋体小四（12pt），行距20磅
+                    rule["font_name"] = "宋体"
+                    rule["font_size"] = 12
+                    rule["line_spacing"] = 20
+            
+            # 处理英文摘要部分
+            elif current_section == "abstract_en":
+                # 英文摘要标题
+                if paragraph_text.startswith("ABSTRACT"):
+                    if "abstract_title_en" in rules:
+                        rule = rules["abstract_title_en"].copy()
+                        applied_rule_name = "abstract_title_en"
+                    else:
+                        rule = FONT_STANDARDS.get("abstract_title_en", {}).copy()
+                        applied_rule_name = "abstract_title_en"
+                # 关键词标签
+                elif paragraph_text.startswith("Keywords") or paragraph_text.startswith("Key words"):
+                    if "keywords_label_en" in rules:
+                        rule = rules["keywords_label_en"].copy()
+                        applied_rule_name = "keywords_label_en"
+                    else:
+                        rule = FONT_STANDARDS.get("keywords_label_en", {}).copy()
+                        applied_rule_name = "keywords_label_en"
+                # 英文摘要正文内容
+                else:
+                    if "abstract_content_en" in rules:
+                        rule = rules["abstract_content_en"].copy()
+                        applied_rule_name = "abstract_content_en"
+                    else:
+                        rule = FONT_STANDARDS.get("abstract_content_en", {}).copy()
+                        applied_rule_name = "abstract_content_en"
+                    # 确保英文摘要正文：Times New Roman小四（12pt）
+                    rule["font_name"] = "Times New Roman"
+                    rule["font_size"] = 12
+            
+            # 处理目录部分
+            elif current_section == "toc":
+                # 目录标题
+                if paragraph_text.startswith("目录") or paragraph_text.startswith("Contents"):
+                    if "toc_title" in rules:
+                        rule = rules["toc_title"].copy()
+                        applied_rule_name = "toc_title"
+                    else:
+                        rule = FONT_STANDARDS.get("toc_title", {}).copy()
+                        applied_rule_name = "toc_title"
+                # 目录内容
+                else:
+                    if "toc_content" in rules:
+                        rule = rules["toc_content"].copy()
+                        applied_rule_name = "toc_content"
+                    else:
+                        rule = FONT_STANDARDS.get("toc_content", {}).copy()
+                        applied_rule_name = "toc_content"
+                    # 确保目录内容：宋体小四（12pt），行距20磅
+                    rule["font_name"] = "宋体"
+                    rule["font_size"] = 12
+                    rule["line_spacing"] = 20
+            
+            # 处理正文部分（使用原有逻辑）
+            else:
+                # 优先使用标准格式检测
+                detected_style = self._detect_paragraph_style(paragraph)
+                if detected_style in rules:
+                    rule = rules[detected_style].copy()
+                    applied_rule_name = detected_style
+                # 如果标准格式中没有，尝试使用模板中的样式名
+                elif style_name and style_name in rules:
+                    rule = rules[style_name].copy()
+                    applied_rule_name = style_name
+                # 如果都没有，使用默认规则
                 elif default_rule:
                     rule = default_rule.copy()
                     applied_rule_name = default_style or "默认样式"
+                
+                # 如果仍然没有规则，使用标准默认样式
+                if not rule:
+                    if DEFAULT_STYLE in rules:
+                        rule = rules[DEFAULT_STYLE].copy()
+                        applied_rule_name = DEFAULT_STYLE
+                    elif default_rule:
+                        rule = default_rule.copy()
+                        applied_rule_name = default_style or "默认样式"
             
             # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体，固定行距20磅
             if rule:
