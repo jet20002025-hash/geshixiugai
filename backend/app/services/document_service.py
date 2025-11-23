@@ -365,6 +365,12 @@ class DocumentService:
         if text.startswith("表") and len(text) < 100:
             return "table_caption"
         
+        # 检查是否是"绪论"或"概述"标题（黑体三号居中）
+        if text == "绪论" or text == "概述" or text.startswith("绪论") or text.startswith("概述"):
+            # 如果是独立的"绪论"或"概述"，且段落较短，则认为是标题
+            if len(text) < 50:
+                return "title_level_1"
+        
         # 章节标题检测：必须是独立的、较短的段落
         # 避免将正文中的"第二章的方案"等误识别为标题
         chapter_match = re.match(r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$", text)
@@ -475,11 +481,12 @@ class DocumentService:
                 toc_end = idx
                 break
         
-        # 查找正文开始
+        # 查找正文开始（从"绪论"或"概述"开始）
         for idx in range(cover_end, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if (para_text.startswith("第一章") or para_text.startswith("第1章") or para_text.startswith("Chapter 1") or 
-                para_text.startswith("1 引言") or para_text.startswith("1 绪论") or para_text.startswith("引言") or para_text.startswith("绪论")):
+                para_text.startswith("1 引言") or para_text.startswith("1 绪论") or para_text.startswith("1 概述") or
+                para_text == "绪论" or para_text == "概述" or para_text.startswith("绪论") or para_text.startswith("概述")):
                 body_start = idx
                 break
         
@@ -1681,7 +1688,7 @@ class DocumentService:
         issues = []
         blank_paragraph_indices = []  # 记录需要标记的空白段落索引
         
-        # 1. 找到正文开始位置
+        # 1. 找到正文开始位置（从"绪论"或"概述"开始）
         body_start_idx = None
         body_start_patterns = [
             r'^正文',
@@ -1690,6 +1697,10 @@ class DocumentService:
             r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
             r'^1\s+',  # 以"1 "开头的标题（第一章）
             r'^1\.',  # 以"1."开头的标题
+            r'^绪论$',  # 绪论（精确匹配）
+            r'^概述$',  # 概述（精确匹配）
+            r'^绪论',  # 以"绪论"开头
+            r'^概述',  # 以"概述"开头
         ]
         
         for idx, paragraph in enumerate(document.paragraphs):
