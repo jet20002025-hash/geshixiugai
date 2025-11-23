@@ -267,9 +267,24 @@ class DocumentService:
         return has_image or has_equation
 
     def _apply_page_settings(self, document: Document) -> None:
-        """应用页面设置（页边距等）"""
+        """应用页面设置（页边距等），但保留封面页的原始页边距"""
         margins = PAGE_SETTINGS["margins"]
-        for section in document.sections:
+        
+        # 找到封面结束位置
+        cover_end_idx = self._find_cover_end_index(document)
+        
+        # 封面页必须完全不被修改，包括页边距
+        # 由于 Word 的 section 是文档级别的设置，一个 section 内的所有页面共享相同的页边距
+        # 如果封面页和正文在同一个 section，我们无法在一个 section 内设置不同的页边距
+        # 因此，我们采用保守策略：永远不修改第一个 section 的页边距，确保封面页不被修改
+        # 如果文档有多个 section，从第二个 section 开始修改页边距
+        
+        # 只修改非第一个 section 的页边距（确保封面页所在的第一个 section 不被修改）
+        for idx, section in enumerate(document.sections):
+            # 永远不修改第一个 section 的页边距（封面页所在 section）
+            if idx == 0:
+                continue
+            
             # 设置页边距（单位：厘米转磅，1厘米=28.35磅）
             section.top_margin = Pt(margins["top"] * 28.35)
             section.bottom_margin = Pt(margins["bottom"] * 28.35)
