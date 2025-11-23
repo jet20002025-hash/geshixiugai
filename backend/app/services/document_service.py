@@ -1778,6 +1778,10 @@ class DocumentService:
             r'^第\d+章',  # 第1章、第2章等
             r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
             r'^附录[一二三四五六七八九十\d]',  # 附录一、附录二
+            r'^绪论$',  # 绪论（精确匹配）
+            r'^概述$',  # 概述（精确匹配）
+            r'^1\s+绪论',  # 1 绪论
+            r'^1\s+概述',  # 1 概述
         ]
         
         # 判断段落是否为章节标题
@@ -1790,6 +1794,12 @@ class DocumentService:
             for pattern in chapter_patterns:
                 if re.match(pattern, para_text):
                     return True
+            
+            # 检查"绪论"或"概述"（精确匹配或独立出现）
+            if para_text == "绪论" or para_text == "概述":
+                return True
+            if para_text.startswith("1 绪论") or para_text.startswith("1 概述"):
+                return True
             
             # 检查是否为标题样式（通常标题样式名称包含"标题"或"Heading"）
             style_name = paragraph.style.name if paragraph.style else ""
@@ -1816,31 +1826,14 @@ class DocumentService:
             # 检查是否为章节标题
             if is_chapter_title(paragraph):
                 # 遇到新章节标题
-                # 如果之前有连续空白，检查这些空白是否在章节标题后（允许）还是在章节内（需要标记）
+                # 如果之前有连续空白，检查这些空白是否在章节标题前或后（都允许）
                 if consecutive_blanks >= 2 and blank_start_idx is not None:
-                    # 检查空白段之前是否有章节标题
-                    is_after_chapter = False
-                    if blank_start_idx > 0:
-                        prev_para = document.paragraphs[blank_start_idx - 1]
-                        if is_chapter_title(prev_para):
-                            # 空白段紧跟在章节标题后，这是章节间的空白，允许
-                            is_after_chapter = True
-                    
-                    # 如果空白段不在章节标题后，而是在章节内，标记为问题
-                    if not is_after_chapter:
-                        issues.append({
-                            "type": "excessive_blanks_in_chapter",
-                            "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（正文章节内）",
-                            "suggestion": "请删除章节内的多余空白，章节之间可以保留适当空白",
-                            "chapter_start": current_chapter_start,
-                            "blank_start": blank_start_idx,
-                            "blank_count": consecutive_blanks,
-                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                        })
-                        # 记录需要标记的段落
-                        blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                    # 空白段在章节标题前，这是章节间的空白，允许（不标记）
+                    # 空白段在章节标题后，也是允许的
+                    # 所以遇到章节标题时，直接清除之前的空白计数，不标记
+                    pass
                 
-                # 开始新章节，重置计数（章节标题后的空白是允许的）
+                # 开始新章节，重置计数（章节标题前后的空白都是允许的）
                 current_chapter_start = idx
                 consecutive_blanks = 0
                 blank_start_idx = None
@@ -1853,18 +1846,28 @@ class DocumentService:
                     consecutive_blanks += 1
                 else:
                     # 遇到非空白段落
-                    # 如果之前有连续空白且在同一章节内，检查是否需要标记
+                    # 如果之前有连续空白，检查是否需要标记
                     if consecutive_blanks >= 2 and blank_start_idx is not None:
-                        # 在同一章节内（不是章节边界），标记为问题
-                        # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，可能是章节间的空白，允许）
+                        # 检查空白段之后是否有章节标题（如果空白段后面是章节标题，这是章节间的空白，允许）
+                        is_before_chapter = False
+                        # 检查空白段之后是否有章节标题
+                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 5, check_end_idx)):
+                            if next_idx < len(document.paragraphs):
+                                next_para = document.paragraphs[next_idx]
+                                if is_chapter_title(next_para):
+                                    # 空白段后面是章节标题，这是章节间的空白，允许
+                                    is_before_chapter = True
+                                    break
+                        
+                        # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，也是允许的）
                         is_after_chapter = False
                         if blank_start_idx > 0:
                             prev_para = document.paragraphs[blank_start_idx - 1]
                             if is_chapter_title(prev_para):
                                 is_after_chapter = True
                         
-                        # 如果空白段不在章节标题后，且在同一章节内，标记为问题
-                        if not is_after_chapter:
+                        # 只有当空白段既不在章节标题前，也不在章节标题后，且在同一章节内时，才标记为问题
+                        if not is_before_chapter and not is_after_chapter:
                             issues.append({
                                 "type": "excessive_blanks_in_chapter",
                                 "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（正文章节内）",
