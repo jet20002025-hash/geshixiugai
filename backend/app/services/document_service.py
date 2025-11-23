@@ -509,6 +509,9 @@ class DocumentService:
         
         # 找到封面结束位置，跳过封面部分
         cover_end_idx = self._find_cover_end_index(document)
+        
+        # 识别各个部分的段落范围
+        section_ranges = self._find_section_ranges(document)
 
         for idx, paragraph in enumerate(document.paragraphs):
             # 跳过封面部分，不修改封面内容
@@ -517,10 +520,28 @@ class DocumentService:
             style_name = paragraph.style.name if paragraph.style else None
             rule = None
             applied_rule_name = None
-            
-            # 根据当前部分应用特定格式规则
             paragraph_text = paragraph.text.strip() if paragraph.text else ""
             
+            # 判断当前段落属于哪个部分
+            current_section = None
+            if "abstract_zh" in section_ranges:
+                start, end = section_ranges["abstract_zh"]
+                if start <= idx < end:
+                    current_section = "abstract_zh"
+            if current_section is None and "abstract_en" in section_ranges:
+                start, end = section_ranges["abstract_en"]
+                if start <= idx < end:
+                    current_section = "abstract_en"
+            if current_section is None and "toc" in section_ranges:
+                start, end = section_ranges["toc"]
+                if start <= idx < end:
+                    current_section = "toc"
+            if current_section is None and "body" in section_ranges:
+                start, end = section_ranges["body"]
+                if start <= idx < end:
+                    current_section = "body"
+            
+            # 根据当前部分应用特定格式规则
             # 处理中文摘要部分
             if current_section == "abstract_zh":
                 # 摘要标题
