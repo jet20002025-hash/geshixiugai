@@ -642,6 +642,8 @@ class DocumentService:
                     else:
                         rule = FONT_STANDARDS.get("abstract_title", {}).copy()
                         applied_rule_name = "abstract_title"
+                    # 强制确保摘要标题居中对齐
+                    rule["alignment"] = "center"
                 # 关键词标签
                 elif paragraph_text.startswith("关键词"):
                     if "keywords_label" in rules:
@@ -673,6 +675,8 @@ class DocumentService:
                     else:
                         rule = FONT_STANDARDS.get("abstract_title_en", {}).copy()
                         applied_rule_name = "abstract_title_en"
+                    # 强制确保ABSTRACT标题居中对齐
+                    rule["alignment"] = "center"
                 # 关键词标签
                 elif paragraph_text.startswith("Keywords") or paragraph_text.startswith("Key words"):
                     if "keywords_label_en" in rules:
