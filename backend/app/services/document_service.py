@@ -699,14 +699,37 @@ class DocumentService:
             
             # 处理目录部分
             elif current_section == "toc":
-                # 目录标题
-                if paragraph_text.startswith("目录") or paragraph_text.startswith("Contents"):
+                # 目录标题（支持中间最多5个空格的变体，如"目 录"、"目  录"、"目    录"等）
+                # 检查是否包含"目"和"录"（允许中间最多5个空格）
+                is_toc_title_para = False
+                if "目" in paragraph_text and "录" in paragraph_text:
+                    # 去除空格和标点后检查是否等于"目录"
+                    cleaned_toc_text = re.sub(r'[\s\u3000：:，,。.；;！!？?、]', '', paragraph_text)
+                    if cleaned_toc_text == "目录":
+                        # 检查"目"和"录"之间的字符是否只有空格（最多5个）
+                        mu_pos = paragraph_text.find("目")
+                        lu_pos = paragraph_text.find("录")
+                        if mu_pos >= 0 and lu_pos > mu_pos:
+                            between_text = paragraph_text[mu_pos + 1:lu_pos]
+                            # 如果中间只有空格（最多5个），或者是空字符串，认为是目录标题
+                            if len(between_text) <= 5 and all(c in ' \t\u3000' for c in between_text):
+                                is_toc_title_para = True
+                            elif len(between_text) == 0:
+                                is_toc_title_para = True
+                elif paragraph_text.startswith("Contents") or paragraph_text.startswith("contents"):
+                    cleaned_toc_text = re.sub(r'[\s\u3000：:，,。.；;！!？?、]', '', paragraph_text).upper()
+                    if cleaned_toc_text == "CONTENTS":
+                        is_toc_title_para = True
+                
+                if is_toc_title_para:
                     if "toc_title" in rules:
                         rule = rules["toc_title"].copy()
                         applied_rule_name = "toc_title"
                     else:
                         rule = FONT_STANDARDS.get("toc_title", {}).copy()
                         applied_rule_name = "toc_title"
+                    # 强制确保目录标题居中对齐
+                    rule["alignment"] = "center"
                 # 目录内容
                 else:
                     if "toc_content" in rules:
@@ -824,7 +847,7 @@ class DocumentService:
                 # 应用规则
                 docx_format_utils.apply_paragraph_rule(paragraph, rule)
                 
-                # 最终检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
+                # 最终检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
                 if para_text_check:
                     # 去除所有空格、标点符号和空白字符，只保留字母和汉字
@@ -832,21 +855,42 @@ class DocumentService:
                     cleaned_text_check_upper = cleaned_text_check.upper()
                     
                     is_abstract_title_check = False
-                    # 检查去除空格和标点后是否等于"摘要"或"ABSTRACT"
+                    is_toc_title_check = False
+                    # 检查去除空格和标点后是否等于"摘要"、"ABSTRACT"或"目录"
                     if cleaned_text_check == "摘要" or cleaned_text_check_upper == "ABSTRACT":
                         is_abstract_title_check = True
-                    # 如果长度较短，也检查是否包含"摘要"或"ABSTRACT"
-                    elif len(para_text_check) <= 25:
+                    elif cleaned_text_check == "目录" or cleaned_text_check_upper == "CONTENTS":
+                        is_toc_title_check = True
+                    # 如果去除空格后的文本较短，也检查是否包含这些关键词
+                    elif len(cleaned_text_check) <= 15:  # 基于去除空格后的长度
                         # 检查是否包含"摘"和"要"（允许中间有空格或其他字符）
                         if "摘" in para_text_check and "要" in para_text_check:
                             if cleaned_text_check == "摘要":
                                 is_abstract_title_check = True
+                        # 检查是否包含"目"和"录"（允许中间最多5个空格）
+                        elif "目" in para_text_check and "录" in para_text_check:
+                            # 检查"目"和"录"之间的字符是否只有空格（最多5个）
+                            mu_pos = para_text_check.find("目")
+                            lu_pos = para_text_check.find("录")
+                            if mu_pos >= 0 and lu_pos > mu_pos:
+                                between_text = para_text_check[mu_pos + 1:lu_pos]
+                                # 如果中间只有空格（最多5个），或者是空字符串，认为是目录标题
+                                if len(between_text) <= 5 and all(c in ' \t\u3000' for c in between_text):
+                                    if cleaned_text_check == "目录":
+                                        is_toc_title_check = True
+                                elif len(between_text) == 0:
+                                    if cleaned_text_check == "目录":
+                                        is_toc_title_check = True
                         # 检查是否包含"ABSTRACT"（不区分大小写）
                         elif "ABSTRACT" in cleaned_text_check_upper or "abstract" in para_text_check.lower():
                             if cleaned_text_check_upper == "ABSTRACT":
                                 is_abstract_title_check = True
+                        # 检查是否包含"Contents"（不区分大小写）
+                        elif "CONTENTS" in cleaned_text_check_upper or "contents" in para_text_check.lower():
+                            if cleaned_text_check_upper == "CONTENTS":
+                                is_toc_title_check = True
                     
-                    if is_abstract_title_check:
+                    if is_abstract_title_check or is_toc_title_check:
                         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                 
                 # 记录修改后的格式
@@ -1237,10 +1281,17 @@ class DocumentService:
             number_match = None
             
             # 检查 [数字] 格式（优先检查，因为这是最常见的格式）
+            # 支持半角方括号 [数字] 和全角方括号 ［数字］
             # 使用 search 查找，但检查是否在段落开头（允许前面有少量空格）
+            bracket_match = None
+            # 先尝试半角方括号
             bracket_match = re.search(r'\[(\d+)\]', para_text)
+            if not bracket_match:
+                # 如果没找到半角方括号，尝试全角方括号
+                bracket_match = re.search(r'［(\d+)］', para_text)
+            
             if bracket_match:
-                # 检查 [数字] 是否在段落开头（允许前面有少量空格）
+                # 检查 [数字] 或 ［数字］ 是否在段落开头（允许前面有少量空格）
                 bracket_pos = para_text.find(bracket_match.group(0))
                 # 改进：允许 [数字] 在段落开头10个字符内，提高容错性
                 if bracket_pos <= 10:  # [数字] 在段落开头10个字符内
@@ -1251,7 +1302,8 @@ class DocumentService:
                     if len(remaining_after_bracket) >= 5:
                         is_reference = True
                         ref_number = int(bracket_match.group(1))
-                        print(f"[DocumentService] 通过 [数字] 格式识别参考文献: {ref_number} (位置: {bracket_pos}, 后续文本长度: {len(remaining_after_bracket)})")
+                        bracket_type = "半角" if "[" in bracket_match.group(0) else "全角"
+                        print(f"[DocumentService] 通过 {bracket_type}方括号 [数字] 格式识别参考文献: {ref_number} (位置: {bracket_pos}, 后续文本长度: {len(remaining_after_bracket)})")
             
             # 如果还没有识别，继续检查其他格式
             if not is_reference:
@@ -1296,8 +1348,11 @@ class DocumentService:
                 # 改进识别逻辑：支持英文参考文献格式
                 # 参考文献必须同时满足：有年份，且（有作者模式或期刊标识或出版社），且段落较长
                 # 或者：有 [数字] 格式在开头，且有年份和期刊标识
+                # 支持半角和全角方括号
                 has_bracket_at_start = False
                 bracket_match_at_start = re.search(r'\[(\d+)\]', para_text)
+                if not bracket_match_at_start:
+                    bracket_match_at_start = re.search(r'［(\d+)］', para_text)
                 if bracket_match_at_start:
                     bracket_pos = para_text.find(bracket_match_at_start.group(0))
                     if bracket_pos <= 10:  # [数字] 在段落开头10个字符内
@@ -1313,8 +1368,10 @@ class DocumentService:
                     is_reference = True
                     # 尝试从段落开头提取编号（更宽松的匹配）
                     # 可能格式：数字开头，后面跟空格或标点，或者 [数字] 格式
-                    # 先尝试 [数字] 格式
+                    # 先尝试 [数字] 格式（支持半角和全角方括号）
                     bracket_match = re.search(r'\[(\d+)\]', para_text)
+                    if not bracket_match:
+                        bracket_match = re.search(r'［(\d+)］', para_text)
                     if bracket_match:
                         bracket_pos = para_text.find(bracket_match.group(0))
                         if bracket_pos <= 10:  # 在段落开头10个字符内
@@ -1366,6 +1423,8 @@ class DocumentService:
         
         body_text = ""
         body_paragraphs = []
+        # 记录每个引用所在的段落索引（用于计算页码）
+        citation_locations = {}  # {ref_number: [paragraph_index1, paragraph_index2, ...]}
         
         # 从正文开始到参考文献之前的所有段落（包括短段落，因为引用可能在图片说明等短段落中）
         # 改进：确保能正确提取段落文本，包括所有 runs 的文本
@@ -1397,6 +1456,70 @@ class DocumentService:
             if len(para_text) > 0:  # 只要有内容就检查
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
+                
+                # 在当前段落中检测引用，并记录段落索引
+                # 检测半角方括号 [数字]
+                for match in re.finditer(r'\[(\d+)\]', para_text):
+                    try:
+                        num = int(match.group(1))
+                        if 1 <= num <= 1000:
+                            if num not in citation_locations:
+                                citation_locations[num] = []
+                            citation_locations[num].append(idx)
+                    except ValueError:
+                        pass
+                
+                # 检测全角方括号 ［数字］
+                for match in re.finditer(r'［(\d+)］', para_text):
+                    try:
+                        num = int(match.group(1))
+                        if 1 <= num <= 1000:
+                            if num not in citation_locations:
+                                citation_locations[num] = []
+                            citation_locations[num].append(idx)
+                    except ValueError:
+                        pass
+                
+                # 检测多个编号格式 [1,2,3] 或 [1-5]
+                for match in re.finditer(r'\[(\d+(?:[,\s]+\d+)+)\]', para_text):
+                    try:
+                        numbers_str = match.group(1)
+                        numbers = re.findall(r'\d+', numbers_str)
+                        for num_str in numbers:
+                            num = int(num_str.strip())
+                            if 1 <= num <= 1000:
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(idx)
+                    except ValueError:
+                        pass
+                
+                # 检测全角方括号多个编号格式 ［1,2,3］
+                for match in re.finditer(r'［(\d+(?:[,\s]+\d+)+)］', para_text):
+                    try:
+                        numbers_str = match.group(1)
+                        numbers = re.findall(r'\d+', numbers_str)
+                        for num_str in numbers:
+                            num = int(num_str.strip())
+                            if 1 <= num <= 1000:
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(idx)
+                    except ValueError:
+                        pass
+                
+                # 检测范围格式 [1-5]
+                for match in re.finditer(r'\[(\d+)[\-\s]+(\d+)\]', para_text):
+                    try:
+                        start = int(match.group(1))
+                        end = int(match.group(2))
+                        if 1 <= start <= end <= 1000:
+                            for num in range(start, end + 1):
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(idx)
+                    except ValueError:
+                        pass
                 
                 # 调试：如果段落包含 [4] 或 [5]，打印详细信息
                 if '[4]' in para_text or '[5]' in para_text:
@@ -1463,18 +1586,31 @@ class DocumentService:
         # 使用更简单直接的方法：直接搜索所有 [数字] 格式
         print(f"[DocumentService] 开始检测引用，正文文本长度: {len(body_text)}")
         
-        # 方法1：使用正则表达式搜索所有 [数字] 格式
+        # 方法1：使用正则表达式搜索所有 [数字] 格式（支持半角和全角方括号）
+        # 先检测半角方括号
         single_citation_pattern = r'\[(\d+)\]'
         single_matches = list(re.finditer(single_citation_pattern, body_text))
-        print(f"[DocumentService] 正则表达式找到 {len(single_matches)} 个 [数字] 格式的匹配")
+        print(f"[DocumentService] 正则表达式找到 {len(single_matches)} 个 [数字] 格式的匹配（半角）")
         
         for match in single_matches:
             try:
                 num = int(match.group(1))
                 if 1 <= num <= 1000:
                     cited_reference_numbers.add(num)
-                    # 获取匹配的上下文（前后各30个字符），便于调试
+                    # 记录引用位置（在body_text中的位置，需要转换为段落索引）
+                    # 由于body_text是合并后的文本，我们需要找到对应的段落
                     match_start = match.start()
+                    # 通过累积文本长度找到对应的段落索引
+                    current_pos = 0
+                    for para_idx, para_text in body_paragraphs:
+                        para_len = len(para_text) + 1  # +1 for space
+                        if current_pos <= match_start < current_pos + para_len:
+                            if num not in citation_locations:
+                                citation_locations[num] = []
+                            citation_locations[num].append(para_idx)
+                            break
+                        current_pos += para_len
+                    # 获取匹配的上下文（前后各30个字符），便于调试
                     match_end = match.end()
                     context_start = max(0, match_start - 30)
                     context_end = min(len(body_text), match_end + 30)
@@ -1483,8 +1619,39 @@ class DocumentService:
             except ValueError as e:
                 print(f"[DocumentService] 提取编号失败: {e}")
         
-        # 方法2：直接使用字符串搜索作为备用（更可靠）
+        # 检测全角方括号 ［数字］
+        fullwidth_citation_pattern = r'［(\d+)］'
+        fullwidth_matches = list(re.finditer(fullwidth_citation_pattern, body_text))
+        print(f"[DocumentService] 正则表达式找到 {len(fullwidth_matches)} 个 ［数字］ 格式的匹配（全角）")
+        
+        for match in fullwidth_matches:
+            try:
+                num = int(match.group(1))
+                if 1 <= num <= 1000:
+                    cited_reference_numbers.add(num)
+                    # 记录引用位置
+                    match_start = match.start()
+                    current_pos = 0
+                    for para_idx, para_text in body_paragraphs:
+                        para_len = len(para_text) + 1
+                        if current_pos <= match_start < current_pos + para_len:
+                            if num not in citation_locations:
+                                citation_locations[num] = []
+                            citation_locations[num].append(para_idx)
+                            break
+                        current_pos += para_len
+                    # 获取匹配的上下文（前后各30个字符），便于调试
+                    match_end = match.end()
+                    context_start = max(0, match_start - 30)
+                    context_end = min(len(body_text), match_end + 30)
+                    context = body_text[context_start:context_end].replace('\n', ' ').replace('\r', ' ')
+                    print(f"[DocumentService] 从单个编号格式中检测到引用: ［{num}］ (位置: {match_start}, 上下文: ...{context}...)")
+            except ValueError as e:
+                print(f"[DocumentService] 提取编号失败: {e}")
+        
+        # 方法2：直接使用字符串搜索作为备用（更可靠，支持半角和全角）
         for num in range(1, 1001):
+            # 搜索半角方括号
             search_str = f'[{num}]'
             if search_str in body_text:
                 if num not in cited_reference_numbers:
@@ -1499,17 +1666,60 @@ class DocumentService:
                         positions.append(pos)
                         start = pos + 1
                     print(f"[DocumentService] 通过字符串搜索检测到引用: [{num}] (找到 {len(positions)} 处)")
+                    # 记录引用位置
+                    for pos in positions:
+                        current_pos = 0
+                        for para_idx, para_text in body_paragraphs:
+                            para_len = len(para_text) + 1
+                            if current_pos <= pos < current_pos + para_len:
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(para_idx)
+                                break
+                            current_pos += para_len
+                    for pos in positions[:2]:  # 只显示前2个
+                        context = body_text[max(0, pos-30):min(len(body_text), pos+30)].replace('\n', ' ').replace('\r', ' ')
+                        print(f"[DocumentService]   位置 {pos}: ...{context}...")
+            
+            # 搜索全角方括号
+            search_str_fullwidth = f'［{num}］'
+            if search_str_fullwidth in body_text:
+                if num not in cited_reference_numbers:
+                    cited_reference_numbers.add(num)
+                    # 找到所有位置
+                    positions = []
+                    start = 0
+                    while True:
+                        pos = body_text.find(search_str_fullwidth, start)
+                        if pos == -1:
+                            break
+                        positions.append(pos)
+                        start = pos + 1
+                    print(f"[DocumentService] 通过字符串搜索检测到引用: ［{num}］ (找到 {len(positions)} 处)")
+                    # 记录引用位置
+                    for pos in positions:
+                        current_pos = 0
+                        for para_idx, para_text in body_paragraphs:
+                            para_len = len(para_text) + 1
+                            if current_pos <= pos < current_pos + para_len:
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(para_idx)
+                                break
+                            current_pos += para_len
                     for pos in positions[:2]:  # 只显示前2个
                         context = body_text[max(0, pos-30):min(len(body_text), pos+30)].replace('\n', ' ').replace('\r', ' ')
                         print(f"[DocumentService]   位置 {pos}: ...{context}...")
         
-        # 然后检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号）
+        # 然后检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号，支持全角方括号）
         # 改进：使用更宽松的模式，确保能匹配 [4,5] 等格式
         # 模式说明：\[(\d+(?:[,\s]+\d+)+)\] 要求至少两个数字，但可能遗漏某些格式
         # 改用更全面的检测：先检测所有 [数字,数字] 或 [数字 数字] 格式
         multi_citation_patterns = [
-            r'\[(\d+(?:[,\s]+\d+)+)\]',  # [1,2,3,4,5] 或 [1 2 3] 格式（至少两个数字）
-            r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 或 [4 5] 格式（两个数字）
+            r'\[(\d+(?:[,\s]+\d+)+)\]',  # [1,2,3,4,5] 或 [1 2 3] 格式（至少两个数字，半角）
+            r'［(\d+(?:[,\s]+\d+)+)］',  # ［1,2,3,4,5］ 或 ［1 2 3］ 格式（至少两个数字，全角）
+            r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 或 [4 5] 格式（两个数字，半角）
+            r'［(\d+)[,\s]+(\d+)］',     # ［4,5］ 或 ［4 5］ 格式（两个数字，全角）
         ]
         for pattern in multi_citation_patterns:
             multi_matches = re.finditer(pattern, body_text)
@@ -1605,19 +1815,39 @@ class DocumentService:
                     # 2. 方括号数字：[1], [2], [3]
                     # 3. 多个数字：[1,2,3] 或 [1-5]
                     
-                    # 检查方括号格式的上标引用 [1], [2] 等
+                    # 检查方括号格式的上标引用 [1], [2] 等（支持半角和全角）
+                    # 先检测半角方括号
                     bracket_matches = re.finditer(r'\[(\d+)\]', run_text)
                     for match in bracket_matches:
                         try:
                             num = int(match.group(1))
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
+                                # 记录引用位置
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(idx)
                                 print(f"[DocumentService] 检测到上标格式引用 [{num}]")
                         except ValueError:
                             pass
                     
-                    # 检查多个编号的上标引用 [1,2,3,4,5] 或 [1-5]（改进：支持任意数量的编号）
-                    # 先检测多个编号格式 [1,2,3,4,5]
+                    # 检测全角方括号 ［1］, ［2］ 等
+                    fullwidth_bracket_matches = re.finditer(r'［(\d+)］', run_text)
+                    for match in fullwidth_bracket_matches:
+                        try:
+                            num = int(match.group(1))
+                            if 1 <= num <= 1000:
+                                cited_reference_numbers.add(num)
+                                # 记录引用位置
+                                if num not in citation_locations:
+                                    citation_locations[num] = []
+                                citation_locations[num].append(idx)
+                                print(f"[DocumentService] 检测到上标格式引用 [{num}]")
+                        except ValueError:
+                            pass
+                    
+                    # 检查多个编号的上标引用 [1,2,3,4,5] 或 [1-5]（改进：支持任意数量的编号，支持全角方括号）
+                    # 先检测多个编号格式 [1,2,3,4,5]（半角）
                     multi_bracket_pattern = r'\[(\d+(?:[,\s]+\d+)+)\]'
                     multi_matches = re.finditer(multi_bracket_pattern, run_text)
                     for match in multi_matches:
@@ -1633,8 +1863,73 @@ class DocumentService:
                         except ValueError:
                             pass
                     
-                    # 再检测范围格式 [1-5] 或两个编号 [1,2]
+                    # 检测全角方括号多个编号格式 ［1,2,3,4,5］
+                    fullwidth_multi_pattern = r'［(\d+(?:[,\s]+\d+)+)］'
+                    fullwidth_multi_matches = re.finditer(fullwidth_multi_pattern, run_text)
+                    for match in fullwidth_multi_matches:
+                        try:
+                            numbers_str = match.group(1)  # 提取括号内的内容
+                            # 提取所有数字
+                            numbers = re.findall(r'\d+', numbers_str)
+                            for num_str in numbers:
+                                num = int(num_str.strip())
+                                if 1 <= num <= 1000:
+                                    cited_reference_numbers.add(num)
+                                    print(f"[DocumentService] 检测到上标格式多个编号引用 ［{num}］")
+                        except ValueError:
+                            pass
+                    
+                    # 再检测范围格式 [1-5] 或两个编号 [1,2]（半角）
                     range_matches = re.finditer(r'\[(\d+)[,\-\s]+(\d+)\]', run_text)
+                    for match in range_matches:
+                        try:
+                            # 提取所有数字
+                            numbers_str = match.group(0).strip('[]')
+                            if ',' in numbers_str:
+                                # 逗号分隔：[1,2] 或 [1,2,3]
+                                for num_str in numbers_str.split(','):
+                                    num = int(num_str.strip())
+                                    if 1 <= num <= 1000:
+                                        cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式逗号分隔引用 [{num}]")
+                            elif '-' in numbers_str:
+                                # 连字符分隔：[1-5]
+                                parts = numbers_str.split('-')
+                                if len(parts) == 2:
+                                    start = int(parts[0].strip())
+                                    end = int(parts[1].strip())
+                                    if 1 <= start <= end <= 1000:
+                                        for num in range(start, end + 1):
+                                            cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式范围引用 [{start}-{end}]")
+                        except ValueError:
+                            pass
+                    
+                    # 检测全角方括号范围格式 ［1-5］ 或 ［1,2］
+                    fullwidth_range_matches = re.finditer(r'［(\d+)[,\-\s]+(\d+)］', run_text)
+                    for match in fullwidth_range_matches:
+                        try:
+                            # 提取所有数字
+                            numbers_str = match.group(0).strip('［］')
+                            if ',' in numbers_str:
+                                # 逗号分隔：［1,2］ 或 ［1,2,3］
+                                for num_str in numbers_str.split(','):
+                                    num = int(num_str.strip())
+                                    if 1 <= num <= 1000:
+                                        cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式逗号分隔引用 ［{num}］")
+                            elif '-' in numbers_str:
+                                # 连字符分隔：［1-5］
+                                parts = numbers_str.split('-')
+                                if len(parts) == 2:
+                                    start = int(parts[0].strip())
+                                    end = int(parts[1].strip())
+                                    if 1 <= start <= end <= 1000:
+                                        for num in range(start, end + 1):
+                                            cited_reference_numbers.add(num)
+                                        print(f"[DocumentService] 检测到上标格式范围引用 ［{start}-{end}］")
+                        except ValueError:
+                            pass
                     for match in range_matches:
                         try:
                             # 提取所有数字
@@ -1674,8 +1969,8 @@ class DocumentService:
                                     pass
                 
                 # 也检查普通文本中的引用格式（非上标，但可能是引用）
-                # 检查是否包含 [数字] 或 (数字) 格式
-                for pattern in [r'\[(\d+)\]', r'\((\d+)\)', r'（(\d+)）']:
+                # 检查是否包含 [数字] 或 (数字) 格式（支持半角和全角方括号）
+                for pattern in [r'\[(\d+)\]', r'［(\d+)］', r'\((\d+)\)', r'（(\d+)）']:
                     matches = re.finditer(pattern, run_text)
                     for match in matches:
                         try:
@@ -1686,10 +1981,12 @@ class DocumentService:
                         except ValueError:
                             pass
                 
-                # 额外检查：检测普通文本中的多个编号格式 [4,5]（非上标）
+                # 额外检查：检测普通文本中的多个编号格式 [4,5]（非上标，支持全角方括号）
                 multi_patterns = [
-                    r'\[(\d+(?:[,\s]+\d+)+)\]',  # [4,5,6] 格式
-                    r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 格式
+                    r'\[(\d+(?:[,\s]+\d+)+)\]',  # [4,5,6] 格式（半角）
+                    r'［(\d+(?:[,\s]+\d+)+)］',  # ［4,5,6］ 格式（全角）
+                    r'\[(\d+)[,\s]+(\d+)\]',     # [4,5] 格式（半角）
+                    r'［(\d+)[,\s]+(\d+)］',     # ［4,5］ 格式（全角）
                 ]
                 for pattern in multi_patterns:
                     matches = re.finditer(pattern, run_text)
@@ -1733,8 +2030,43 @@ class DocumentService:
                 print(f"[DocumentService] 未引用的参考文献: {ref_num} - {ref_item['text'][:50]}")
         
         print(f"[DocumentService] 未引用的参考文献数量: {len(uncited_references)}")
+        print(f"[DocumentService] 引用位置记录: {citation_locations}")
         
-        # 5. 在参考文献段落中标记未被引用的参考文献（标红并在文本后添加提示）
+        # 5. 在参考文献段落中标记引用信息
+        # 5.1 对于被引用的参考文献，添加引用页码信息
+        for ref_item in reference_items:
+            ref_num = ref_item["number"]
+            para = ref_item["paragraph"]
+            
+            if ref_num in cited_reference_numbers:
+                # 该参考文献被引用了，添加引用页码信息
+                try:
+                    # 获取引用位置（段落索引列表）
+                    locations = citation_locations.get(ref_num, [])
+                    if locations:
+                        # 尝试估算页码（假设每页约25个段落，从正文开始计算）
+                        # 这是一个简化的估算方法
+                        pages = []
+                        for para_idx in sorted(set(locations)):
+                            # 估算页码：正文开始位置 + 段落索引 / 每页段落数
+                            estimated_page = max(1, (para_idx - body_start_idx) // 25 + 1)
+                            pages.append(estimated_page)
+                        
+                        # 去重并排序页码
+                        unique_pages = sorted(set(pages))
+                        if unique_pages:
+                            page_info = "、".join([str(p) for p in unique_pages])
+                            marker_text = f"（引用页码：{page_info}）"
+                            
+                            # 在段落末尾添加页码信息
+                            new_run = para.add_run(marker_text)
+                            new_run.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
+                            new_run.font.bold = False
+                            print(f"[DocumentService] 为参考文献 {ref_num} 添加引用页码: {page_info}")
+                except Exception as e:
+                    print(f"[DocumentService] 添加引用页码失败: {e}")
+        
+        # 5.2 对于未被引用的参考文献，标红并添加提示
         for ref_item in uncited_references:
             para = ref_item["paragraph"]
             ref_num = ref_item["number"]

@@ -95,10 +95,11 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
     # 智能对齐逻辑：标题、图片说明可以居中，正文保持左对齐
     paragraph_text = paragraph.text.strip() if paragraph.text else ""
     
-    # 判断是否是"摘要"或"ABSTRACT"标题（需要强制居中）
-    # 匹配"摘要"、"ABSTRACT"及其变体，包括中间有空格的变体（如"摘 要"）
-    # 使用更灵活的匹配：去除所有空格和标点后检查是否等于"摘要"或"ABSTRACT"
+    # 判断是否是"摘要"、"ABSTRACT"或"目录"标题（需要强制居中）
+    # 匹配"摘要"、"ABSTRACT"、"目录"及其变体，包括中间有空格的变体（如"摘 要"、"目 录"）
+    # 使用更灵活的匹配：去除所有空格和标点后检查是否等于"摘要"、"ABSTRACT"或"目录"
     is_abstract_title = False
+    is_toc_title = False
     if paragraph_text:
         # 去除所有空格、标点符号和空白字符，只保留字母和汉字
         # 去除所有空格、标点符号（包括中文和英文标点）
@@ -109,21 +110,48 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
         # 检查去除空格和标点后是否等于"摘要"或"ABSTRACT"
         if cleaned_text == "摘要" or cleaned_text_upper == "ABSTRACT":
             is_abstract_title = True
-        # 如果长度较短（可能是"摘要："、"ABSTRACT:"、"摘 要"等），也检查是否包含"摘要"或"ABSTRACT"
-        elif len(paragraph_text) <= 25:
+        # 检查去除空格和标点后是否等于"目录"或"Contents"（支持中间最多5个空格）
+        elif cleaned_text == "目录" or cleaned_text_upper == "CONTENTS":
+            is_toc_title = True
+        # 如果去除空格后的文本较短，也检查是否包含这些关键词（支持中间有空格）
+        # 对于"目录"，允许中间最多5个空格，所以原始文本长度可能达到 2 + 5 + 标点 = 约10个字符
+        elif len(cleaned_text) <= 15:  # 放宽限制，基于去除空格后的长度
             # 检查是否包含"摘"和"要"（允许中间有空格或其他字符）
             if "摘" in paragraph_text and "要" in paragraph_text:
                 # 进一步验证：去除空格和标点后是否等于"摘要"
                 if cleaned_text == "摘要":
                     is_abstract_title = True
+            # 检查是否包含"目"和"录"（允许中间最多5个空格）
+            elif "目" in paragraph_text and "录" in paragraph_text:
+                # 进一步验证：去除空格和标点后是否等于"目录"
+                # 检查"目"和"录"之间的字符是否只有空格（最多5个）
+                # 找到"目"和"录"的位置
+                mu_pos = paragraph_text.find("目")
+                lu_pos = paragraph_text.find("录")
+                if mu_pos >= 0 and lu_pos > mu_pos:
+                    # 检查"目"和"录"之间的字符
+                    between_text = paragraph_text[mu_pos + 1:lu_pos]
+                    # 如果中间只有空格（最多5个），或者是空字符串，认为是目录标题
+                    if len(between_text) <= 5 and all(c in ' \t\u3000' for c in between_text):
+                        if cleaned_text == "目录":
+                            is_toc_title = True
+                    # 如果中间没有字符或只有空格，也认为是目录标题
+                    elif len(between_text) == 0:
+                        if cleaned_text == "目录":
+                            is_toc_title = True
             # 检查是否包含"ABSTRACT"（不区分大小写）
             elif "ABSTRACT" in cleaned_text_upper or "abstract" in paragraph_text.lower():
                 # 进一步验证：去除空格和标点后是否等于"ABSTRACT"
                 if cleaned_text_upper == "ABSTRACT":
                     is_abstract_title = True
+            # 检查是否包含"Contents"（不区分大小写）
+            elif "CONTENTS" in cleaned_text_upper or "contents" in paragraph_text.lower():
+                # 进一步验证：去除空格和标点后是否等于"CONTENTS"
+                if cleaned_text_upper == "CONTENTS":
+                    is_toc_title = True
     
-    # 如果是"摘要"或"ABSTRACT"标题，强制居中，无论规则如何设置
-    if is_abstract_title:
+    # 如果是"摘要"、"ABSTRACT"或"目录"标题，强制居中，无论规则如何设置
+    if is_abstract_title or is_toc_title:
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         # 直接返回，不执行后续的对齐逻辑，确保不会被覆盖
         # 但继续执行其他格式设置（字体、行距等）
@@ -244,7 +272,7 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             if bold_value is not None:
                 font.bold = bool(bold_value)
     
-    # 最后再次检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
+    # 最后再次检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
     paragraph_text_final = paragraph.text.strip() if paragraph.text else ""
     if paragraph_text_final:
         # 使用相同的判断逻辑
@@ -252,17 +280,36 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
         cleaned_text_final_upper = cleaned_text_final.upper()
         
         is_abstract_title_final = False
+        is_toc_title_final = False
         if cleaned_text_final == "摘要" or cleaned_text_final_upper == "ABSTRACT":
             is_abstract_title_final = True
-        elif len(paragraph_text_final) <= 25:
+        elif cleaned_text_final == "目录" or cleaned_text_final_upper == "CONTENTS":
+            is_toc_title_final = True
+        elif len(cleaned_text_final) <= 15:  # 基于去除空格后的长度
             if "摘" in paragraph_text_final and "要" in paragraph_text_final:
                 if cleaned_text_final == "摘要":
                     is_abstract_title_final = True
+            elif "目" in paragraph_text_final and "录" in paragraph_text_final:
+                # 检查"目"和"录"之间的字符是否只有空格（最多5个）
+                mu_pos = paragraph_text_final.find("目")
+                lu_pos = paragraph_text_final.find("录")
+                if mu_pos >= 0 and lu_pos > mu_pos:
+                    between_text = paragraph_text_final[mu_pos + 1:lu_pos]
+                    # 如果中间只有空格（最多5个），或者是空字符串，认为是目录标题
+                    if len(between_text) <= 5 and all(c in ' \t\u3000' for c in between_text):
+                        if cleaned_text_final == "目录":
+                            is_toc_title_final = True
+                    elif len(between_text) == 0:
+                        if cleaned_text_final == "目录":
+                            is_toc_title_final = True
             elif "ABSTRACT" in cleaned_text_final_upper or "abstract" in paragraph_text_final.lower():
                 if cleaned_text_final_upper == "ABSTRACT":
                     is_abstract_title_final = True
+            elif "CONTENTS" in cleaned_text_final_upper or "contents" in paragraph_text_final.lower():
+                if cleaned_text_final_upper == "CONTENTS":
+                    is_toc_title_final = True
         
-        if is_abstract_title_final:
+        if is_abstract_title_final or is_toc_title_final:
             paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
 
