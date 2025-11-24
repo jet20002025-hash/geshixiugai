@@ -459,17 +459,23 @@ class DocumentService:
                 return "title_level_1"
         
         # 二级标题检测：必须是独立的、较短的段落
+        # 标题格式：数字.数字 或 数字.数字 后跟标点符号，且后面没有其他文字内容
         section_match = re.match(r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
         if section_match:
             remaining_text = text[len(section_match.group(0)):].strip()
-            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+            # 只有当剩余文本为空或只有标点符号时，才认为是标题
+            # 如果后面还有文字内容，则不是标题（是正文中的编号引用）
+            if len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]:
                 return "title_level_2"
         
         # 三级标题检测：必须是独立的、较短的段落
+        # 标题格式：数字.数字.数字 或 数字.数字.数字 后跟标点符号，且后面没有其他文字内容
         subsection_match = re.match(r"^(\d+\.\d+\.\d+)([，,。.：:；;]?)$", text)
         if subsection_match:
             remaining_text = text[len(subsection_match.group(0)):].strip()
-            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+            # 只有当剩余文本为空或只有标点符号时，才认为是标题
+            # 如果后面还有文字内容（如"3.2.4 12864 液晶显示屏"），则不是标题，是正文
+            if len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]:
                 return "title_level_3"
         
         # 默认返回正文样式
