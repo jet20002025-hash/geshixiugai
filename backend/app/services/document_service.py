@@ -2035,8 +2035,8 @@ class DocumentService:
                         
                         # 检查空白段之后是否有章节标题（如果空白段后面是章节标题，这是章节间的空白，允许）
                         is_before_chapter = False
-                        # 检查空白段之后是否有章节标题
-                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 5, check_end_idx)):
+                        # 扩大检查范围：检查空白段之后是否有章节标题（最多检查20个段落，以覆盖目录和第一章之间的情况）
+                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 20, check_end_idx, len(document.paragraphs))):
                             if next_idx < len(document.paragraphs):
                                 next_para = document.paragraphs[next_idx]
                                 if is_chapter_title(next_para):
@@ -2045,10 +2045,20 @@ class DocumentService:
                                     break
                         
                         # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，也是允许的）
+                        # 扩大检查范围：不仅检查前一个段落，还要检查前面是否有章节标题（比如目录结束）
                         is_after_chapter = False
-                        if blank_start_idx > 0:
-                            prev_para = document.paragraphs[blank_start_idx - 1]
-                            if is_chapter_title(prev_para):
+                        # 向前检查最多10个段落，查找章节标题
+                        for prev_idx in range(max(0, blank_start_idx - 10), blank_start_idx):
+                            if prev_idx < len(document.paragraphs):
+                                prev_para = document.paragraphs[prev_idx]
+                                if is_chapter_title(prev_para):
+                                    # 空白段前面有章节标题，这是章节间的空白，允许
+                                    is_after_chapter = True
+                                    break
+                        
+                        # 特别检查：如果空白段位于目录结束和正文开始之间，也允许（这是章节间的空白）
+                        if not is_after_chapter and toc_end_idx is not None and body_start_idx is not None:
+                            if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
                                 is_after_chapter = True
                         
                         # 只有当空白段既不在目录页范围内，也不在章节标题前，也不在章节标题后，且在同一章节内时，才标记为问题
@@ -2082,16 +2092,26 @@ class DocumentService:
                     if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
                         is_in_toc = True
             
-            # 检查是否在章节标题后
+            # 检查是否在章节标题后（扩大检查范围）
             is_after_chapter = False
-            if blank_start_idx > 0:
-                prev_para = document.paragraphs[blank_start_idx - 1]
-                if is_chapter_title(prev_para):
+            # 向前检查最多10个段落，查找章节标题
+            for prev_idx in range(max(0, blank_start_idx - 10), blank_start_idx):
+                if prev_idx < len(document.paragraphs):
+                    prev_para = document.paragraphs[prev_idx]
+                    if is_chapter_title(prev_para):
+                        # 空白段前面有章节标题，这是章节间的空白，允许
+                        is_after_chapter = True
+                        break
+            
+            # 特别检查：如果空白段位于目录结束和正文开始之间，也允许（这是章节间的空白）
+            if not is_after_chapter and toc_end_idx is not None and body_start_idx is not None:
+                if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
                     is_after_chapter = True
             
             # 检查空白段之后是否有章节标题（虽然已经到文档末尾，但也要检查）
             is_before_chapter = False
-            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 5, len(document.paragraphs))):
+            # 扩大检查范围：检查空白段之后是否有章节标题（最多检查20个段落）
+            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 20, len(document.paragraphs))):
                 if next_idx < len(document.paragraphs):
                     next_para = document.paragraphs[next_idx]
                     if is_chapter_title(next_para):
