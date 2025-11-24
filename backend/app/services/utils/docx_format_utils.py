@@ -92,20 +92,28 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
     }
     
     # 智能对齐逻辑：标题、图片说明可以居中，正文保持左对齐
-    paragraph_text = paragraph.text.strip()
+    paragraph_text = paragraph.text.strip() if paragraph.text else ""
     
     # 判断是否是"摘要"或"ABSTRACT"标题（需要强制居中）
-    # 匹配"摘要"、"ABSTRACT"及其变体（如"摘要："、"ABSTRACT:"等），但排除包含大量正文的情况
-    is_abstract_title = (
-        paragraph_text == "摘要" or 
-        (paragraph_text.startswith("摘要") and len(paragraph_text) <= 15) or
-        paragraph_text == "ABSTRACT" or 
-        (paragraph_text.startswith("ABSTRACT") and len(paragraph_text) <= 15)
-    )
+    # 匹配"摘要"、"ABSTRACT"及其变体，但排除包含大量正文的情况
+    # 使用更精确的匹配：只包含"摘要"或"ABSTRACT"本身，或者后面只有少量标点符号
+    is_abstract_title = False
+    if paragraph_text:
+        # 精确匹配"摘要"或"ABSTRACT"
+        if paragraph_text == "摘要" or paragraph_text == "ABSTRACT":
+            is_abstract_title = True
+        # 匹配以"摘要"或"ABSTRACT"开头，且长度较短的情况（可能是"摘要："、"ABSTRACT:"等）
+        elif (paragraph_text.startswith("摘要") or paragraph_text.startswith("ABSTRACT")) and len(paragraph_text) <= 20:
+            # 进一步检查：去除常见标点后是否只剩下"摘要"或"ABSTRACT"
+            cleaned_text = paragraph_text.replace("：", "").replace(":", "").replace(" ", "").strip()
+            if cleaned_text == "摘要" or cleaned_text == "ABSTRACT":
+                is_abstract_title = True
     
     # 如果是"摘要"或"ABSTRACT"标题，强制居中，无论规则如何设置
     if is_abstract_title:
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        # 直接返回，不执行后续的对齐逻辑，确保不会被覆盖
+        # 但继续执行其他格式设置（字体、行距等）
     elif alignment := rule.get("alignment"):
         # 判断是否是图片或表格说明（包含"图"或"表"字，且通常较短）
         is_figure_caption = (
@@ -222,6 +230,20 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             # 应用加粗设置
             if bold_value is not None:
                 font.bold = bool(bold_value)
+    
+    # 最后再次检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
+    paragraph_text_final = paragraph.text.strip() if paragraph.text else ""
+    if paragraph_text_final:
+        is_abstract_title_final = False
+        if paragraph_text_final == "摘要" or paragraph_text_final == "ABSTRACT":
+            is_abstract_title_final = True
+        elif (paragraph_text_final.startswith("摘要") or paragraph_text_final.startswith("ABSTRACT")) and len(paragraph_text_final) <= 20:
+            cleaned_text_final = paragraph_text_final.replace("：", "").replace(":", "").replace(" ", "").strip()
+            if cleaned_text_final == "摘要" or cleaned_text_final == "ABSTRACT":
+                is_abstract_title_final = True
+        
+        if is_abstract_title_final:
+            paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
 
 def _length_to_pt(value) -> Optional[float]:

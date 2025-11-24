@@ -824,6 +824,19 @@ class DocumentService:
                 # 应用规则
                 docx_format_utils.apply_paragraph_rule(paragraph, rule)
                 
+                # 最终检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
+                para_text_check = paragraph.text.strip() if paragraph.text else ""
+                if para_text_check:
+                    is_abstract_title_check = (
+                        para_text_check == "摘要" or para_text_check == "ABSTRACT" or
+                        (para_text_check.startswith("摘要") and len(para_text_check) <= 20 and 
+                         para_text_check.replace("：", "").replace(":", "").replace(" ", "").strip() == "摘要") or
+                        (para_text_check.startswith("ABSTRACT") and len(para_text_check) <= 20 and 
+                         para_text_check.replace("：", "").replace(":", "").replace(" ", "").strip() == "ABSTRACT")
+                    )
+                    if is_abstract_title_check:
+                        paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                
                 # 记录修改后的格式
                 after_format = docx_format_utils.extract_paragraph_format(paragraph)
                 
@@ -1853,6 +1866,26 @@ class DocumentService:
         if body_start_idx is None:
             body_start_idx = min(10, len(document.paragraphs))
         
+        # 1.5. 找到目录页的范围（用于排除目录页末尾的空白行）
+        toc_start_idx = None
+        toc_end_idx = None
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if (para_text.startswith("目录") or para_text.startswith("Contents")) and toc_start_idx is None:
+                toc_start_idx = idx
+            elif toc_start_idx is not None and (
+                para_text.startswith("第一章") or para_text.startswith("第1章") or 
+                para_text.startswith("Chapter 1") or para_text.startswith("1 引言") or 
+                para_text.startswith("1 绪论") or para_text.startswith("1 概述") or
+                para_text == "绪论" or para_text == "概述"
+            ):
+                toc_end_idx = idx
+                break
+        
+        # 如果没找到目录结束位置，假设目录到正文开始之前
+        if toc_start_idx is not None and toc_end_idx is None:
+            toc_end_idx = body_start_idx if body_start_idx is not None else len(document.paragraphs)
+        
         # 2. 找到参考文献结束位置
         reference_end_idx = len(document.paragraphs)  # 默认到文档末尾
         
@@ -1977,6 +2010,17 @@ class DocumentService:
                     # 遇到非空白段落
                     # 如果之前有连续空白，检查是否需要标记
                     if consecutive_blanks >= 2 and blank_start_idx is not None:
+                        # 检查空白段是否在目录页范围内（目录页末尾的空白行允许）
+                        is_in_toc = False
+                        if toc_start_idx is not None and toc_end_idx is not None:
+                            # 如果空白段的起始位置在目录页范围内，或者是目录页结束后的空白（目录页和正文开始之间），都允许
+                            if blank_start_idx >= toc_start_idx and blank_start_idx < toc_end_idx:
+                                is_in_toc = True
+                            # 如果空白段位于目录页结束和正文开始之间，也允许（这是章节间的空白）
+                            elif toc_end_idx is not None and body_start_idx is not None:
+                                if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
+                                    is_in_toc = True
+                        
                         # 检查空白段之后是否有章节标题（如果空白段后面是章节标题，这是章节间的空白，允许）
                         is_before_chapter = False
                         # 检查空白段之后是否有章节标题
@@ -1995,8 +2039,8 @@ class DocumentService:
                             if is_chapter_title(prev_para):
                                 is_after_chapter = True
                         
-                        # 只有当空白段既不在章节标题前，也不在章节标题后，且在同一章节内时，才标记为问题
-                        if not is_before_chapter and not is_after_chapter:
+                        # 只有当空白段既不在目录页范围内，也不在章节标题前，也不在章节标题后，且在同一章节内时，才标记为问题
+                        if not is_in_toc and not is_before_chapter and not is_after_chapter:
                             issues.append({
                                 "type": "excessive_blanks_in_chapter",
                                 "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（正文章节内）",
@@ -2015,6 +2059,17 @@ class DocumentService:
         
         # 处理文档末尾的连续空白
         if consecutive_blanks >= 2 and blank_start_idx is not None:
+            # 检查空白段是否在目录页范围内（目录页末尾的空白行允许）
+            is_in_toc = False
+            if toc_start_idx is not None and toc_end_idx is not None:
+                # 如果空白段的起始位置在目录页范围内，或者是目录页结束后的空白（目录页和正文开始之间），都允许
+                if blank_start_idx >= toc_start_idx and blank_start_idx < toc_end_idx:
+                    is_in_toc = True
+                # 如果空白段位于目录页结束和正文开始之间，也允许（这是章节间的空白）
+                elif toc_end_idx is not None and body_start_idx is not None:
+                    if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
+                        is_in_toc = True
+            
             # 检查是否在章节标题后
             is_after_chapter = False
             if blank_start_idx > 0:
@@ -2031,8 +2086,8 @@ class DocumentService:
                         is_before_chapter = True
                         break
             
-            # 只有当空白段既不在章节标题前，也不在章节标题后时，才标记为问题
-            if not is_after_chapter and not is_before_chapter:
+            # 只有当空白段既不在目录页范围内，也不在章节标题前，也不在章节标题后时，才标记为问题
+            if not is_in_toc and not is_after_chapter and not is_before_chapter:
                 issues.append({
                     "type": "excessive_blanks_in_chapter",
                     "message": f"正文末尾第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落",
