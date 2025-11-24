@@ -265,6 +265,83 @@ class DocumentService:
             pass
         
         return has_image or has_equation
+    
+    def _paragraph_has_flowchart(self, paragraph) -> bool:
+        """判断段落是否包含流程图（由多个形状组成的流程图）"""
+        try:
+            para_xml = str(paragraph._element.xml)
+            
+            # 方法1: 检测 Word Processing Shapes (wps:wsp) - 现代 Word 文档中的形状
+            # 流程图通常包含多个形状，如果段落中有多个 wps:wsp 元素，可能是流程图
+            if 'wps:wsp' in para_xml:
+                # 计算形状数量
+                shape_count = para_xml.count('wps:wsp')
+                # 如果包含多个形状（至少2个），可能是流程图
+                if shape_count >= 2:
+                    return True
+            
+            # 方法2: 检测 VML Shapes (v:shape) - 旧版 Word 文档中的形状
+            # 排除水印（包含 textpath 的 v:shape 通常是水印）
+            vml_shapes = []
+            if 'v:shape' in para_xml.lower():
+                # 检查是否有多个非水印的形状
+                # 简单判断：如果包含 v:shape 但不包含 textpath，可能是流程图的一部分
+                vml_count = para_xml.lower().count('v:shape')
+                textpath_count = para_xml.lower().count('textpath')
+                # 如果有形状且不是水印，可能是流程图
+                if vml_count > textpath_count and vml_count >= 2:
+                    return True
+            
+            # 方法3: 检测 SmartArt 流程图
+            # SmartArt 在 XML 中通常包含 'smartart' 或特定的命名空间
+            if 'smartart' in para_xml.lower() or 'dgm:' in para_xml:
+                return True
+            
+            # 方法4: 检测 drawing 元素中的多个形状
+            # 使用 xpath 查找 drawing 元素，检查是否包含多个形状
+            try:
+                from docx.oxml.ns import qn
+                drawings = paragraph._element.xpath('.//w:drawing', namespaces={
+                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                    'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+                    'v': 'urn:schemas-microsoft-com:vml'
+                })
+                if drawings:
+                    # 检查每个 drawing 元素中是否包含多个形状
+                    for drawing in drawings:
+                        drawing_xml = str(drawing.xml)
+                        # 计算形状数量
+                        wps_count = drawing_xml.count('wps:wsp')
+                        vml_count = drawing_xml.lower().count('v:shape') - drawing_xml.lower().count('textpath')
+                        # 如果包含多个形状，可能是流程图
+                        if wps_count >= 2 or (vml_count >= 2 and vml_count > 0):
+                            return True
+            except:
+                pass
+            
+            # 方法5: 检测段落中的 runs 是否包含形状
+            try:
+                shape_count = 0
+                for run in paragraph.runs:
+                    if not hasattr(run, 'element'):
+                        continue
+                    run_xml = str(run.element.xml)
+                    # 排除水印
+                    if 'v:shape' in run_xml.lower() and 'textpath' in run_xml.lower():
+                        continue
+                    # 检查是否包含形状
+                    if 'wps:wsp' in run_xml or ('v:shape' in run_xml.lower() and 'textpath' not in run_xml.lower()):
+                        shape_count += 1
+                # 如果包含多个形状，可能是流程图
+                if shape_count >= 2:
+                    return True
+            except:
+                pass
+            
+        except:
+            pass
+        
+        return False
 
     def _apply_page_settings(self, document: Document) -> None:
         """应用页面设置（页边距等），但不修改任何页边距，保持文档原始页边距"""
@@ -696,8 +773,8 @@ class DocumentService:
                     # 也移除首行缩进，图片段落通常不需要缩进
                     rule.pop("first_line_indent", None)
                 
-                # 对于正文段落（非标题、非图片、非公式），如果使用的是标准默认样式，确保格式正确
-                if not is_heading and not has_image_or_equation:
+                # 对于正文段落（非标题、非图片、非公式、非流程图），如果使用的是标准默认样式，确保格式正确
+                if not is_heading and not has_image_or_equation and not has_flowchart:
                     # 如果使用的是标准默认样式，确保格式符合标准
                     if applied_rule_name == DEFAULT_STYLE or applied_rule_name == "body_text":
                         if DEFAULT_STYLE in FONT_STANDARDS:
