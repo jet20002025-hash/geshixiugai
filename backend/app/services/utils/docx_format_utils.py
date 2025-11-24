@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Dict, Optional
 
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT, WD_LINE_SPACING
@@ -95,19 +96,31 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
     paragraph_text = paragraph.text.strip() if paragraph.text else ""
     
     # 判断是否是"摘要"或"ABSTRACT"标题（需要强制居中）
-    # 匹配"摘要"、"ABSTRACT"及其变体，但排除包含大量正文的情况
-    # 使用更精确的匹配：只包含"摘要"或"ABSTRACT"本身，或者后面只有少量标点符号
+    # 匹配"摘要"、"ABSTRACT"及其变体，包括中间有空格的变体（如"摘 要"）
+    # 使用更灵活的匹配：去除所有空格和标点后检查是否等于"摘要"或"ABSTRACT"
     is_abstract_title = False
     if paragraph_text:
-        # 精确匹配"摘要"或"ABSTRACT"
-        if paragraph_text == "摘要" or paragraph_text == "ABSTRACT":
+        # 去除所有空格、标点符号和空白字符，只保留字母和汉字
+        # 去除所有空格、标点符号（包括中文和英文标点）
+        cleaned_text = re.sub(r'[\s\u3000：:，,。.；;！!？?、]', '', paragraph_text)
+        # 转换为大写以便匹配（对于英文）
+        cleaned_text_upper = cleaned_text.upper()
+        
+        # 检查去除空格和标点后是否等于"摘要"或"ABSTRACT"
+        if cleaned_text == "摘要" or cleaned_text_upper == "ABSTRACT":
             is_abstract_title = True
-        # 匹配以"摘要"或"ABSTRACT"开头，且长度较短的情况（可能是"摘要："、"ABSTRACT:"等）
-        elif (paragraph_text.startswith("摘要") or paragraph_text.startswith("ABSTRACT")) and len(paragraph_text) <= 20:
-            # 进一步检查：去除常见标点后是否只剩下"摘要"或"ABSTRACT"
-            cleaned_text = paragraph_text.replace("：", "").replace(":", "").replace(" ", "").strip()
-            if cleaned_text == "摘要" or cleaned_text == "ABSTRACT":
-                is_abstract_title = True
+        # 如果长度较短（可能是"摘要："、"ABSTRACT:"、"摘 要"等），也检查是否包含"摘要"或"ABSTRACT"
+        elif len(paragraph_text) <= 25:
+            # 检查是否包含"摘"和"要"（允许中间有空格或其他字符）
+            if "摘" in paragraph_text and "要" in paragraph_text:
+                # 进一步验证：去除空格和标点后是否等于"摘要"
+                if cleaned_text == "摘要":
+                    is_abstract_title = True
+            # 检查是否包含"ABSTRACT"（不区分大小写）
+            elif "ABSTRACT" in cleaned_text_upper or "abstract" in paragraph_text.lower():
+                # 进一步验证：去除空格和标点后是否等于"ABSTRACT"
+                if cleaned_text_upper == "ABSTRACT":
+                    is_abstract_title = True
     
     # 如果是"摘要"或"ABSTRACT"标题，强制居中，无论规则如何设置
     if is_abstract_title:
@@ -234,13 +247,20 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
     # 最后再次检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
     paragraph_text_final = paragraph.text.strip() if paragraph.text else ""
     if paragraph_text_final:
+        # 使用相同的判断逻辑
+        cleaned_text_final = re.sub(r'[\s\u3000：:，,。.；;！!？?、]', '', paragraph_text_final)
+        cleaned_text_final_upper = cleaned_text_final.upper()
+        
         is_abstract_title_final = False
-        if paragraph_text_final == "摘要" or paragraph_text_final == "ABSTRACT":
+        if cleaned_text_final == "摘要" or cleaned_text_final_upper == "ABSTRACT":
             is_abstract_title_final = True
-        elif (paragraph_text_final.startswith("摘要") or paragraph_text_final.startswith("ABSTRACT")) and len(paragraph_text_final) <= 20:
-            cleaned_text_final = paragraph_text_final.replace("：", "").replace(":", "").replace(" ", "").strip()
-            if cleaned_text_final == "摘要" or cleaned_text_final == "ABSTRACT":
-                is_abstract_title_final = True
+        elif len(paragraph_text_final) <= 25:
+            if "摘" in paragraph_text_final and "要" in paragraph_text_final:
+                if cleaned_text_final == "摘要":
+                    is_abstract_title_final = True
+            elif "ABSTRACT" in cleaned_text_final_upper or "abstract" in paragraph_text_final.lower():
+                if cleaned_text_final_upper == "ABSTRACT":
+                    is_abstract_title_final = True
         
         if is_abstract_title_final:
             paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER

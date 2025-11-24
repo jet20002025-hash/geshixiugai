@@ -827,13 +827,25 @@ class DocumentService:
                 # 最终检查：确保"摘要"和"ABSTRACT"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
                 if para_text_check:
-                    is_abstract_title_check = (
-                        para_text_check == "摘要" or para_text_check == "ABSTRACT" or
-                        (para_text_check.startswith("摘要") and len(para_text_check) <= 20 and 
-                         para_text_check.replace("：", "").replace(":", "").replace(" ", "").strip() == "摘要") or
-                        (para_text_check.startswith("ABSTRACT") and len(para_text_check) <= 20 and 
-                         para_text_check.replace("：", "").replace(":", "").replace(" ", "").strip() == "ABSTRACT")
-                    )
+                    # 去除所有空格、标点符号和空白字符，只保留字母和汉字
+                    cleaned_text_check = re.sub(r'[\s\u3000：:，,。.；;！!？?、]', '', para_text_check)
+                    cleaned_text_check_upper = cleaned_text_check.upper()
+                    
+                    is_abstract_title_check = False
+                    # 检查去除空格和标点后是否等于"摘要"或"ABSTRACT"
+                    if cleaned_text_check == "摘要" or cleaned_text_check_upper == "ABSTRACT":
+                        is_abstract_title_check = True
+                    # 如果长度较短，也检查是否包含"摘要"或"ABSTRACT"
+                    elif len(para_text_check) <= 25:
+                        # 检查是否包含"摘"和"要"（允许中间有空格或其他字符）
+                        if "摘" in para_text_check and "要" in para_text_check:
+                            if cleaned_text_check == "摘要":
+                                is_abstract_title_check = True
+                        # 检查是否包含"ABSTRACT"（不区分大小写）
+                        elif "ABSTRACT" in cleaned_text_check_upper or "abstract" in para_text_check.lower():
+                            if cleaned_text_check_upper == "ABSTRACT":
+                                is_abstract_title_check = True
+                    
                     if is_abstract_title_check:
                         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                 
