@@ -91,7 +91,7 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
         "distribute": WD_PARAGRAPH_ALIGNMENT.DISTRIBUTE,
     }
     
-    # 智能对齐逻辑：只有图片说明才居中，正文保持左对齐
+    # 智能对齐逻辑：标题、图片说明可以居中，正文保持左对齐
     if alignment := rule.get("alignment"):
         paragraph_text = paragraph.text.strip()
         # 判断是否是图片或表格说明（包含"图"或"表"字，且通常较短）
@@ -101,11 +101,23 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             (paragraph_text.startswith("图") or paragraph_text.startswith("表"))
         )
         
-        # 如果是图片说明，且规则要求居中，则应用居中
-        if is_figure_caption and alignment == "center":
+        # 判断是否是标题（摘要、目录、ABSTRACT、绪论、概述等）
+        is_title = (
+            paragraph_text == "摘要" or paragraph_text.startswith("摘要") or
+            paragraph_text == "ABSTRACT" or paragraph_text.startswith("ABSTRACT") or
+            paragraph_text == "目录" or paragraph_text.startswith("目录") or
+            paragraph_text == "Contents" or paragraph_text.startswith("Contents") or
+            paragraph_text == "绪论" or paragraph_text == "概述" or
+            paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述") or
+            paragraph_text.startswith("参考文献") or paragraph_text.startswith("致谢") or
+            paragraph_text.startswith("References") or paragraph_text.startswith("Acknowledgement")
+        )
+        
+        # 如果是图片说明或标题，且规则要求居中，则应用居中
+        if (is_figure_caption or is_title) and alignment == "center":
             paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         # 如果是普通正文，且规则要求居中，则强制改为左对齐（避免正文被错误居中）
-        elif not is_figure_caption and alignment == "center":
+        elif not is_figure_caption and not is_title and alignment == "center":
             # 只有当前不是左对齐时才修改，避免不必要的修改记录
             if paragraph.alignment != WD_PARAGRAPH_ALIGNMENT.LEFT:
                 paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
