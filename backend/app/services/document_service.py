@@ -759,18 +759,19 @@ class DocumentService:
                         (paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"))
                     )
                 
-                # 判断是否包含图片或公式
+                # 判断是否包含图片、公式或流程图
                 has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
+                has_flowchart = self._paragraph_has_flowchart(paragraph)
                 
                 # 对于标题，移除行距设置，保持标题的原始行距
                 if is_heading:
                     rule.pop("line_spacing", None)
                 
-                # 对于包含图片或公式的段落，移除行距设置，避免图片被压缩看不见
-                if has_image_or_equation:
-                    # 移除行距设置，保持图片段落的原始行距
+                # 对于包含图片、公式或流程图的段落，移除行距设置，避免被压缩看不见
+                if has_image_or_equation or has_flowchart:
+                    # 移除行距设置，保持图片/流程图段落的原始行距
                     rule.pop("line_spacing", None)
-                    # 也移除首行缩进，图片段落通常不需要缩进
+                    # 也移除首行缩进，图片/流程图段落通常不需要缩进
                     rule.pop("first_line_indent", None)
                 
                 # 对于正文段落（非标题、非图片、非公式、非流程图），如果使用的是标准默认样式，确保格式正确
@@ -1037,9 +1038,15 @@ class DocumentService:
                     check_text = check_para.text.strip() if check_para.text else ""
                     
                     # 判断是否是图题：以"图"开头，且包含数字（如"图1-1"、"图2.1"等）
-                    if check_text and check_text.startswith("图") and len(check_text) < 100:
+                    # 或者以"流程图"开头（如"流程图1-1"、"流程图2.1"等）
+                    if check_text and len(check_text) < 100:
                         # 检查是否包含图号格式（图X-X、图X.X等）
-                        if re.search(r'图\s*\d+[\.\-]\d+', check_text) or re.search(r'图\s*\d+', check_text):
+                        if (check_text.startswith("图") and (re.search(r'图\s*\d+[\.\-]\d+', check_text) or re.search(r'图\s*\d+', check_text))):
+                            is_caption = True
+                            caption_paragraph_idx = check_idx
+                            break
+                        # 检查是否是流程图标题（流程图X-X、流程图X.X等）
+                        elif (check_text.startswith("流程图") and (re.search(r'流程图\s*\d+[\.\-]\d+', check_text) or re.search(r'流程图\s*\d+', check_text))):
                             is_caption = True
                             caption_paragraph_idx = check_idx
                             break
