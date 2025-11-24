@@ -2101,10 +2101,9 @@ class DocumentService:
         print(f"[DocumentService] 引用位置记录: {citation_locations}")
         
         # 5. 在参考文献段落中标记引用信息
-        # 5.1 对于被引用的参考文献，添加引用页码信息
-        # 注意：只有同时满足以下条件才认为是真正被引用：
-        # 1. 在 cited_reference_numbers 中
-        # 2. 在 citation_locations 中有位置记录（说明确实找到了引用位置）
+        # 逻辑：先识别参考文献被引用的页码位置
+        # - 如果找到了页码（在 cited_reference_numbers 中且有位置记录），则不做任何标记
+        # - 如果没找到对应页码，则标记为"该文献未被正确引用"
         for ref_item in reference_items:
             ref_num = ref_item["number"]
             para = ref_item["paragraph"]
@@ -2114,10 +2113,9 @@ class DocumentService:
             
             # 检查是否真正被引用：必须在 cited_reference_numbers 中，并且有位置记录
             if ref_num in cited_reference_numbers and locations:
-                # 该参考文献被引用了，添加引用页码信息
+                # 该参考文献被引用了，且找到了页码位置，不做任何标记
                 try:
-                    # 尝试估算页码（假设每页约25个段落，从正文开始计算）
-                    # 这是一个简化的估算方法
+                    # 尝试估算页码（用于验证是否真的找到了位置）
                     pages = []
                     for para_idx in sorted(set(locations)):
                         # 估算页码：正文开始位置 + 段落索引 / 每页段落数
@@ -2128,17 +2126,11 @@ class DocumentService:
                     unique_pages = sorted(set(pages))
                     if unique_pages:
                         page_info = "、".join([str(p) for p in unique_pages])
-                        marker_text = f"（引用页码：{page_info}）"
-                        
-                        # 在段落末尾添加页码信息
-                        new_run = para.add_run(marker_text)
-                        new_run.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
-                        new_run.font.bold = False
-                        print(f"[DocumentService] 为参考文献 {ref_num} 添加引用页码: {page_info}")
+                        print(f"[DocumentService] 参考文献 {ref_num} 已正确引用，页码: {page_info}，不做标记")
                 except Exception as e:
-                    print(f"[DocumentService] 添加引用页码失败: {e}")
+                    print(f"[DocumentService] 验证引用页码失败: {e}")
         
-        # 5.2 对于未被引用的参考文献（包括检测到但无位置记录的情况），统一标红并添加提示
+        # 5.2 对于未被正确引用的参考文献（包括检测到但无位置记录的情况），统一标红并添加提示
         for ref_item in uncited_references:
             para = ref_item["paragraph"]
             ref_num = ref_item["number"]
@@ -2164,7 +2156,7 @@ class DocumentService:
                     run.font.bold = True  # 加粗
                 
                 # 在参考文献文本后添加提示（不插入新段落，直接在段落末尾添加）
-                marker_text = "（该文献没有被正文引用）"
+                marker_text = "（该文献未被正确引用）"
                 # 在段落末尾添加红色提示文本
                 new_run = para.add_run(marker_text)
                 new_run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
@@ -2178,7 +2170,7 @@ class DocumentService:
         if uncited_references:
             issues.append({
                 "type": "uncited_references",
-                "message": f"发现 {len(uncited_references)} 条参考文献在正文中未被引用",
+                "message": f"发现 {len(uncited_references)} 条参考文献未被正确引用",
                 "suggestion": "请在正文中添加引用标注，或删除未被引用的参考文献",
                 "uncited_count": len(uncited_references),
                 "uncited_references": [
