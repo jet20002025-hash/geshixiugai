@@ -411,6 +411,19 @@ class DocumentService:
         if not text:
             return DEFAULT_STYLE
         
+        # 优先检测特殊标题：摘要、ABSTRACT、目录、绪论、概述
+        # 这些标题需要设置为黑体、三号字、加粗、居中
+        if text == "摘要" or text.startswith("摘要"):
+            return "abstract_title"
+        if text == "ABSTRACT" or text.startswith("ABSTRACT"):
+            return "abstract_title_en"
+        if text == "目录" or text.startswith("目录") or text == "Contents" or text.startswith("Contents"):
+            return "toc_title"
+        if text == "绪论" or text == "概述" or text.startswith("1 绪论") or text.startswith("1 概述"):
+            # 如果是独立的"绪论"或"概述"，且段落较短，则认为是标题
+            if len(text) < 50:
+                return "title_level_1"
+        
         # 根据样式映射规则检测
         for rule in STYLE_MAPPING_RULES:
             if re.match(rule["pattern"], text, re.IGNORECASE):
@@ -434,12 +447,6 @@ class DocumentService:
             return "figure_caption"
         if text.startswith("表") and len(text) < 100:
             return "table_caption"
-        
-        # 检查是否是"绪论"或"概述"标题（黑体三号居中）
-        if text == "绪论" or text == "概述" or text.startswith("绪论") or text.startswith("概述"):
-            # 如果是独立的"绪论"或"概述"，且段落较短，则认为是标题
-            if len(text) < 50:
-                return "title_level_1"
         
         # 章节标题检测：必须是独立的、较短的段落
         # 避免将正文中的"第二章的方案"等误识别为标题

@@ -86,7 +86,7 @@ FONT_STANDARDS = {
     },
     # 英文摘要格式
     "abstract_title_en": {
-        "font_name": "Times New Roman",
+        "font_name": "黑体",  # 改为黑体，与中文摘要标题一致
         "font_size": 16,  # 三号字
         "bold": True,
         "alignment": "center",
