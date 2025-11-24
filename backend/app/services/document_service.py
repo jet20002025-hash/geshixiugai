@@ -797,6 +797,13 @@ class DocumentService:
                 before_format = docx_format_utils.extract_paragraph_format(paragraph)
                 paragraph_text = paragraph.text[:50] + "..." if len(paragraph.text) > 50 else paragraph.text
                 
+                # 再次确认：如果段落包含流程图，确保行距不被修改
+                # 流程图视为图片，不修改行距
+                if has_flowchart:
+                    # 确保规则中不包含行距设置
+                    rule.pop("line_spacing", None)
+                    rule.pop("first_line_indent", None)
+                
                 # 应用规则
                 docx_format_utils.apply_paragraph_rule(paragraph, rule)
                 
