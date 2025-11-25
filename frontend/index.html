@@ -5,13 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>论文格式自动修复</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
-    <!-- Google Fonts - 添加超时和错误处理 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
-    </noscript>
+    <!-- 不再使用Google字体，使用系统默认字体确保显示 -->
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -138,7 +132,7 @@
         100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
       }
       .slogan-text {
-        font-family: 'Microsoft YaHei', 'SimHei', 'STKaiti', 'KaiTi', '楷体', 'ZCOOL KuaiLe', 'Ma Shan Zheng', sans-serif, cursive !important;
+        font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; /* 使用最简单的系统字体 */
         font-size: 2.5rem !important;
         font-weight: bold !important;
         color: #ffffff !important; /* 强制白色 */
@@ -153,8 +147,6 @@
         opacity: 1 !important; /* 确保不透明 */
         transform: rotate(-1deg) !important;
         animation: float 2s ease-in-out infinite !important;
-        /* 字体加载失败时的回退样式 */
-        font-display: swap; /* 使用 swap 策略，即使字体未加载也立即显示文本 */
       }
       @keyframes float {
         0%, 100% { transform: rotate(-1deg) translateY(0px); }
@@ -196,7 +188,7 @@
             slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important;';
             const sloganText = document.querySelector('.slogan-text');
             if (sloganText) {
-              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
+              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
             }
           }
         }
@@ -217,21 +209,7 @@
         setTimeout(ensureSloganVisible, 1000);
       })();
       
-      // 如果字体加载失败，使用系统字体
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(function() {
-          // 字体加载完成，确保显示
-          const sloganText = document.querySelector('.slogan-text');
-          if (sloganText) {
-            sloganText.style.cssText += 'font-family: "ZCOOL KuaiLe", "Ma Shan Zheng", "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important;';
-          }
-        }).catch(function() {
-          // 字体加载失败，使用系统字体
-          const style = document.createElement('style');
-          style.textContent = '.slogan-text { font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; }';
-          document.head.appendChild(style);
-        });
-      }
+      // 不再需要字体加载检查，直接使用系统字体
     </script>
   </head>
   <body>
