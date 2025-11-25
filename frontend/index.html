@@ -326,7 +326,7 @@
     </div>
     
     <h1>论文格式自动修复</h1>
-    <p class="small">流程：上传模板 → 上传学生文档 → 预览水印版 → 支付后下载正式版。</p>
+    <p class="small">流程：上传模板 → 上传您的文档 → 预览水印版 → 支付后下载正式版。</p>
 
     <section>
       <div class="card-title">
@@ -342,14 +342,14 @@
 
     <section>
       <div class="card-title">
-        <h2>2. 上传学生文档</h2>
+        <h2>2. 上传您的文档</h2>
       </div>
       <form id="documentForm">
         <label for="templateSelect">选择模板</label>
         <select id="templateSelect" required>
           <option value="">请先上传模板</option>
         </select>
-        <label for="documentFile">选择学生文档（.docx）</label>
+        <label for="documentFile">选择您的文档（.docx）</label>
         <input id="documentFile" type="file" accept=".docx" required />
         <button type="submit">上传并自动修复</button>
       </form>
@@ -578,7 +578,7 @@
           return;
         }
         if (!file) {
-          showMessage(documentStatus, "请选择学生文档", true);
+          showMessage(documentStatus, "请选择您的文档", true);
           return;
         }
 
