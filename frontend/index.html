@@ -180,25 +180,78 @@
       }
     </style>
     <script>
+      // 首先确保广告显示（在错误处理之前）
+      (function() {
+        function ensureSloganVisible() {
+          const slogan = document.querySelector('.slogan');
+          if (slogan) {
+            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;';
+            const sloganText = document.querySelector('.slogan-text');
+            if (sloganText) {
+              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
+            }
+          }
+          const backup = document.getElementById('slogan-backup');
+          if (backup && slogan) {
+            const sloganStyle = window.getComputedStyle(slogan);
+            if (sloganStyle.display === 'none' || sloganStyle.visibility === 'hidden' || sloganStyle.opacity === '0') {
+              backup.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;';
+            } else {
+              backup.style.display = 'none';
+            }
+          }
+        }
+        // 立即执行
+        ensureSloganVisible();
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', ensureSloganVisible);
+        }
+        setTimeout(ensureSloganVisible, 100);
+      })();
+      
       // 全局错误处理：捕获未处理的 Promise 错误
+      // 注意：这个错误处理必须在页面最前面，确保能捕获所有错误
       window.addEventListener('unhandledrejection', function(event) {
-        // 如果是网络错误（Failed to fetch），静默处理，不影响页面显示
         const reason = event.reason;
-        if (reason && (reason.message === 'Failed to fetch' || reason.httpStatusText === 'TypeError: Failed to fetch')) {
-          console.warn('网络请求失败（可能是后端服务未启动）:', reason);
-          // 阻止错误传播，不影响页面显示
+        
+        // 检查是否是网络错误（多种格式）
+        const isNetworkError = 
+          (reason && typeof reason === 'object' && (
+            reason.message === 'Failed to fetch' ||
+            reason.httpStatusText === 'TypeError: Failed to fetch' ||
+            (reason.httpStatusText && reason.httpStatusText.includes('Failed to fetch')) ||
+            (reason.name && reason.name === 'TypeError' && reason.message && reason.message.includes('fetch')) ||
+            // 检查是否是来自浏览器扩展的错误（content.js）
+            (reason.name === 'i' && reason.httpStatusText && reason.httpStatusText.includes('Failed to fetch'))
+          )) ||
+          (reason && typeof reason === 'string' && reason.includes('Failed to fetch'));
+        
+        // 如果是网络错误或来自浏览器扩展的错误，静默处理
+        if (isNetworkError || (reason && reason.name === 'i')) {
+          // 静默处理，不影响页面显示
           event.preventDefault();
           return;
         }
         
-        console.error('=== 未捕获的 Promise 错误 ===');
-        console.error('错误原因:', reason);
-        console.error('Promise:', event.promise);
-        console.error('完整错误对象:', event);
-        if (reason && reason.stack) {
-          console.error('错误堆栈:', reason.stack);
+        // 其他错误才显示（但也要检查是否来自扩展）
+        const isFromExtension = event.promise && (
+          String(event.promise).includes('content.js') ||
+          String(event.promise).includes('extension')
+        );
+        
+        if (!isFromExtension) {
+          console.error('=== 未捕获的 Promise 错误 ===');
+          console.error('错误原因:', reason);
+          console.error('Promise:', event.promise);
+          console.error('完整错误对象:', event);
+          if (reason && reason.stack) {
+            console.error('错误堆栈:', reason.stack);
+          }
+          console.error('===========================');
+        } else {
+          // 来自扩展的错误，静默处理
+          event.preventDefault();
         }
-        console.error('===========================');
       });
       
       // 全局错误处理：捕获其他错误
