@@ -138,23 +138,21 @@
         100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
       }
       .slogan-text {
-        font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'STKaiti', 'KaiTi', '楷体', 'Microsoft YaHei', 'SimHei', sans-serif, cursive;
-        font-size: 2.5rem;
-        font-weight: bold;
+        font-family: 'Microsoft YaHei', 'SimHei', 'STKaiti', 'KaiTi', '楷体', 'ZCOOL KuaiLe', 'Ma Shan Zheng', sans-serif, cursive !important;
+        font-size: 2.5rem !important;
+        font-weight: bold !important;
         color: #ffffff !important; /* 强制白色 */
         text-shadow: 
           2px 2px 4px rgba(0, 0, 0, 0.3),
-          0 0 20px rgba(255, 255, 255, 0.5);
-        letter-spacing: 0.1em;
-        position: relative;
-        z-index: 1;
+          0 0 20px rgba(255, 255, 255, 0.5) !important;
+        letter-spacing: 0.1em !important;
+        position: relative !important;
+        z-index: 1 !important;
         display: inline-block !important; /* 强制显示 */
         visibility: visible !important; /* 确保可见 */
         opacity: 1 !important; /* 确保不透明 */
-        transform: rotate(-1deg);
-        animation: float 2s ease-in-out infinite;
-        text-stroke: 1px rgba(255, 255, 255, 0.3);
-        -webkit-text-stroke: 1px rgba(255, 255, 255, 0.3);
+        transform: rotate(-1deg) !important;
+        animation: float 2s ease-in-out infinite !important;
         /* 字体加载失败时的回退样式 */
         font-display: swap; /* 使用 swap 策略，即使字体未加载也立即显示文本 */
       }
@@ -190,36 +188,56 @@
       }
     </style>
     <script>
-      // 确保广告在页面加载后立即显示
-      document.addEventListener('DOMContentLoaded', function() {
-        const slogan = document.querySelector('.slogan');
-        if (slogan) {
-          slogan.style.display = 'block';
-          slogan.style.visibility = 'visible';
-          slogan.style.opacity = '1';
-          const sloganText = document.querySelector('.slogan-text');
-          if (sloganText) {
-            sloganText.style.display = 'inline-block';
-            sloganText.style.visibility = 'visible';
-            sloganText.style.opacity = '1';
+      // 立即执行，不等待DOMContentLoaded
+      (function() {
+        function ensureSloganVisible() {
+          const slogan = document.querySelector('.slogan');
+          if (slogan) {
+            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important;';
+            const sloganText = document.querySelector('.slogan-text');
+            if (sloganText) {
+              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
+            }
           }
         }
-      });
+        
+        // 立即执行
+        ensureSloganVisible();
+        
+        // DOMContentLoaded时再次执行
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', ensureSloganVisible);
+        } else {
+          ensureSloganVisible();
+        }
+        
+        // 延迟执行，确保所有样式都应用后
+        setTimeout(ensureSloganVisible, 100);
+        setTimeout(ensureSloganVisible, 500);
+        setTimeout(ensureSloganVisible, 1000);
+      })();
+      
       // 如果字体加载失败，使用系统字体
-      document.fonts.ready.then(function() {
-        // 字体加载完成
-      }).catch(function() {
-        // 字体加载失败，使用系统字体
-        const style = document.createElement('style');
-        style.textContent = '.slogan-text { font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; }';
-        document.head.appendChild(style);
-      });
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+          // 字体加载完成，确保显示
+          const sloganText = document.querySelector('.slogan-text');
+          if (sloganText) {
+            sloganText.style.cssText += 'font-family: "ZCOOL KuaiLe", "Ma Shan Zheng", "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important;';
+          }
+        }).catch(function() {
+          // 字体加载失败，使用系统字体
+          const style = document.createElement('style');
+          style.textContent = '.slogan-text { font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; }';
+          document.head.appendChild(style);
+        });
+      }
     </script>
   </head>
   <body>
     <!-- 广告语 - 确保始终显示 -->
-    <div class="slogan">
-      <div class="slogan-text">一秒解决你的论文格式问题！</div>
+    <div class="slogan" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important;">
+      <div class="slogan-text" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important;">一秒解决你的论文格式问题！</div>
     </div>
     
     <h1>论文格式自动修复</h1>
