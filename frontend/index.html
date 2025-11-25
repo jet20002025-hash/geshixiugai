@@ -180,33 +180,38 @@
       }
     </style>
     <script>
-      // 首先确保广告显示（在错误处理之前）
+      // 广告已经使用内联样式，不需要 JavaScript 处理
+      // 但为了调试，添加一个检查函数
       (function() {
-        function ensureSloganVisible() {
-          const slogan = document.querySelector('.slogan');
-          if (slogan) {
-            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;';
-            const sloganText = document.querySelector('.slogan-text');
-            if (sloganText) {
-              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
+        function checkSlogan() {
+          // 查找包含"一秒解决你的论文格式问题！"的元素
+          const allDivs = document.querySelectorAll('div');
+          let found = false;
+          for (let div of allDivs) {
+            if (div.textContent && div.textContent.includes('一秒解决你的论文格式问题')) {
+              const style = window.getComputedStyle(div);
+              console.log('找到广告元素，display:', style.display, 'visibility:', style.visibility, 'opacity:', style.opacity);
+              found = true;
+              // 确保显示
+              if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                div.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
+                const textDiv = div.querySelector('div');
+                if (textDiv) {
+                  textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;';
+                }
+              }
+              break;
             }
           }
-          const backup = document.getElementById('slogan-backup');
-          if (backup && slogan) {
-            const sloganStyle = window.getComputedStyle(slogan);
-            if (sloganStyle.display === 'none' || sloganStyle.visibility === 'hidden' || sloganStyle.opacity === '0') {
-              backup.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;';
-            } else {
-              backup.style.display = 'none';
-            }
+          if (!found) {
+            console.warn('未找到广告元素');
           }
         }
-        // 立即执行
-        ensureSloganVisible();
+        // 延迟检查，确保 DOM 已加载
+        setTimeout(checkSlogan, 100);
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', ensureSloganVisible);
+          document.addEventListener('DOMContentLoaded', checkSlogan);
         }
-        setTimeout(ensureSloganVisible, 100);
       })();
       
       // 全局错误处理：捕获未处理的 Promise 错误
@@ -381,15 +386,9 @@
     </script>
   </head>
   <body>
-    <!-- 广告语 - 确保始终显示 -->
-    <!-- 添加多个备用版本，确保至少一个能显示 -->
-    <div class="slogan" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; text-align: center !important; padding: 1.5rem !important; border-radius: 15px !important; margin: 2rem 0 1.5rem 0 !important;">
-      <div class="slogan-text" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;">一秒解决你的论文格式问题！</div>
-    </div>
-    
-    <!-- 备用测试版本（如果上面的不显示，这个应该能显示） -->
-    <div id="slogan-backup" style="display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;">
-      一秒解决你的论文格式问题！
+    <!-- 广告语 - 使用最简单的内联样式，不依赖任何外部资源 -->
+    <div style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;">
+      <div style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;">一秒解决你的论文格式问题！</div>
     </div>
     
     <h1>论文格式自动修复</h1>
