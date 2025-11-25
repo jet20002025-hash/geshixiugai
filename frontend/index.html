@@ -180,6 +180,33 @@
       }
     </style>
     <script>
+      // 全局错误处理：捕获未处理的 Promise 错误
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('=== 未捕获的 Promise 错误 ===');
+        console.error('错误原因:', event.reason);
+        console.error('Promise:', event.promise);
+        console.error('完整错误对象:', event);
+        if (event.reason && event.reason.stack) {
+          console.error('错误堆栈:', event.reason.stack);
+        }
+        console.error('===========================');
+        // 不阻止错误，让开发者能看到
+      });
+      
+      // 全局错误处理：捕获其他错误
+      window.addEventListener('error', function(event) {
+        console.error('=== 页面错误 ===');
+        console.error('错误消息:', event.message);
+        console.error('错误文件:', event.filename);
+        console.error('错误行号:', event.lineno);
+        console.error('错误列号:', event.colno);
+        console.error('错误对象:', event.error);
+        if (event.error && event.error.stack) {
+          console.error('错误堆栈:', event.error.stack);
+        }
+        console.error('================');
+      });
+      
       // 调试函数：检查广告显示状态
       function debugSlogan() {
         const slogan = document.querySelector('.slogan');
@@ -466,11 +493,14 @@
           });
         } catch (error) {
           console.error("加载模板列表错误:", error);
+          // 确保错误被正确处理，不会导致未捕获的 Promise 错误
         }
       }
 
-      // 页面加载时获取用户模板列表
-      loadUserTemplates();
+      // 页面加载时获取用户模板列表（添加错误处理）
+      loadUserTemplates().catch(function(error) {
+        console.error("loadUserTemplates 未捕获的错误:", error);
+      });
 
       // 文件大小限制：20 MB（支持毕业论文等大文件）
       const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
