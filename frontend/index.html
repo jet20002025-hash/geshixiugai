@@ -245,14 +245,55 @@
       (function() {
         function ensureBannerVisible() {
           const banner = document.getElementById('banner');
+          console.log('=== 横幅检查 ===');
+          console.log('banner元素存在:', !!banner);
+          
           if (banner) {
+            const computedStyle = window.getComputedStyle(banner);
+            console.log('banner display:', computedStyle.display);
+            console.log('banner visibility:', computedStyle.visibility);
+            console.log('banner opacity:', computedStyle.opacity);
+            console.log('banner height:', computedStyle.height);
+            console.log('banner width:', computedStyle.width);
+            console.log('banner background:', computedStyle.backgroundColor);
+            
+            // 强制设置样式
             banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
+            
             const textDiv = banner.querySelector('div');
             if (textDiv) {
+              const textStyle = window.getComputedStyle(textDiv);
+              console.log('textDiv display:', textStyle.display);
+              console.log('textDiv visibility:', textStyle.visibility);
+              console.log('textDiv color:', textStyle.color);
+              console.log('textDiv text:', textDiv.textContent);
+              
               textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;';
+            } else {
+              console.warn('未找到textDiv');
+            }
+            
+            // 再次检查
+            const finalStyle = window.getComputedStyle(banner);
+            console.log('设置后 display:', finalStyle.display);
+            console.log('设置后 visibility:', finalStyle.visibility);
+            console.log('设置后 opacity:', finalStyle.opacity);
+          } else {
+            console.error('错误：找不到 #banner 元素！');
+            // 尝试通过文本查找
+            const allDivs = document.querySelectorAll('div');
+            for (let div of allDivs) {
+              if (div.textContent && div.textContent.includes('一秒解决你的论文格式问题')) {
+                console.log('通过文本找到元素:', div);
+                div.id = 'banner';
+                div.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
+                break;
+              }
             }
           }
+          console.log('================');
         }
+        
         // 立即执行
         ensureBannerVisible();
         // DOMContentLoaded时再次执行
@@ -261,6 +302,12 @@
         } else {
           ensureBannerVisible();
         }
+        // 延迟执行
+        setTimeout(ensureBannerVisible, 100);
+        setTimeout(ensureBannerVisible, 500);
+        
+        // 暴露到全局，方便在控制台调用
+        window.checkBanner = ensureBannerVisible;
       })();
       
       // 暴露调试函数到全局，方便在控制台调用
