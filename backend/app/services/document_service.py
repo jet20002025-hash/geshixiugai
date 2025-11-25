@@ -1801,34 +1801,8 @@ class DocumentService:
         blank_paragraph_indices = []  # 记录需要标记的空白段落索引
         
         # 1. 找到正文开始位置（从"绪论"、"概述"或"第一章"开始）
-        # 明确排除目录、摘要、致谢等部分
+        # 明确排除摘要、Abstract、目录等部分，这些部分完全不检测空白行
         body_start_idx = None
-        
-        # 先找到摘要、目录、致谢等部分的结束位置
-        excluded_sections = []  # 记录需要排除的部分的结束位置
-        
-        for idx, paragraph in enumerate(document.paragraphs):
-            para_text = paragraph.text.strip() if paragraph.text else ""
-            if not para_text:
-                continue
-            
-            # 识别摘要部分
-            if re.search(r'^(摘要|Abstract)', para_text, re.IGNORECASE):
-                # 找到摘要结束位置（通常是"关键词"或"目录"）
-                for next_idx in range(idx + 1, len(document.paragraphs)):
-                    next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
-                    if re.search(r'^(关键词|目录|Contents|Key\s*words)', next_text, re.IGNORECASE):
-                        excluded_sections.append((idx, next_idx))
-                        break
-            
-            # 识别目录部分
-            if re.search(r'^(目录|Contents)', para_text, re.IGNORECASE):
-                # 找到目录结束位置（通常是"第一章"、"绪论"、"概述"等）
-                for next_idx in range(idx + 1, len(document.paragraphs)):
-                    next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
-                    if re.search(r'^(第一章|第1章|绪论|概述|1\s+绪论|1\s+概述|1\.\s+绪论|1\.\s+概述)', next_text, re.IGNORECASE):
-                        excluded_sections.append((idx, next_idx))
-                        break
         
         # 找到正文开始位置：从"绪论"、"概述"或"第一章"开始
         body_start_patterns = [
@@ -1838,18 +1812,22 @@ class DocumentService:
             r'^1\.\s+绪论', r'^1\.\s+概述',  # 1. 绪论、1. 概述
         ]
         
+        # 先找到摘要、Abstract、目录等部分，确保这些部分不被检测
+        excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
+        
         for idx, paragraph in enumerate(document.paragraphs):
             para_text = paragraph.text.strip() if paragraph.text else ""
             if not para_text:
                 continue
             
-            # 检查是否在排除的部分内
-            in_excluded = False
-            for start, end in excluded_sections:
-                if start <= idx < end:
-                    in_excluded = True
+            # 如果遇到摘要、Abstract、目录等关键词，跳过这些部分
+            is_excluded = False
+            for keyword in excluded_keywords:
+                if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                    is_excluded = True
                     break
-            if in_excluded:
+            
+            if is_excluded:
                 continue
             
             # 检查是否符合正文开始模式
@@ -1864,6 +1842,22 @@ class DocumentService:
         # 如果没找到，使用原来的方法
         if body_start_idx is None:
             body_start_idx = self._find_body_start_index(document)
+        
+        # 确保正文开始位置不在摘要、Abstract、目录等部分
+        if body_start_idx is not None:
+            for idx in range(0, body_start_idx):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                for keyword in excluded_keywords:
+                    if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                        # 如果正文开始位置在排除部分内，继续向后查找
+                        body_start_idx = None
+                        break
+                if body_start_idx is None:
+                    break
+            
+            # 如果重新查找后还是没找到，使用原来的方法
+            if body_start_idx is None:
+                body_start_idx = self._find_body_start_index(document)
         
         # 2. 找到参考文献开始位置（作为检测结束位置）
         reference_start_idx = None
@@ -1940,12 +1934,27 @@ class DocumentService:
             # 如果只有文本模式匹配但没有三号字体，不是大章节（可能是小节标题或其他格式）
             return has_three_size_font
         
-        # 3. 识别所有大章节的边界
+        # 3. 识别所有大章节的边界（只在正文范围内识别）
         major_chapters = []  # [(start_idx, end_idx), ...]
         current_chapter_start = None
         
+        # 确保检测范围从正文开始，不包括摘要、Abstract、目录等
+        excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
+        
         for idx in range(check_start_idx, check_end_idx):
             paragraph = document.paragraphs[idx]
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            
+            # 再次检查是否在排除部分内（双重保险）
+            is_excluded = False
+            for keyword in excluded_keywords:
+                if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                    is_excluded = True
+                    break
+            
+            if is_excluded:
+                continue
+            
             if is_major_chapter_title(paragraph):
                 # 如果之前有章节，结束之前的章节
                 if current_chapter_start is not None:
@@ -1965,10 +1974,13 @@ class DocumentService:
         # 调试信息：打印识别到的大章节
         # print(f"[空白行检测] 识别到 {len(major_chapters)} 个大章节: {major_chapters}")
         
-        # 4. 只在大章节内部检测空白行
+        # 4. 只在大章节内部检测空白行（确保不在摘要、Abstract、目录等部分）
         def is_blank_paragraph(paragraph) -> bool:
             para_text = paragraph.text.strip() if paragraph.text else ""
             return len(para_text) == 0
+        
+        # 排除关键词列表（摘要、Abstract、目录等部分完全不检测空白行）
+        excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
         
         for chapter_start, chapter_end in major_chapters:
             consecutive_blanks = 0
@@ -1976,7 +1988,25 @@ class DocumentService:
             
             # 在大章节内部遍历
             for idx in range(chapter_start + 1, chapter_end):  # +1 跳过章节标题本身
+                # 确保索引在检测范围内（从正文开始，不包括摘要、目录等）
+                if idx < check_start_idx:
+                    continue
+                
                 paragraph = document.paragraphs[idx]
+                para_text = paragraph.text.strip() if paragraph.text else ""
+                
+                # 检查是否在排除部分内（摘要、Abstract、目录等部分完全不检测）
+                is_excluded = False
+                for keyword in excluded_keywords:
+                    if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                        is_excluded = True
+                        break
+                
+                if is_excluded:
+                    # 如果在排除部分内，重置空白计数，不检测
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+                    continue
                 
                 if is_blank_paragraph(paragraph):
                     if consecutive_blanks == 0:
@@ -2001,15 +2031,25 @@ class DocumentService:
             
             # 处理章节末尾的连续空白
             if consecutive_blanks >= 2 and blank_start_idx is not None:
-                issues.append({
-                    "type": "excessive_blanks_in_chapter",
-                    "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
-                    "suggestion": "请删除章节内的多余空白",
-                    "blank_start": blank_start_idx,
-                    "blank_count": consecutive_blanks,
-                    "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                })
-                blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                # 再次确认不在排除部分内
+                is_excluded = False
+                if blank_start_idx < len(document.paragraphs) and blank_start_idx >= check_start_idx:
+                    para_text = document.paragraphs[blank_start_idx].text.strip() if document.paragraphs[blank_start_idx].text else ""
+                    for keyword in excluded_keywords:
+                        if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                            is_excluded = True
+                            break
+                
+                if not is_excluded and blank_start_idx >= check_start_idx:
+                    issues.append({
+                        "type": "excessive_blanks_in_chapter",
+                        "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
+                        "suggestion": "请删除章节内的多余空白",
+                        "blank_start": blank_start_idx,
+                        "blank_count": consecutive_blanks,
+                        "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                    })
+                    blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
         
         # 在文档中标记问题（从后往前插入，避免索引变化）
         for blank_idx in sorted(set(blank_paragraph_indices), reverse=True):
