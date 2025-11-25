@@ -1890,21 +1890,21 @@ class DocumentService:
             return issues
         
         # 2. 识别大章节标题
-        # 大章节特征：1、2、3或一、二、三开头，字体三号（约16磅）
+        # 大章节特征：数字（1、2、3、4、5、6、7、8等）或中文一、二、三开头，字体三号（约16磅）
         def is_major_chapter_title(paragraph) -> bool:
             para_text = paragraph.text.strip() if paragraph.text else ""
             if not para_text:
                 return False
             
-            # 检查是否以数字1、2、3或中文一、二、三开头（不包括4、5、6等，那些是小节）
-            # 支持格式：1 绪论、1. 绪论、第一章、第1章、一 绪论等
+            # 检查是否以数字（1-9）或中文一、二、三开头
+            # 支持格式：1 绪论、1. 绪论、4. 剔除粗大误差、第一章、第1章、第4章、一 绪论等
             major_chapter_patterns = [
-                r'^[123]\s+',  # 1 、2 、3 开头（数字+空格）
-                r'^[123]\.',  # 1.、2.、3. 开头（数字+点）
+                r'^\d+\s+',  # 1 、2 、3、4、5、6、7、8 等开头（数字+空格）
+                r'^\d+\.',  # 1.、2.、3.、4.、5. 等开头（数字+点）
                 r'^[一二三四五六七八九十]\s+',  # 一 、二 、三 开头（中文数字+空格）
                 r'^第[一二三四五六七八九十]章',  # 第一章、第二章等
-                r'^第[123]章',  # 第1章、第2章、第3章
-                r'^[123]\s+[^\d]',  # 1 绪论、2 概述等（数字+空格+非数字）
+                r'^第\d+章',  # 第1章、第2章、第3章、第4章等
+                r'^\d+\s+[^\d]',  # 1 绪论、2 概述、4 剔除粗大误差等（数字+空格+非数字）
             ]
             
             # 先检查文本模式
@@ -1929,7 +1929,7 @@ class DocumentService:
                             has_three_size_font = True
                             break
             
-            # 大章节必须同时满足：文本模式匹配（1、2、3或一、二、三开头）AND 三号字体
+            # 大章节必须同时满足：文本模式匹配（数字或中文数字开头）AND 三号字体
             # 如果只有文本模式匹配但没有三号字体，不是大章节（可能是小节标题或其他格式）
             return has_three_size_font
         
@@ -1981,6 +1981,82 @@ class DocumentService:
         # 排除关键词列表（摘要、Abstract、目录等部分完全不检测空白行）
         excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
         
+        # 如果大章节范围为空，直接在整个检测范围内检测空白行
+        if not major_chapters:
+            # 在整个检测范围内检测空白行
+            consecutive_blanks = 0
+            blank_start_idx = None
+            
+            for idx in range(check_start_idx, check_end_idx):
+                paragraph = document.paragraphs[idx]
+                para_text = paragraph.text.strip() if paragraph.text else ""
+                
+                # 检查是否在排除部分内
+                is_excluded = False
+                for keyword in excluded_keywords:
+                    if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
+                        is_excluded = True
+                        break
+                
+                if is_excluded:
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+                    continue
+                
+                if is_blank_paragraph(paragraph):
+                    if consecutive_blanks == 0:
+                        blank_start_idx = idx
+                    consecutive_blanks += 1
+                else:
+                    # 遇到非空白段落
+                    if consecutive_blanks >= 2 and blank_start_idx is not None:
+                        # 直接删除连续空白段落
+                        deleted_count = 0
+                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                            if delete_idx < len(document.paragraphs):
+                                para_to_delete = document.paragraphs[delete_idx]
+                                if is_blank_paragraph(para_to_delete):
+                                    para_to_delete._element.getparent().remove(para_to_delete._element)
+                                    deleted_count += 1
+                        
+                        if deleted_count > 0:
+                            issues.append({
+                                "type": "excessive_blanks_in_chapter",
+                                "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落",
+                                "suggestion": "已自动删除章节内的多余空白",
+                                "blank_start": blank_start_idx,
+                                "blank_count": deleted_count,
+                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                            })
+                    
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+            
+            # 处理末尾的连续空白
+            if consecutive_blanks >= 2 and blank_start_idx is not None:
+                deleted_count = 0
+                for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                    if delete_idx < len(document.paragraphs):
+                        para_to_delete = document.paragraphs[delete_idx]
+                        if is_blank_paragraph(para_to_delete):
+                            # 检查：确保不删除包含字段代码的段落（如TOC字段）
+                            para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                            if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                # 包含字段代码，不删除
+                                continue
+                            para_to_delete._element.getparent().remove(para_to_delete._element)
+                            deleted_count += 1
+                
+                if deleted_count > 0:
+                    issues.append({
+                        "type": "excessive_blanks_in_chapter",
+                        "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落",
+                        "suggestion": "已自动删除章节内的多余空白",
+                        "blank_start": blank_start_idx,
+                        "blank_count": deleted_count,
+                        "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                    })
+        
         for chapter_start, chapter_end in major_chapters:
             consecutive_blanks = 0
             blank_start_idx = None
@@ -2001,6 +2077,13 @@ class DocumentService:
                         is_excluded = True
                         break
                 
+                # 检查段落是否包含目录字段代码（TOC字段），如果包含则不删除
+                if not is_excluded:
+                    # 检查段落XML中是否包含TOC字段
+                    para_xml = paragraph._element.xml if hasattr(paragraph._element, 'xml') else ""
+                    if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                        is_excluded = True
+                
                 if is_excluded:
                     # 如果在排除部分内，重置空白计数，不检测
                     consecutive_blanks = 0
@@ -2014,28 +2097,105 @@ class DocumentService:
                 else:
                     # 遇到非空白段落
                     if consecutive_blanks >= 2 and blank_start_idx is not None:
-                        # 在大章节内部发现连续空白，直接删除这些空白段落
-                        # 从后往前删除，避免索引变化
-                        deleted_count = 0
-                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
-                            if delete_idx < len(document.paragraphs):
-                                para_to_delete = document.paragraphs[delete_idx]
-                                # 确认是空白段落再删除
-                                if is_blank_paragraph(para_to_delete):
-                                    # 删除段落
-                                    para_to_delete._element.getparent().remove(para_to_delete._element)
-                                    deleted_count += 1
+                        # 检查空白行是否在章节边界处（目录和正文之间、大章节之间）
+                        # 如果空白行紧邻大章节标题，则不删除（这是章节间的空白，应该保留）
+                        is_at_chapter_boundary = False
                         
-                        # 记录删除的空白段落信息（用于报告）
-                        if deleted_count > 0:
-                            issues.append({
-                                "type": "excessive_blanks_in_chapter",
-                                "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
-                                "suggestion": "已自动删除章节内的多余空白",
-                                "blank_start": blank_start_idx,
-                                "blank_count": deleted_count,
-                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                            })
+                        # 检查空白行之后是否有大章节标题（如果空白行后面是大章节标题，这是章节间的空白，不删除）
+                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, len(document.paragraphs))):
+                            if next_idx < len(document.paragraphs):
+                                next_para = document.paragraphs[next_idx]
+                                if is_major_chapter_title(next_para):
+                                    is_at_chapter_boundary = True
+                                    break
+                        
+                        # 检查空白行之前是否有大章节标题（如果空白行前面是大章节标题，这也是章节间的空白，不删除）
+                        if not is_at_chapter_boundary:
+                            for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
+                                if prev_idx < len(document.paragraphs):
+                                    prev_para = document.paragraphs[prev_idx]
+                                    if is_major_chapter_title(prev_para):
+                                        is_at_chapter_boundary = True
+                                        break
+                        
+                        # 检查空白行是否在目录和正文之间
+                        # 如果空白行之前有"目录"关键词，且空白行之后有正文开始标记（如"1 称重技术和衡器的发展"），则不删除
+                        if not is_at_chapter_boundary:
+                            has_toc_before = False
+                            has_body_after = False
+                            
+                            # 检查空白行之前是否有"目录"关键词（扩大检查范围到20个段落）
+                            for prev_idx in range(max(0, blank_start_idx - 20), blank_start_idx):
+                                if prev_idx < len(document.paragraphs):
+                                    prev_text = document.paragraphs[prev_idx].text.strip() if document.paragraphs[prev_idx].text else ""
+                                    if re.search(r'^(目录|Contents)', prev_text, re.IGNORECASE):
+                                        has_toc_before = True
+                                        break
+                            
+                            # 检查空白行之后是否有正文开始标记（如"1 称重技术和衡器的发展"、"第一章"等）
+                            if has_toc_before:
+                                for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 10, len(document.paragraphs))):
+                                    if next_idx < len(document.paragraphs):
+                                        next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                                        # 检查是否是正文开始标记
+                                        if (re.match(r'^[1-9]\s+', next_text) or  # 1 称重技术和衡器的发展
+                                            re.match(r'^[1-9]\.', next_text) or  # 1. 绪论
+                                            re.match(r'^第一章', next_text) or  # 第一章
+                                            re.match(r'^第1章', next_text) or  # 第1章
+                                            re.match(r'^第[一二三四五六七八九十]章', next_text) or  # 第一章、第二章等
+                                            next_text == "绪论" or next_text == "概述"):  # 绪论、概述
+                                            has_body_after = True
+                                            break
+                            
+                            # 如果空白行在目录和正文之间，不删除
+                            if has_toc_before and has_body_after:
+                                is_at_chapter_boundary = True
+                        
+                        # 检查空白行之前是否有小节标题（如"4. 剔除粗大误差"），如果是小节标题后的空白，应该删除
+                        # 小节标题格式：数字. 文字（如"4. 剔除粗大误差"）
+                        if is_at_chapter_boundary:
+                            # 如果空白行之前是小节标题（不是大章节），则应该删除
+                            for prev_idx in range(max(0, blank_start_idx - 3), blank_start_idx):
+                                if prev_idx < len(document.paragraphs):
+                                    prev_para = document.paragraphs[prev_idx]
+                                    prev_text = prev_para.text.strip() if prev_para.text else ""
+                                    # 检查是否是小节标题格式（数字. 文字，但不是大章节）
+                                    if prev_text and re.match(r'^\d+\.\s+', prev_text):
+                                        # 进一步确认不是大章节（大章节必须是1、2、3开头且三号字体）
+                                        if not is_major_chapter_title(prev_para):
+                                            # 是小节标题，不是大章节，应该删除空白行
+                                            is_at_chapter_boundary = False
+                                            break
+                        
+                        # 只有不在章节边界处的空白行才删除
+                        if not is_at_chapter_boundary:
+                            # 在大章节内部发现连续空白，直接删除这些空白段落
+                            # 从后往前删除，避免索引变化
+                            deleted_count = 0
+                            for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                                if delete_idx < len(document.paragraphs):
+                                    para_to_delete = document.paragraphs[delete_idx]
+                                    # 确认是空白段落再删除
+                                    if is_blank_paragraph(para_to_delete):
+                                        # 再次检查：确保不删除包含字段代码的段落（如TOC字段）
+                                        para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                                        if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                            # 包含字段代码，不删除
+                                            continue
+                                        # 删除段落
+                                        para_to_delete._element.getparent().remove(para_to_delete._element)
+                                        deleted_count += 1
+                            
+                            # 记录删除的空白段落信息（用于报告）
+                            if deleted_count > 0:
+                                issues.append({
+                                    "type": "excessive_blanks_in_chapter",
+                                    "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
+                                    "suggestion": "已自动删除章节内的多余空白",
+                                    "blank_start": blank_start_idx,
+                                    "blank_count": deleted_count,
+                                    "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                                })
                     
                     consecutive_blanks = 0
                     blank_start_idx = None
@@ -2052,28 +2212,87 @@ class DocumentService:
                             break
                 
                 if not is_excluded and blank_start_idx >= check_start_idx:
-                    # 直接删除章节末尾的连续空白段落
-                    # 从后往前删除，避免索引变化
-                    deleted_count = 0
-                    for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
-                        if delete_idx < len(document.paragraphs):
-                            para_to_delete = document.paragraphs[delete_idx]
-                            # 确认是空白段落再删除
-                            if is_blank_paragraph(para_to_delete):
-                                # 删除段落
-                                para_to_delete._element.getparent().remove(para_to_delete._element)
-                                deleted_count += 1
+                    # 检查空白行是否在章节边界处（如果空白行后面是大章节标题，不删除）
+                    is_at_chapter_boundary = False
                     
-                    # 记录删除的空白段落信息（用于报告）
-                    if deleted_count > 0:
-                        issues.append({
-                            "type": "excessive_blanks_in_chapter",
-                            "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
-                            "suggestion": "已自动删除章节内的多余空白",
-                            "blank_start": blank_start_idx,
-                            "blank_count": deleted_count,
-                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                        })
+                    # 检查空白行之后是否有大章节标题（虽然已经到章节末尾，但也要检查）
+                    for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, len(document.paragraphs))):
+                        if next_idx < len(document.paragraphs):
+                            next_para = document.paragraphs[next_idx]
+                            if is_major_chapter_title(next_para):
+                                is_at_chapter_boundary = True
+                                break
+                    
+                    # 检查空白行之前是否有大章节标题
+                    if not is_at_chapter_boundary:
+                        for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
+                            if prev_idx < len(document.paragraphs):
+                                prev_para = document.paragraphs[prev_idx]
+                                if is_major_chapter_title(prev_para):
+                                    is_at_chapter_boundary = True
+                                    break
+                    
+                    # 检查空白行是否在目录和正文之间（处理章节末尾的连续空白时也要检查）
+                    if not is_at_chapter_boundary:
+                        has_toc_before = False
+                        has_body_after = False
+                        
+                        # 检查空白行之前是否有"目录"关键词（扩大检查范围到20个段落）
+                        for prev_idx in range(max(0, blank_start_idx - 20), blank_start_idx):
+                            if prev_idx < len(document.paragraphs):
+                                prev_text = document.paragraphs[prev_idx].text.strip() if document.paragraphs[prev_idx].text else ""
+                                if re.search(r'^(目录|Contents)', prev_text, re.IGNORECASE):
+                                    has_toc_before = True
+                                    break
+                        
+                        # 检查空白行之后是否有正文开始标记（如"1 称重技术和衡器的发展"、"第一章"等）
+                        if has_toc_before:
+                            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 10, len(document.paragraphs))):
+                                if next_idx < len(document.paragraphs):
+                                    next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                                    # 检查是否是正文开始标记
+                                    if (re.match(r'^[1-9]\s+', next_text) or  # 1 称重技术和衡器的发展
+                                        re.match(r'^[1-9]\.', next_text) or  # 1. 绪论
+                                        re.match(r'^第一章', next_text) or  # 第一章
+                                        re.match(r'^第1章', next_text) or  # 第1章
+                                        re.match(r'^第[一二三四五六七八九十]章', next_text) or  # 第一章、第二章等
+                                        next_text == "绪论" or next_text == "概述"):  # 绪论、概述
+                                        has_body_after = True
+                                        break
+                        
+                        # 如果空白行在目录和正文之间，不删除
+                        if has_toc_before and has_body_after:
+                            is_at_chapter_boundary = True
+                    
+                    # 只有不在章节边界处的空白行才删除
+                    if not is_at_chapter_boundary:
+                        # 直接删除章节末尾的连续空白段落
+                        # 从后往前删除，避免索引变化
+                        deleted_count = 0
+                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                            if delete_idx < len(document.paragraphs):
+                                para_to_delete = document.paragraphs[delete_idx]
+                                # 确认是空白段落再删除
+                                if is_blank_paragraph(para_to_delete):
+                                    # 再次检查：确保不删除包含字段代码的段落（如TOC字段）
+                                    para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                                    if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                        # 包含字段代码，不删除
+                                        continue
+                                    # 删除段落
+                                    para_to_delete._element.getparent().remove(para_to_delete._element)
+                                    deleted_count += 1
+                        
+                        # 记录删除的空白段落信息（用于报告）
+                        if deleted_count > 0:
+                            issues.append({
+                                "type": "excessive_blanks_in_chapter",
+                                "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
+                                "suggestion": "已自动删除章节内的多余空白",
+                                "blank_start": blank_start_idx,
+                                "blank_count": deleted_count,
+                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                            })
         
         # 空白段落已直接删除，不需要标记
         return issues
