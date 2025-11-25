@@ -1459,7 +1459,7 @@ class DocumentService:
                 body_text += para_text + " "
                 body_paragraphs.append((idx, para_text))
                 
-                # 在当前段落中检测引用，并记录段落索引
+                # 在当前段落中检测引用，并记录段落索引（只记录一次，避免重复）
                 # 检测半角方括号 [数字]
                 for match in re.finditer(r'\[(\d+)\]', para_text):
                     try:
@@ -1467,7 +1467,9 @@ class DocumentService:
                         if 1 <= num <= 1000:
                             if num not in citation_locations:
                                 citation_locations[num] = []
-                            citation_locations[num].append(idx)
+                            # 只有当这个段落索引还没有记录时才添加，避免重复
+                            if idx not in citation_locations[num]:
+                                citation_locations[num].append(idx)
                     except ValueError:
                         pass
                 
@@ -1481,7 +1483,9 @@ class DocumentService:
                             if 1 <= num <= 1000:
                                 if num not in citation_locations:
                                     citation_locations[num] = []
-                                citation_locations[num].append(idx)
+                                # 只有当这个段落索引还没有记录时才添加，避免重复
+                                if idx not in citation_locations[num]:
+                                    citation_locations[num].append(idx)
                     except ValueError:
                         pass
                 
@@ -1494,7 +1498,9 @@ class DocumentService:
                             for num in range(start, end + 1):
                                 if num not in citation_locations:
                                     citation_locations[num] = []
-                                citation_locations[num].append(idx)
+                                # 只有当这个段落索引还没有记录时才添加，避免重复
+                                if idx not in citation_locations[num]:
+                                    citation_locations[num].append(idx)
                     except ValueError:
                         pass
                 
@@ -1564,6 +1570,7 @@ class DocumentService:
         print(f"[DocumentService] 开始检测引用，正文文本长度: {len(body_text)}")
         
         # 方法1：使用正则表达式搜索所有 [数字] 格式（只支持半角方括号）
+        # 注意：位置已经在遍历段落时记录了，这里只用于检测是否被引用（补充检测）
         single_citation_pattern = r'\[(\d+)\]'
         single_matches = list(re.finditer(single_citation_pattern, body_text))
         print(f"[DocumentService] 正则表达式找到 {len(single_matches)} 个 [数字] 格式的匹配（半角）")
@@ -1573,59 +1580,35 @@ class DocumentService:
                 num = int(match.group(1))
                 if 1 <= num <= 1000:
                     cited_reference_numbers.add(num)
-                    # 记录引用位置（在body_text中的位置，需要转换为段落索引）
-                    # 由于body_text是合并后的文本，我们需要找到对应的段落
+                    # 注意：位置已经在遍历段落时记录了，这里不再重复记录
+                    # 只用于确保引用被检测到
                     match_start = match.start()
-                    # 通过累积文本长度找到对应的段落索引
-                    current_pos = 0
-                    for para_idx, para_text in body_paragraphs:
-                        para_len = len(para_text) + 1  # +1 for space
-                        if current_pos <= match_start < current_pos + para_len:
-                            if num not in citation_locations:
-                                citation_locations[num] = []
-                            citation_locations[num].append(para_idx)
-                            break
-                        current_pos += para_len
-                    # 获取匹配的上下文（前后各30个字符），便于调试
-                    match_end = match.end()
                     context_start = max(0, match_start - 30)
-                    context_end = min(len(body_text), match_end + 30)
+                    context_end = min(len(body_text), match_start + 30)
                     context = body_text[context_start:context_end].replace('\n', ' ').replace('\r', ' ')
                     print(f"[DocumentService] 从单个编号格式中检测到引用: [{num}] (位置: {match_start}, 上下文: ...{context}...)")
             except ValueError as e:
                 print(f"[DocumentService] 提取编号失败: {e}")
         
         # 方法2：直接使用字符串搜索作为备用（只支持半角方括号）
+        # 注意：位置已经在遍历段落时记录了，这里只用于检测是否被引用（补充检测）
         for num in range(1, 1001):
             # 搜索半角方括号
             search_str = f'[{num}]'
             if search_str in body_text:
-                if num not in cited_reference_numbers:
-                    cited_reference_numbers.add(num)
-                    # 找到所有位置
-                    positions = []
-                    start = 0
-                    while True:
-                        pos = body_text.find(search_str, start)
-                        if pos == -1:
-                            break
-                        positions.append(pos)
-                        start = pos + 1
-                    print(f"[DocumentService] 通过字符串搜索检测到引用: [{num}] (找到 {len(positions)} 处)")
-                    # 记录引用位置
-                    for pos in positions:
-                        current_pos = 0
-                        for para_idx, para_text in body_paragraphs:
-                            para_len = len(para_text) + 1
-                            if current_pos <= pos < current_pos + para_len:
-                                if num not in citation_locations:
-                                    citation_locations[num] = []
-                                citation_locations[num].append(para_idx)
-                                break
-                            current_pos += para_len
-                    for pos in positions[:2]:  # 只显示前2个
-                        context = body_text[max(0, pos-30):min(len(body_text), pos+30)].replace('\n', ' ').replace('\r', ' ')
-                        print(f"[DocumentService]   位置 {pos}: ...{context}...")
+                cited_reference_numbers.add(num)
+                # 注意：位置已经在遍历段落时记录了，这里不再重复记录
+                # 只用于确保引用被检测到
+                positions = []
+                start = 0
+                while True:
+                    pos = body_text.find(search_str, start)
+                    if pos == -1:
+                        break
+                    positions.append(pos)
+                    start = pos + 1
+                print(f"[DocumentService] 通过字符串搜索检测到引用: [{num}] (找到 {len(positions)} 处)")
+                # 不再重复记录位置，因为已经在遍历段落时记录了
             
         
         # 然后检测多个编号的格式 [1,2,3,4,5]（改进：支持任意数量的编号，只支持半角方括号）
@@ -1664,11 +1647,14 @@ class DocumentService:
                         num = int(num_str.strip())
                         if 1 <= num <= 1000:
                             cited_reference_numbers.add(num)
-                            # 记录引用位置
+                            # 注意：位置已经在遍历段落时记录了，这里只记录如果还没有记录的情况
+                            # 避免重复记录导致同一个引用出现在多个页码
                             if para_idx is not None:
                                 if num not in citation_locations:
                                     citation_locations[num] = []
-                                citation_locations[num].append(para_idx)
+                                # 只有当这个段落索引还没有记录时才添加，避免重复
+                                if para_idx not in citation_locations[num]:
+                                    citation_locations[num].append(para_idx)
                             print(f"[DocumentService] 从多个编号格式中检测到引用: {num} (模式: {pattern})")
                     except ValueError:
                         pass
@@ -1697,21 +1683,25 @@ class DocumentService:
                     # (1) 格式，提取单个编号
                     num = int(match.group(1))
                     cited_reference_numbers.add(num)
-                    # 记录引用位置
+                    # 记录引用位置（避免重复记录）
                     if para_idx is not None:
                         if num not in citation_locations:
                             citation_locations[num] = []
-                        citation_locations[num].append(para_idx)
+                        # 只有当这个段落索引还没有记录时才添加，避免重复
+                        if para_idx not in citation_locations[num]:
+                            citation_locations[num].append(para_idx)
                     print(f"[DocumentService] 检测到单个引用: ({num})")
                 elif pattern_type == 'paren_single_cn':
                     # （1）格式，提取单个编号
                     num = int(match.group(1))
                     cited_reference_numbers.add(num)
-                    # 记录引用位置
+                    # 记录引用位置（避免重复记录）
                     if para_idx is not None:
                         if num not in citation_locations:
                             citation_locations[num] = []
-                        citation_locations[num].append(para_idx)
+                        # 只有当这个段落索引还没有记录时才添加，避免重复
+                        if para_idx not in citation_locations[num]:
+                            citation_locations[num].append(para_idx)
                     print(f"[DocumentService] 检测到单个引用: （{num}）")
                 elif pattern_type in ['range_comma', 'range_dash', 'paren_range', 'paren_range_cn']:
                     # [1,2,3] 或 [1-5] 或 (1,2,3) 格式，提取所有编号
@@ -1723,11 +1713,13 @@ class DocumentService:
                                 num = int(num_str.strip())
                                 if 1 <= num <= 1000:  # 合理的参考文献编号范围
                                     cited_reference_numbers.add(num)
-                                    # 记录引用位置
+                                    # 记录引用位置（避免重复记录）
                                     if para_idx is not None:
                                         if num not in citation_locations:
                                             citation_locations[num] = []
-                                        citation_locations[num].append(para_idx)
+                                        # 只有当这个段落索引还没有记录时才添加，避免重复
+                                        if para_idx not in citation_locations[num]:
+                                            citation_locations[num].append(para_idx)
                                     print(f"[DocumentService] 从逗号分隔格式中检测到引用: {num}")
                             except ValueError:
                                 pass
@@ -1743,11 +1735,13 @@ class DocumentService:
                                 if 1 <= start <= end <= 1000:
                                     for num in range(start, end + 1):
                                         cited_reference_numbers.add(num)
-                                        # 记录引用位置
+                                        # 记录引用位置（避免重复记录）
                                         if para_idx is not None:
                                             if num not in citation_locations:
                                                 citation_locations[num] = []
-                                            citation_locations[num].append(para_idx)
+                                            # 只有当这个段落索引还没有记录时才添加，避免重复
+                                            if para_idx not in citation_locations[num]:
+                                                citation_locations[num].append(para_idx)
                                     print(f"[DocumentService] 从范围格式中检测到引用: {start}-{end}")
                             except ValueError:
                                 pass
@@ -1757,11 +1751,13 @@ class DocumentService:
                             num = int(numbers_str.strip())
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
-                                # 记录引用位置
+                                # 记录引用位置（避免重复记录）
                                 if para_idx is not None:
                                     if num not in citation_locations:
                                         citation_locations[num] = []
-                                    citation_locations[num].append(para_idx)
+                                    # 只有当这个段落索引还没有记录时才添加，避免重复
+                                    if para_idx not in citation_locations[num]:
+                                        citation_locations[num].append(para_idx)
                                 print(f"[DocumentService] 从格式中检测到引用: {num}")
                         except ValueError:
                             pass
@@ -1790,10 +1786,12 @@ class DocumentService:
                             num = int(match.group(1))
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
-                                # 记录引用位置
+                                # 记录引用位置（避免重复记录）
                                 if num not in citation_locations:
                                     citation_locations[num] = []
-                                citation_locations[num].append(idx)
+                                # 只有当这个段落索引还没有记录时才添加，避免重复
+                                if idx not in citation_locations[num]:
+                                    citation_locations[num].append(idx)
                                 print(f"[DocumentService] 检测到上标格式引用 [{num}]")
                         except ValueError:
                             pass
@@ -1811,10 +1809,12 @@ class DocumentService:
                                 num = int(num_str.strip())
                                 if 1 <= num <= 1000:
                                     cited_reference_numbers.add(num)
-                                    # 记录引用位置
+                                    # 记录引用位置（避免重复记录）
                                     if num not in citation_locations:
                                         citation_locations[num] = []
-                                    citation_locations[num].append(idx)
+                                    # 只有当这个段落索引还没有记录时才添加，避免重复
+                                    if idx not in citation_locations[num]:
+                                        citation_locations[num].append(idx)
                                     print(f"[DocumentService] 检测到上标格式多个编号引用 [{num}]")
                         except ValueError:
                             pass
@@ -1831,10 +1831,12 @@ class DocumentService:
                                     num = int(num_str.strip())
                                     if 1 <= num <= 1000:
                                         cited_reference_numbers.add(num)
-                                        # 记录引用位置
+                                        # 记录引用位置（避免重复记录）
                                         if num not in citation_locations:
                                             citation_locations[num] = []
-                                        citation_locations[num].append(idx)
+                                        # 只有当这个段落索引还没有记录时才添加，避免重复
+                                        if idx not in citation_locations[num]:
+                                            citation_locations[num].append(idx)
                                         print(f"[DocumentService] 检测到上标格式逗号分隔引用 [{num}]")
                             elif '-' in numbers_str:
                                 # 连字符分隔：[1-5]
@@ -1845,10 +1847,12 @@ class DocumentService:
                                     if 1 <= start <= end <= 1000:
                                         for num in range(start, end + 1):
                                             cited_reference_numbers.add(num)
-                                            # 记录引用位置
+                                            # 记录引用位置（避免重复记录）
                                             if num not in citation_locations:
                                                 citation_locations[num] = []
-                                            citation_locations[num].append(idx)
+                                            # 只有当这个段落索引还没有记录时才添加，避免重复
+                                            if idx not in citation_locations[num]:
+                                                citation_locations[num].append(idx)
                                         print(f"[DocumentService] 检测到上标格式范围引用 [{start}-{end}]")
                         except ValueError:
                             pass
@@ -1863,16 +1867,19 @@ class DocumentService:
                                     num = int(num_str)
                                     if 1 <= num <= 1000:
                                         cited_reference_numbers.add(num)
-                                        # 记录引用位置
+                                        # 记录引用位置（避免重复记录）
                                         if num not in citation_locations:
                                             citation_locations[num] = []
-                                        citation_locations[num].append(idx)
+                                        # 只有当这个段落索引还没有记录时才添加，避免重复
+                                        if idx not in citation_locations[num]:
+                                            citation_locations[num].append(idx)
                                         print(f"[DocumentService] 检测到上标格式引用 {num}")
                                 except ValueError:
                                     pass
                 
                 # 也检查普通文本中的引用格式（非上标，但可能是引用）
                 # 检查是否包含 [数字] 或 (数字) 格式（只支持半角方括号）
+                # 注意：位置已经在遍历段落时记录了，这里只用于检测是否被引用（补充检测）
                 for pattern in [r'\[(\d+)\]', r'\((\d+)\)', r'（(\d+)）']:
                     matches = re.finditer(pattern, run_text)
                     for match in matches:
@@ -1880,10 +1887,13 @@ class DocumentService:
                             num = int(match.group(1))
                             if 1 <= num <= 1000:
                                 cited_reference_numbers.add(num)
-                                # 记录引用位置
+                                # 注意：位置已经在遍历段落时记录了，这里只记录如果还没有记录的情况
+                                # 避免重复记录导致同一个引用出现在多个页码
                                 if num not in citation_locations:
                                     citation_locations[num] = []
-                                citation_locations[num].append(idx)
+                                # 只有当这个段落索引还没有记录时才添加，避免重复
+                                if idx not in citation_locations[num]:
+                                    citation_locations[num].append(idx)
                                 print(f"[DocumentService] 从普通文本中检测到引用: {num} (格式: {pattern})")
                         except ValueError:
                             pass
@@ -1907,10 +1917,12 @@ class DocumentService:
                                 num = int(num_str.strip())
                                 if 1 <= num <= 1000:
                                     cited_reference_numbers.add(num)
-                                    # 记录引用位置
+                                    # 记录引用位置（避免重复记录）
                                     if num not in citation_locations:
                                         citation_locations[num] = []
-                                    citation_locations[num].append(idx)
+                                    # 只有当这个段落索引还没有记录时才添加，避免重复
+                                    if idx not in citation_locations[num]:
+                                        citation_locations[num].append(idx)
                                     print(f"[DocumentService] 从普通文本多个编号格式中检测到引用: {num}")
                         except ValueError:
                             pass
@@ -1959,15 +1971,22 @@ class DocumentService:
             if ref_num in cited_reference_numbers and locations:
                 # 找到了页码，在文献后面添加页码信息
                 try:
-                    # 尝试估算页码（假设每页约25个段落，从正文开始计算）
+                    # 尝试估算页码（假设每页约25个段落，从文档开头计算整篇文章的页码）
+                    # 注意：这是估算值，表示整篇文章的第几页（从封面开始计数）
+                    # python-docx无法直接获取Word文档页面底部的实际页码，只能通过段落索引估算
+                    # 如果需要页面底部的实际页码，需要打开Word文档查看
                     pages = []
                     for para_idx in sorted(set(locations)):
-                        # 估算页码：正文开始位置 + 段落索引 / 每页段落数
-                        estimated_page = max(1, (para_idx - body_start_idx) // 25 + 1)
+                        # 估算页码：从文档开头开始计算整篇文章的页码
+                        # 假设每页约25个段落
+                        # 整篇文章的页码 = 段落索引 / 每页段落数 + 1
+                        estimated_page = max(1, para_idx // 25 + 1)
                         pages.append(estimated_page)
                     
                     # 去重并排序页码
                     unique_pages = sorted(set(pages))
+                    # 去重段落索引（避免同一个引用在同一个段落中被记录多次）
+                    unique_locations = sorted(set(locations))
                     if unique_pages:
                         page_info = "、".join([str(p) for p in unique_pages])
                         marker_text = f"（引用页码：{page_info}）"
@@ -1976,7 +1995,7 @@ class DocumentService:
                         new_run = para.add_run(marker_text)
                         new_run.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
                         new_run.font.bold = False
-                        print(f"[DocumentService] 为参考文献 {ref_num} 添加引用页码: {page_info}")
+                        print(f"[DocumentService] 为参考文献 {ref_num} 添加引用页码: {page_info} (段落位置: {unique_locations}, 估算页码: {unique_pages})")
                 except Exception as e:
                     print(f"[DocumentService] 添加引用页码失败: {e}")
             else:
