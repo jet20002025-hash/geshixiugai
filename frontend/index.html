@@ -102,7 +102,7 @@
       [class*="account"] {
         display: none !important;
       }
-      /* 广告语样式 - 草书风格但清晰 */
+      /* 标语样式 */
       .slogan {
         text-align: center;
         margin: 2rem 0 1.5rem 0;
@@ -168,7 +168,7 @@
           font-size: 1.8rem;
         }
       }
-      /* 确保广告不被隐藏 - 最高优先级 */
+      /* 确保标语不被隐藏 - 最高优先级 */
       .slogan,
       .slogan * {
         display: block !important;
@@ -180,39 +180,7 @@
       }
     </style>
     <script>
-      // 广告已经使用内联样式，不需要 JavaScript 处理
-      // 但为了调试，添加一个检查函数
-      (function() {
-        function checkSlogan() {
-          // 查找包含"一秒解决你的论文格式问题！"的元素
-          const allDivs = document.querySelectorAll('div');
-          let found = false;
-          for (let div of allDivs) {
-            if (div.textContent && div.textContent.includes('一秒解决你的论文格式问题')) {
-              const style = window.getComputedStyle(div);
-              console.log('找到广告元素，display:', style.display, 'visibility:', style.visibility, 'opacity:', style.opacity);
-              found = true;
-              // 确保显示
-              if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-                div.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
-                const textDiv = div.querySelector('div');
-                if (textDiv) {
-                  textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;';
-                }
-              }
-              break;
-            }
-          }
-          if (!found) {
-            console.warn('未找到广告元素');
-          }
-        }
-        // 延迟检查，确保 DOM 已加载
-        setTimeout(checkSlogan, 100);
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', checkSlogan);
-        }
-      })();
+      // 标语已经使用内联样式，不需要 JavaScript 处理
       
       // 全局错误处理：捕获未处理的 Promise 错误
       // 注意：这个错误处理必须在页面最前面，确保能捕获所有错误
@@ -273,112 +241,26 @@
         console.error('================');
       });
       
-      // 调试函数：检查广告显示状态
-      function debugSlogan() {
-        const slogan = document.querySelector('.slogan');
-        const sloganText = document.querySelector('.slogan-text');
-        
-        console.log('=== 广告调试信息 ===');
-        console.log('slogan元素存在:', !!slogan);
-        console.log('slogan-text元素存在:', !!sloganText);
-        
-        if (slogan) {
-          const computedStyle = window.getComputedStyle(slogan);
-          console.log('slogan display:', computedStyle.display);
-          console.log('slogan visibility:', computedStyle.visibility);
-          console.log('slogan opacity:', computedStyle.opacity);
-          console.log('slogan height:', computedStyle.height);
-          console.log('slogan width:', computedStyle.width);
-          console.log('slogan position:', computedStyle.position);
-          console.log('slogan z-index:', computedStyle.zIndex);
-        }
-        
-        if (sloganText) {
-          const computedStyle = window.getComputedStyle(sloganText);
-          console.log('slogan-text display:', computedStyle.display);
-          console.log('slogan-text visibility:', computedStyle.visibility);
-          console.log('slogan-text opacity:', computedStyle.opacity);
-          console.log('slogan-text color:', computedStyle.color);
-          console.log('slogan-text font-size:', computedStyle.fontSize);
-          console.log('slogan-text text:', sloganText.textContent);
-        }
-        
-        console.log('==================');
-      }
-      
-      // 立即执行，不等待DOMContentLoaded
+      // 确保横幅立即显示（使用最简单的代码）
       (function() {
-        function ensureSloganVisible() {
-          const slogan = document.querySelector('.slogan');
-          if (slogan) {
-            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;';
-            const sloganText = document.querySelector('.slogan-text');
-            if (sloganText) {
-              sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
-            }
-            console.log('广告元素已强制显示');
-          } else {
-            console.error('警告：找不到 .slogan 元素！');
-          }
-        }
-        
-        // 检查备用版本
-        function checkBackup() {
-          const backup = document.getElementById('slogan-backup');
-          if (backup) {
-            const computedStyle = window.getComputedStyle(backup);
-            console.log('备用广告 display:', computedStyle.display);
-            console.log('备用广告 visibility:', computedStyle.visibility);
-            console.log('备用广告 opacity:', computedStyle.opacity);
-            // 如果主广告不显示，确保备用版本显示
-            const slogan = document.querySelector('.slogan');
-            if (slogan) {
-              const sloganStyle = window.getComputedStyle(slogan);
-              if (sloganStyle.display === 'none' || sloganStyle.visibility === 'hidden' || sloganStyle.opacity === '0') {
-                console.warn('主广告不显示，确保备用版本显示');
-                backup.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;';
-              } else {
-                // 主广告显示正常，隐藏备用版本
-                backup.style.display = 'none';
-              }
+        function ensureBannerVisible() {
+          const banner = document.getElementById('banner');
+          if (banner) {
+            banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
+            const textDiv = banner.querySelector('div');
+            if (textDiv) {
+              textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;';
             }
           }
         }
-        
         // 立即执行
-        ensureSloganVisible();
-        debugSlogan();
-        checkBackup();
-        
+        ensureBannerVisible();
         // DOMContentLoaded时再次执行
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function() {
-            ensureSloganVisible();
-            debugSlogan();
-            checkBackup();
-          });
+          document.addEventListener('DOMContentLoaded', ensureBannerVisible);
         } else {
-          ensureSloganVisible();
-          debugSlogan();
-          checkBackup();
+          ensureBannerVisible();
         }
-        
-        // 延迟执行，确保所有样式都应用后
-        setTimeout(function() {
-          ensureSloganVisible();
-          debugSlogan();
-          checkBackup();
-        }, 100);
-        setTimeout(function() {
-          ensureSloganVisible();
-          debugSlogan();
-          checkBackup();
-        }, 500);
-        setTimeout(function() {
-          ensureSloganVisible();
-          debugSlogan();
-          checkBackup();
-        }, 1000);
       })();
       
       // 暴露调试函数到全局，方便在控制台调用
@@ -386,8 +268,8 @@
     </script>
   </head>
   <body>
-    <!-- 广告语 - 使用最简单的内联样式，不依赖任何外部资源 -->
-    <div style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;">
+    <!-- 标语横幅 - 使用最简单的内联样式，不依赖任何外部资源 -->
+    <div id="banner" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;">
       <div style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;">一秒解决你的论文格式问题！</div>
     </div>
     
@@ -563,7 +445,7 @@
 
       // 页面加载时获取用户模板列表（添加错误处理，确保不会影响页面显示）
       loadUserTemplates().catch(function(error) {
-        // 静默处理，不显示错误，确保不影响广告显示
+        // 静默处理，不显示错误，确保不影响页面显示
         console.warn("模板列表加载失败（不影响使用）:", error.message || error);
         templateSelect.innerHTML = '<option value="">请先上传模板</option>';
       });
