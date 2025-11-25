@@ -1800,8 +1800,72 @@ class DocumentService:
         issues = []
         blank_paragraph_indices = []  # 记录需要标记的空白段落索引
         
-        # 1. 找到正文开始位置和参考文献结束位置
-        body_start_idx = self._find_body_start_index(document)
+        # 1. 找到正文开始位置（从"绪论"、"概述"或"第一章"开始）
+        # 明确排除目录、摘要、致谢等部分
+        body_start_idx = None
+        
+        # 先找到摘要、目录、致谢等部分的结束位置
+        excluded_sections = []  # 记录需要排除的部分的结束位置
+        
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if not para_text:
+                continue
+            
+            # 识别摘要部分
+            if re.search(r'^(摘要|Abstract)', para_text, re.IGNORECASE):
+                # 找到摘要结束位置（通常是"关键词"或"目录"）
+                for next_idx in range(idx + 1, len(document.paragraphs)):
+                    next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                    if re.search(r'^(关键词|目录|Contents|Key\s*words)', next_text, re.IGNORECASE):
+                        excluded_sections.append((idx, next_idx))
+                        break
+            
+            # 识别目录部分
+            if re.search(r'^(目录|Contents)', para_text, re.IGNORECASE):
+                # 找到目录结束位置（通常是"第一章"、"绪论"、"概述"等）
+                for next_idx in range(idx + 1, len(document.paragraphs)):
+                    next_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                    if re.search(r'^(第一章|第1章|绪论|概述|1\s+绪论|1\s+概述|1\.\s+绪论|1\.\s+概述)', next_text, re.IGNORECASE):
+                        excluded_sections.append((idx, next_idx))
+                        break
+        
+        # 找到正文开始位置：从"绪论"、"概述"或"第一章"开始
+        body_start_patterns = [
+            r'^第一章', r'^第1章', r'^第[一二三四五六七八九十]章',  # 第一章、第二章等
+            r'^绪论$', r'^概述$',  # 绪论、概述（精确匹配）
+            r'^1\s+绪论', r'^1\s+概述',  # 1 绪论、1 概述
+            r'^1\.\s+绪论', r'^1\.\s+概述',  # 1. 绪论、1. 概述
+        ]
+        
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if not para_text:
+                continue
+            
+            # 检查是否在排除的部分内
+            in_excluded = False
+            for start, end in excluded_sections:
+                if start <= idx < end:
+                    in_excluded = True
+                    break
+            if in_excluded:
+                continue
+            
+            # 检查是否符合正文开始模式
+            for pattern in body_start_patterns:
+                if re.match(pattern, para_text, re.IGNORECASE):
+                    body_start_idx = idx
+                    break
+            
+            if body_start_idx is not None:
+                break
+        
+        # 如果没找到，使用原来的方法
+        if body_start_idx is None:
+            body_start_idx = self._find_body_start_index(document)
+        
+        # 2. 找到参考文献开始位置（作为检测结束位置）
         reference_start_idx = None
         for idx, paragraph in enumerate(document.paragraphs):
             para_text = paragraph.text.strip() if paragraph.text else ""
@@ -1809,30 +1873,26 @@ class DocumentService:
                 reference_start_idx = idx
                 break
         
-        reference_end_idx = len(document.paragraphs)  # 默认到文档末尾
-        if reference_start_idx is not None:
-            # 从参考文献开始位置向后查找，找到参考文献结束位置
-            non_ref_count = 0
-            for idx in range(reference_start_idx + 1, len(document.paragraphs)):
-                para = document.paragraphs[idx]
-                para_text = para.text.strip() if para.text else ""
-                if re.search(r'^(致谢|附录|Acknowledgement|Appendix)', para_text, re.IGNORECASE):
-                    reference_end_idx = idx
-                    break
-                is_reference = False
-                if re.match(r'^\[\d+\]', para_text) or re.match(r'^\d+\.', para_text) or re.match(r'^\(\d+\)', para_text):
-                    is_reference = True
-                if not is_reference and len(para_text) > 20:
-                    non_ref_count += 1
-                    if non_ref_count >= 3:
-                        reference_end_idx = idx - 2
-                        break
-                else:
-                    non_ref_count = 0
+        # 3. 找到致谢部分（如果存在，也要排除）
+        acknowledgement_start_idx = None
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if re.search(r'^(致谢|Acknowledgement)', para_text, re.IGNORECASE):
+                acknowledgement_start_idx = idx
+                break
         
-        # 确定检测范围：从正文开始到参考文献结束
+        # 确定检测范围：从正文开始到参考文献开始（或致谢开始，取较早的）
         check_start_idx = body_start_idx
-        check_end_idx = reference_end_idx
+        if check_start_idx is None:
+            return issues
+        
+        # 检测结束位置：参考文献开始或致谢开始，取较早的
+        check_end_idx = len(document.paragraphs)
+        if reference_start_idx is not None:
+            check_end_idx = reference_start_idx
+        if acknowledgement_start_idx is not None and acknowledgement_start_idx < check_end_idx:
+            check_end_idx = acknowledgement_start_idx
+        
         if check_start_idx >= check_end_idx:
             return issues
         
