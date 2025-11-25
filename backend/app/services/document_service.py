@@ -450,32 +450,38 @@ class DocumentService:
         
         # 章节标题检测：必须是独立的、较短的段落
         # 避免将正文中的"第二章的方案"等误识别为标题
+        # 标题一般不会超过一行，字数不会超过30个
         chapter_match = re.match(r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$", text)
         if chapter_match:
-            # 如果匹配到章节标题，且段落较短（标题通常是独立的短段落）
+            # 如果匹配到章节标题，且段落较短（标题通常是独立的短段落，不超过30个字符）
             # 或者后面只有标点符号，则认为是标题
+            # 换行以后就是新的内容了，标题一般不会超过一行
             remaining_text = text[len(chapter_match.group(0)):].strip()
-            if len(text) < 50 or (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+            if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
                 return "title_level_1"
         
         # 二级标题检测：必须是独立的、较短的段落
         # 标题格式：数字.数字 或 数字.数字 后跟标点符号，且后面没有其他文字内容
+        # 标题一般不会超过一行，字数不会超过30个
         section_match = re.match(r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
         if section_match:
             remaining_text = text[len(section_match.group(0)):].strip()
-            # 只有当剩余文本为空或只有标点符号时，才认为是标题
+            # 只有当剩余文本为空或只有标点符号时，且总长度不超过30个字符，才认为是标题
             # 如果后面还有文字内容，则不是标题（是正文中的编号引用）
-            if len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]:
+            # 换行以后就是新的内容了，标题一般不会超过一行
+            if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
                 return "title_level_2"
         
         # 三级标题检测：必须是独立的、较短的段落
         # 标题格式：数字.数字.数字 或 数字.数字.数字 后跟标点符号，且后面没有其他文字内容
+        # 标题一般不会超过一行，字数不会超过30个
         subsection_match = re.match(r"^(\d+\.\d+\.\d+)([，,。.：:；;]?)$", text)
         if subsection_match:
             remaining_text = text[len(subsection_match.group(0)):].strip()
-            # 只有当剩余文本为空或只有标点符号时，才认为是标题
+            # 只有当剩余文本为空或只有标点符号时，且总长度不超过30个字符，才认为是标题
             # 如果后面还有文字内容（如"3.2.4 12864 液晶显示屏"），则不是标题，是正文
-            if len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]:
+            # 换行以后就是新的内容了，标题一般不会超过一行
+            if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
                 return "title_level_3"
         
         # 默认返回正文样式
@@ -787,19 +793,20 @@ class DocumentService:
                     # 或者检查是否是"绪论"、"概述"等标题
                     elif paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"):
                         is_heading = True
-                    # 或者检查是否以数字开头且较短（但需要更严格的判断，避免误判正文）
-                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30:
+                    # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过30个）
+                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 30:
                         # 更严格的判断：只有纯数字编号格式（如"3.2.4"、"3.2"等）才认为是标题
-                        # 如果包含其他文字内容，则不是标题
+                        # 如果包含其他文字内容（如"3.2.4 12864 液晶显示屏"），则不是标题，是正文
+                        # 换行以后就是新的内容了，标题一般不会超过一行
                         if re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text):
                             is_heading = True
                 # 如果没有应用规则名称，使用备用判断逻辑
                 if not is_heading:
                     is_heading = (
                         (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
-                        (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
-                        # 更严格的判断：只有纯数字编号格式才认为是标题
-                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30 and 
+                        (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) <= 30) or
+                        # 更严格的判断：只有纯数字编号格式才认为是标题（标题一般不会超过一行，字数不会超过30个）
+                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 30 and 
                          re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text)) or
                         (paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"))
                     )
