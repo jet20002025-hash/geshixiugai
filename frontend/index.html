@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>论文格式自动修复</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
+    <!-- Google Fonts - 添加超时和错误处理 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    </noscript>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -114,6 +118,10 @@
         box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
         position: relative;
         overflow: hidden;
+        display: block !important; /* 强制显示 */
+        visibility: visible !important; /* 确保可见 */
+        opacity: 1 !important; /* 确保不透明 */
+        min-height: 80px; /* 确保有足够高度 */
       }
       .slogan::before {
         content: '';
@@ -130,21 +138,25 @@
         100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
       }
       .slogan-text {
-        font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'STKaiti', 'KaiTi', '楷体', cursive;
+        font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'STKaiti', 'KaiTi', '楷体', 'Microsoft YaHei', 'SimHei', sans-serif, cursive;
         font-size: 2.5rem;
         font-weight: bold;
-        color: #ffffff;
+        color: #ffffff !important; /* 强制白色 */
         text-shadow: 
           2px 2px 4px rgba(0, 0, 0, 0.3),
           0 0 20px rgba(255, 255, 255, 0.5);
         letter-spacing: 0.1em;
         position: relative;
         z-index: 1;
-        display: inline-block;
+        display: inline-block !important; /* 强制显示 */
+        visibility: visible !important; /* 确保可见 */
+        opacity: 1 !important; /* 确保不透明 */
         transform: rotate(-1deg);
         animation: float 2s ease-in-out infinite;
         text-stroke: 1px rgba(255, 255, 255, 0.3);
         -webkit-text-stroke: 1px rgba(255, 255, 255, 0.3);
+        /* 字体加载失败时的回退样式 */
+        font-display: swap; /* 使用 swap 策略，即使字体未加载也立即显示文本 */
       }
       @keyframes float {
         0%, 100% { transform: rotate(-1deg) translateY(0px); }
@@ -166,10 +178,46 @@
           font-size: 1.8rem;
         }
       }
+      /* 确保广告不被隐藏 - 最高优先级 */
+      .slogan,
+      .slogan * {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+      .slogan-text {
+        display: inline-block !important;
+      }
     </style>
+    <script>
+      // 确保广告在页面加载后立即显示
+      document.addEventListener('DOMContentLoaded', function() {
+        const slogan = document.querySelector('.slogan');
+        if (slogan) {
+          slogan.style.display = 'block';
+          slogan.style.visibility = 'visible';
+          slogan.style.opacity = '1';
+          const sloganText = document.querySelector('.slogan-text');
+          if (sloganText) {
+            sloganText.style.display = 'inline-block';
+            sloganText.style.visibility = 'visible';
+            sloganText.style.opacity = '1';
+          }
+        }
+      });
+      // 如果字体加载失败，使用系统字体
+      document.fonts.ready.then(function() {
+        // 字体加载完成
+      }).catch(function() {
+        // 字体加载失败，使用系统字体
+        const style = document.createElement('style');
+        style.textContent = '.slogan-text { font-family: "Microsoft YaHei", "SimHei", "STKaiti", "KaiTi", "楷体", sans-serif !important; }';
+        document.head.appendChild(style);
+      });
+    </script>
   </head>
   <body>
-    <!-- 广告语 -->
+    <!-- 广告语 - 确保始终显示 -->
     <div class="slogan">
       <div class="slogan-text">一秒解决你的论文格式问题！</div>
     </div>
