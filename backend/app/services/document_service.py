@@ -1798,7 +1798,6 @@ class DocumentService:
             问题列表
         """
         issues = []
-        blank_paragraph_indices = []  # 记录需要标记的空白段落索引
         
         # 1. 找到正文开始位置（从"绪论"、"概述"或"第一章"开始）
         # 明确排除摘要、Abstract、目录等部分，这些部分完全不检测空白行
@@ -2015,16 +2014,28 @@ class DocumentService:
                 else:
                     # 遇到非空白段落
                     if consecutive_blanks >= 2 and blank_start_idx is not None:
-                        # 在大章节内部发现连续空白，标记为问题
-                        issues.append({
-                            "type": "excessive_blanks_in_chapter",
-                            "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
-                            "suggestion": "请删除章节内的多余空白",
-                            "blank_start": blank_start_idx,
-                            "blank_count": consecutive_blanks,
-                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                        })
-                        blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                        # 在大章节内部发现连续空白，直接删除这些空白段落
+                        # 从后往前删除，避免索引变化
+                        deleted_count = 0
+                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                            if delete_idx < len(document.paragraphs):
+                                para_to_delete = document.paragraphs[delete_idx]
+                                # 确认是空白段落再删除
+                                if is_blank_paragraph(para_to_delete):
+                                    # 删除段落
+                                    para_to_delete._element.getparent().remove(para_to_delete._element)
+                                    deleted_count += 1
+                        
+                        # 记录删除的空白段落信息（用于报告）
+                        if deleted_count > 0:
+                            issues.append({
+                                "type": "excessive_blanks_in_chapter",
+                                "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
+                                "suggestion": "已自动删除章节内的多余空白",
+                                "blank_start": blank_start_idx,
+                                "blank_count": deleted_count,
+                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                            })
                     
                     consecutive_blanks = 0
                     blank_start_idx = None
@@ -2041,43 +2052,30 @@ class DocumentService:
                             break
                 
                 if not is_excluded and blank_start_idx >= check_start_idx:
-                    issues.append({
-                        "type": "excessive_blanks_in_chapter",
-                        "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
-                        "suggestion": "请删除章节内的多余空白",
-                        "blank_start": blank_start_idx,
-                        "blank_count": consecutive_blanks,
-                        "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                    })
-                    blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                    # 直接删除章节末尾的连续空白段落
+                    # 从后往前删除，避免索引变化
+                    deleted_count = 0
+                    for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                        if delete_idx < len(document.paragraphs):
+                            para_to_delete = document.paragraphs[delete_idx]
+                            # 确认是空白段落再删除
+                            if is_blank_paragraph(para_to_delete):
+                                # 删除段落
+                                para_to_delete._element.getparent().remove(para_to_delete._element)
+                                deleted_count += 1
+                    
+                    # 记录删除的空白段落信息（用于报告）
+                    if deleted_count > 0:
+                        issues.append({
+                            "type": "excessive_blanks_in_chapter",
+                            "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个连续空白段落（大章节内）",
+                            "suggestion": "已自动删除章节内的多余空白",
+                            "blank_start": blank_start_idx,
+                            "blank_count": deleted_count,
+                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                        })
         
-        # 在文档中标记问题（从后往前插入，避免索引变化）
-        for blank_idx in sorted(set(blank_paragraph_indices), reverse=True):
-            blank_paragraph = document.paragraphs[blank_idx]
-            
-            # 创建标记文本
-            marker_text = "⚠️ 【正文章节内多余空白】请删除此空白段落"
-            escaped_text = xml.sax.saxutils.escape(marker_text)
-            
-            # 创建标记段落（插入在空白段落之后，这样更容易看到）
-            new_para_xml = f'''<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                <w:pPr>
-                    <w:jc w:val="left"/>
-                </w:pPr>
-                <w:r>
-                    <w:rPr>
-                        <w:b/>
-                        <w:color w:val="FF0000"/>
-                        <w:highlight w:val="yellow"/>
-                    </w:rPr>
-                    <w:t xml:space="preserve">{escaped_text}</w:t>
-                </w:r>
-            </w:p>'''
-            
-            # 解析并插入新段落（在空白段落之后）
-            new_para_element = parse_xml(new_para_xml)
-            blank_paragraph._element.addnext(new_para_element)
-        
+        # 空白段落已直接删除，不需要标记
         return issues
 
     def _save_file_to_storage(self, key: str, content: bytes) -> bool:
