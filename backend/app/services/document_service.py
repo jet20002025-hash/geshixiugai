@@ -1915,6 +1915,7 @@ class DocumentService:
             r'^第[一二三四五六七八九十\d]+章',  # 第一章、第二章等
             r'^第[一二三四五六七八九十\d]+节',  # 第一节、第二节等
             r'^\d+\.\d+',  # 1.1、2.1 等
+            r'^\d+\.\s+',  # 4. 剔除粗大误差（数字+点+空格+文字，标题通常较短）
             r'^第\d+章',  # 第1章、第2章等
             r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
             r'^附录[一二三四五六七八九十\d]',  # 附录一、附录二
@@ -1933,7 +1934,12 @@ class DocumentService:
             # 检查是否符合章节标题模式
             for pattern in chapter_patterns:
                 if re.match(pattern, para_text):
-                    return True
+                    # 对于 "数字. 文字" 格式，需要进一步验证：标题通常较短（不超过30字符）
+                    if pattern == r'^\d+\.\s+':
+                        if len(para_text) <= 30:
+                            return True
+                    else:
+                        return True
             
             # 检查"绪论"或"概述"（精确匹配或独立出现）
             if para_text == "绪论" or para_text == "概述":
@@ -2001,8 +2007,9 @@ class DocumentService:
                         
                         # 检查空白段之后是否有章节标题（如果空白段后面是章节标题，这是章节间的空白，允许）
                         is_before_chapter = False
-                        # 扩大检查范围：检查空白段之后是否有章节标题（最多检查20个段落，以覆盖目录和第一章之间的情况）
-                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 20, check_end_idx, len(document.paragraphs))):
+                        # 缩小检查范围：只检查空白段之后紧邻的3个段落（章节间的空白通常紧邻章节标题）
+                        # 如果检查范围太大，会误判正文中的空行为章节间空白
+                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, check_end_idx, len(document.paragraphs))):
                             if next_idx < len(document.paragraphs):
                                 next_para = document.paragraphs[next_idx]
                                 if is_chapter_title(next_para):
@@ -2011,10 +2018,10 @@ class DocumentService:
                                     break
                         
                         # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，也是允许的）
-                        # 扩大检查范围：不仅检查前一个段落，还要检查前面是否有章节标题（比如目录结束）
                         is_after_chapter = False
-                        # 向前检查最多10个段落，查找章节标题
-                        for prev_idx in range(max(0, blank_start_idx - 10), blank_start_idx):
+                        # 缩小检查范围：只检查空白段之前紧邻的2个段落（章节标题后的空白通常紧邻标题）
+                        # 如果检查范围太大，会误判正文中的空行为章节间空白
+                        for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
                             if prev_idx < len(document.paragraphs):
                                 prev_para = document.paragraphs[prev_idx]
                                 if is_chapter_title(prev_para):
@@ -2058,10 +2065,10 @@ class DocumentService:
                     if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
                         is_in_toc = True
             
-            # 检查是否在章节标题后（扩大检查范围）
+            # 检查是否在章节标题后（缩小检查范围，避免误判）
             is_after_chapter = False
-            # 向前检查最多10个段落，查找章节标题
-            for prev_idx in range(max(0, blank_start_idx - 10), blank_start_idx):
+            # 只检查空白段之前紧邻的2个段落（章节标题后的空白通常紧邻标题）
+            for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
                 if prev_idx < len(document.paragraphs):
                     prev_para = document.paragraphs[prev_idx]
                     if is_chapter_title(prev_para):
@@ -2076,8 +2083,8 @@ class DocumentService:
             
             # 检查空白段之后是否有章节标题（虽然已经到文档末尾，但也要检查）
             is_before_chapter = False
-            # 扩大检查范围：检查空白段之后是否有章节标题（最多检查20个段落）
-            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 20, len(document.paragraphs))):
+            # 缩小检查范围：只检查空白段之后紧邻的3个段落（章节间的空白通常紧邻章节标题）
+            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, len(document.paragraphs))):
                 if next_idx < len(document.paragraphs):
                     next_para = document.paragraphs[next_idx]
                     if is_chapter_title(next_para):
