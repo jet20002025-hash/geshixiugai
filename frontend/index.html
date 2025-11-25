@@ -180,42 +180,128 @@
       }
     </style>
     <script>
+      // 调试函数：检查广告显示状态
+      function debugSlogan() {
+        const slogan = document.querySelector('.slogan');
+        const sloganText = document.querySelector('.slogan-text');
+        
+        console.log('=== 广告调试信息 ===');
+        console.log('slogan元素存在:', !!slogan);
+        console.log('slogan-text元素存在:', !!sloganText);
+        
+        if (slogan) {
+          const computedStyle = window.getComputedStyle(slogan);
+          console.log('slogan display:', computedStyle.display);
+          console.log('slogan visibility:', computedStyle.visibility);
+          console.log('slogan opacity:', computedStyle.opacity);
+          console.log('slogan height:', computedStyle.height);
+          console.log('slogan width:', computedStyle.width);
+          console.log('slogan position:', computedStyle.position);
+          console.log('slogan z-index:', computedStyle.zIndex);
+        }
+        
+        if (sloganText) {
+          const computedStyle = window.getComputedStyle(sloganText);
+          console.log('slogan-text display:', computedStyle.display);
+          console.log('slogan-text visibility:', computedStyle.visibility);
+          console.log('slogan-text opacity:', computedStyle.opacity);
+          console.log('slogan-text color:', computedStyle.color);
+          console.log('slogan-text font-size:', computedStyle.fontSize);
+          console.log('slogan-text text:', sloganText.textContent);
+        }
+        
+        console.log('==================');
+      }
+      
       // 立即执行，不等待DOMContentLoaded
       (function() {
         function ensureSloganVisible() {
           const slogan = document.querySelector('.slogan');
           if (slogan) {
-            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important;';
+            slogan.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;';
             const sloganText = document.querySelector('.slogan-text');
             if (sloganText) {
               sloganText.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;';
+            }
+            console.log('广告元素已强制显示');
+          } else {
+            console.error('警告：找不到 .slogan 元素！');
+          }
+        }
+        
+        // 检查备用版本
+        function checkBackup() {
+          const backup = document.getElementById('slogan-backup');
+          if (backup) {
+            const computedStyle = window.getComputedStyle(backup);
+            console.log('备用广告 display:', computedStyle.display);
+            console.log('备用广告 visibility:', computedStyle.visibility);
+            console.log('备用广告 opacity:', computedStyle.opacity);
+            // 如果主广告不显示，确保备用版本显示
+            const slogan = document.querySelector('.slogan');
+            if (slogan) {
+              const sloganStyle = window.getComputedStyle(slogan);
+              if (sloganStyle.display === 'none' || sloganStyle.visibility === 'hidden' || sloganStyle.opacity === '0') {
+                console.warn('主广告不显示，确保备用版本显示');
+                backup.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;';
+              } else {
+                // 主广告显示正常，隐藏备用版本
+                backup.style.display = 'none';
+              }
             }
           }
         }
         
         // 立即执行
         ensureSloganVisible();
+        debugSlogan();
+        checkBackup();
         
         // DOMContentLoaded时再次执行
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', ensureSloganVisible);
+          document.addEventListener('DOMContentLoaded', function() {
+            ensureSloganVisible();
+            debugSlogan();
+            checkBackup();
+          });
         } else {
           ensureSloganVisible();
+          debugSlogan();
+          checkBackup();
         }
         
         // 延迟执行，确保所有样式都应用后
-        setTimeout(ensureSloganVisible, 100);
-        setTimeout(ensureSloganVisible, 500);
-        setTimeout(ensureSloganVisible, 1000);
+        setTimeout(function() {
+          ensureSloganVisible();
+          debugSlogan();
+          checkBackup();
+        }, 100);
+        setTimeout(function() {
+          ensureSloganVisible();
+          debugSlogan();
+          checkBackup();
+        }, 500);
+        setTimeout(function() {
+          ensureSloganVisible();
+          debugSlogan();
+          checkBackup();
+        }, 1000);
       })();
       
-      // 不再需要字体加载检查，直接使用系统字体
+      // 暴露调试函数到全局，方便在控制台调用
+      window.debugSlogan = debugSlogan;
     </script>
   </head>
   <body>
     <!-- 广告语 - 确保始终显示 -->
-    <div class="slogan" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important;">
-      <div class="slogan-text" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important;">一秒解决你的论文格式问题！</div>
+    <!-- 添加多个备用版本，确保至少一个能显示 -->
+    <div class="slogan" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; text-align: center !important; padding: 1.5rem !important; border-radius: 15px !important; margin: 2rem 0 1.5rem 0 !important;">
+      <div class="slogan-text" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, sans-serif !important; font-size: 2.5rem !important; font-weight: bold !important;">一秒解决你的论文格式问题！</div>
+    </div>
+    
+    <!-- 备用测试版本（如果上面的不显示，这个应该能显示） -->
+    <div id="slogan-backup" style="display: block !important; visibility: visible !important; opacity: 1 !important; background: #667eea !important; color: #ffffff !important; text-align: center !important; padding: 20px !important; margin: 20px 0 !important; font-size: 24px !important; font-weight: bold !important;">
+      一秒解决你的论文格式问题！
     </div>
     
     <h1>论文格式自动修复</h1>
