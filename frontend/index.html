@@ -182,15 +182,23 @@
     <script>
       // 全局错误处理：捕获未处理的 Promise 错误
       window.addEventListener('unhandledrejection', function(event) {
+        // 如果是网络错误（Failed to fetch），静默处理，不影响页面显示
+        const reason = event.reason;
+        if (reason && (reason.message === 'Failed to fetch' || reason.httpStatusText === 'TypeError: Failed to fetch')) {
+          console.warn('网络请求失败（可能是后端服务未启动）:', reason);
+          // 阻止错误传播，不影响页面显示
+          event.preventDefault();
+          return;
+        }
+        
         console.error('=== 未捕获的 Promise 错误 ===');
-        console.error('错误原因:', event.reason);
+        console.error('错误原因:', reason);
         console.error('Promise:', event.promise);
         console.error('完整错误对象:', event);
-        if (event.reason && event.reason.stack) {
-          console.error('错误堆栈:', event.reason.stack);
+        if (reason && reason.stack) {
+          console.error('错误堆栈:', reason.stack);
         }
         console.error('===========================');
-        // 不阻止错误，让开发者能看到
       });
       
       // 全局错误处理：捕获其他错误
@@ -470,7 +478,9 @@
         try {
           const response = await fetch("/templates");
           if (!response.ok) {
-            console.error("加载模板列表失败:", response.status);
+            console.warn("加载模板列表失败:", response.status);
+            // 设置默认选项
+            templateSelect.innerHTML = '<option value="">请先上传模板</option>';
             return;
           }
           
@@ -492,14 +502,18 @@
             addTemplateOption(template.template_id, template.name);
           });
         } catch (error) {
-          console.error("加载模板列表错误:", error);
-          // 确保错误被正确处理，不会导致未捕获的 Promise 错误
+          // 网络错误或其他错误，静默处理，不影响页面显示
+          console.warn("加载模板列表失败（可能是后端服务未启动）:", error.message || error);
+          // 设置默认选项，确保页面可以正常使用
+          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
         }
       }
 
-      // 页面加载时获取用户模板列表（添加错误处理）
+      // 页面加载时获取用户模板列表（添加错误处理，确保不会影响页面显示）
       loadUserTemplates().catch(function(error) {
-        console.error("loadUserTemplates 未捕获的错误:", error);
+        // 静默处理，不显示错误，确保不影响广告显示
+        console.warn("模板列表加载失败（不影响使用）:", error.message || error);
+        templateSelect.innerHTML = '<option value="">请先上传模板</option>';
       });
 
       // 文件大小限制：20 MB（支持毕业论文等大文件）
