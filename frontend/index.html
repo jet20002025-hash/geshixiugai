@@ -257,8 +257,14 @@
             console.log('banner width:', computedStyle.width);
             console.log('banner background:', computedStyle.backgroundColor);
             
-            // 强制设置样式
-            banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;';
+            // 强制设置样式，确保可见
+            banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 9999 !important;';
+            
+            // 确保元素在视口中可见
+            const rect = banner.getBoundingClientRect();
+            if (rect.top < 0 || rect.left < 0) {
+              banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             
             const textDiv = banner.querySelector('div');
             if (textDiv) {
@@ -278,6 +284,8 @@
             console.log('设置后 display:', finalStyle.display);
             console.log('设置后 visibility:', finalStyle.visibility);
             console.log('设置后 opacity:', finalStyle.opacity);
+            console.log('设置后 z-index:', finalStyle.zIndex);
+            console.log('元素位置 top:', rect.top, 'left:', rect.left);
           } else {
             console.error('错误：找不到 #banner 元素！');
             // 尝试通过文本查找
@@ -309,9 +317,6 @@
         // 暴露到全局，方便在控制台调用
         window.checkBanner = ensureBannerVisible;
       })();
-      
-      // 暴露调试函数到全局，方便在控制台调用
-      window.debugSlogan = debugSlogan;
     </script>
   </head>
   <body>
