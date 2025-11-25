@@ -1903,15 +1903,15 @@ class DocumentService:
             if not para_text:
                 return False
             
-            # 检查是否以数字1、2、3或中文一、二、三开头
-            # 支持格式：1 绪论、1. 绪论、第一章、第1章、一 绪论等
+            # 检查是否以数字1-9或中文一、二、三开头
+            # 支持格式：1 绪论、1. 绪论、4. 剔除粗大误差、第一章、第1章、一 绪论等
             major_chapter_patterns = [
-                r'^[123]\s+',  # 1 、2 、3 开头（数字+空格）
-                r'^[123]\.',  # 1.、2.、3. 开头（数字+点）
+                r'^\d+\s+',  # 1 、2 、3、4 等开头（数字+空格）
+                r'^\d+\.',  # 1.、2.、3.、4. 等开头（数字+点）
                 r'^[一二三四五六七八九十]\s+',  # 一 、二 、三 开头（中文数字+空格）
                 r'^第[一二三四五六七八九十]章',  # 第一章、第二章等
-                r'^第[123]章',  # 第1章、第2章、第3章
-                r'^[123]\s+[^\d]',  # 1 绪论、2 概述等（数字+空格+非数字）
+                r'^第\d+章',  # 第1章、第2章、第3章、第4章等
+                r'^\d+\s+[^\d]',  # 1 绪论、2 概述、4 剔除粗大误差等（数字+空格+非数字）
             ]
             
             # 先检查文本模式
@@ -1936,6 +1936,7 @@ class DocumentService:
                             break
             
             # 如果符合文本模式，且（有16磅字体 或 文本较短可能是标题）
+            # 对于"数字. 文字"格式，如果文本长度<=30，认为是标题
             if has_three_size_font or len(para_text) <= 30:
                 return True
             
@@ -1959,8 +1960,12 @@ class DocumentService:
             major_chapters.append((current_chapter_start, check_end_idx))
         
         # 如果没有找到大章节，将整个检测范围作为一个章节处理
+        # 这样可以确保即使没有识别到大章节，也能检测空白行
         if not major_chapters:
             major_chapters = [(check_start_idx, check_end_idx)]
+        
+        # 调试信息：打印识别到的大章节
+        # print(f"[空白行检测] 识别到 {len(major_chapters)} 个大章节: {major_chapters}")
         
         # 4. 只在大章节内部检测空白行
         def is_blank_paragraph(paragraph) -> bool:
