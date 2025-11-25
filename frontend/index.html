@@ -257,8 +257,8 @@
             console.log('banner width:', computedStyle.width);
             console.log('banner background:', computedStyle.backgroundColor);
             
-            // 强制设置样式，确保可见（Windows兼容）
-            banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background-color: #667eea !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 9999 !important; width: 100% !important; max-width: 760px !important; margin-left: auto !important; margin-right: auto !important;';
+            // 强制设置样式，确保可见（Windows兼容，使用flexbox居中）
+            banner.style.cssText = 'display: flex !important; align-items: center !important; justify-content: center !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background-color: #667eea !important; background: #667eea !important; padding: 25px 20px !important; border-radius: 15px !important; margin: 20px auto !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 9999 !important; width: 100% !important; max-width: 760px !important;';
             
             // 确保元素在视口中可见
             const rect = banner.getBoundingClientRect();
@@ -274,7 +274,7 @@
               console.log('textDiv color:', textStyle.color);
               console.log('textDiv text:', textDiv.textContent);
               
-              textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important;';
+              textDiv.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, "Microsoft YaHei", "SimHei", sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.4 !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important; margin: 0 !important; padding: 0 !important;';
             } else {
               console.warn('未找到textDiv');
             }
@@ -321,8 +321,8 @@
   </head>
   <body>
     <!-- 标语横幅 - 使用最简单的内联样式，不依赖任何外部资源，兼容Windows -->
-    <div id="banner" style="display: block !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background-color: #667eea !important; background: #667eea !important; text-align: center !important; padding: 20px !important; border-radius: 15px !important; margin: 20px 0 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 9999 !important; width: 100% !important; max-width: 760px !important; margin-left: auto !important; margin-right: auto !important;">
-      <div style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, 'Microsoft YaHei', 'SimHei', sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.2 !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;">一秒解决你的论文格式问题！</div>
+    <div id="banner" style="display: flex !important; align-items: center !important; justify-content: center !important; visibility: visible !important; opacity: 1 !important; min-height: 80px !important; background-color: #667eea !important; background: #667eea !important; padding: 25px 20px !important; border-radius: 15px !important; margin: 20px auto !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 9999 !important; width: 100% !important; max-width: 760px !important;">
+      <div style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; color: #ffffff !important; font-family: Arial, Helvetica, 'Microsoft YaHei', 'SimHei', sans-serif !important; font-size: 28px !important; font-weight: bold !important; line-height: 1.4 !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important; margin: 0 !important; padding: 0 !important;">一秒解决你的论文格式问题！</div>
     </div>
     
     <h1>论文格式自动修复</h1>
