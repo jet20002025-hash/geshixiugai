@@ -1790,10 +1790,9 @@ class DocumentService:
         检测文档中的大段空白
         
         规则：
-        - 只检测从正文开始到参考文献结束之间的内容
-        - 其他部分（封面、目录、摘要等）不需要检测空白行
-        - 两个章节之间允许有大段空白
-        - 在同一章节内，不允许有大段空白（连续2个以上空白段落）
+        - 先识别大章节（1、2、3或一、二、三开头，字体三号约16磅）
+        - 只在大章节内部检测空白行（连续2个以上空白段落）
+        - 章节之间不需要检测空白行
         
         Returns:
             问题列表
@@ -1801,73 +1800,8 @@ class DocumentService:
         issues = []
         blank_paragraph_indices = []  # 记录需要标记的空白段落索引
         
-        # 1. 找到正文开始位置（从"绪论"或"概述"开始）
-        body_start_idx = None
-        body_start_patterns = [
-            r'^正文',
-            r'^第[一二三四五六七八九十\d]+章',  # 第一章、第二章等
-            r'^第\d+章',  # 第1章、第2章等
-            r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
-            r'^1\s+',  # 以"1 "开头的标题（第一章）
-            r'^1\.',  # 以"1."开头的标题
-            r'^绪论$',  # 绪论（精确匹配）
-            r'^概述$',  # 概述（精确匹配）
-            r'^绪论',  # 以"绪论"开头
-            r'^概述',  # 以"概述"开头
-        ]
-        
-        for idx, paragraph in enumerate(document.paragraphs):
-            para_text = paragraph.text.strip() if paragraph.text else ""
-            # 检查是否符合正文开始模式
-            for pattern in body_start_patterns:
-                if re.match(pattern, para_text):
-                    body_start_idx = idx
-                    break
-            if body_start_idx is not None:
-                break
-        
-        # 如果没有找到明确的正文开始标记，尝试找第一个较长的段落（可能是正文开始）
-        if body_start_idx is None:
-            for idx, paragraph in enumerate(document.paragraphs):
-                para_text = paragraph.text.strip() if paragraph.text else ""
-                # 跳过明显的非正文部分（摘要、目录等）
-                if re.search(r'^(摘要|Abstract|目录|Contents|致谢|Acknowledgement)', para_text, re.IGNORECASE):
-                    continue
-                # 如果段落较长（可能是正文），且不是标题样式，认为是正文开始
-                if len(para_text) > 100:
-                    style_name = paragraph.style.name if paragraph.style else ""
-                    if '标题' not in style_name and 'Heading' not in style_name.lower():
-                        body_start_idx = idx
-                        break
-        
-        # 如果仍然找不到，从第10个段落开始（跳过封面、目录等）
-        if body_start_idx is None:
-            body_start_idx = min(10, len(document.paragraphs))
-        
-        # 1.5. 找到目录页的范围（用于排除目录页末尾的空白行）
-        toc_start_idx = None
-        toc_end_idx = None
-        for idx, paragraph in enumerate(document.paragraphs):
-            para_text = paragraph.text.strip() if paragraph.text else ""
-            if (para_text.startswith("目录") or para_text.startswith("Contents")) and toc_start_idx is None:
-                toc_start_idx = idx
-            elif toc_start_idx is not None and (
-                para_text.startswith("第一章") or para_text.startswith("第1章") or 
-                para_text.startswith("Chapter 1") or para_text.startswith("1 引言") or 
-                para_text.startswith("1 绪论") or para_text.startswith("1 概述") or
-                para_text == "绪论" or para_text == "概述"
-            ):
-                toc_end_idx = idx
-                break
-        
-        # 如果没找到目录结束位置，假设目录到正文开始之前
-        if toc_start_idx is not None and toc_end_idx is None:
-            toc_end_idx = body_start_idx if body_start_idx is not None else len(document.paragraphs)
-        
-        # 2. 找到参考文献结束位置
-        reference_end_idx = len(document.paragraphs)  # 默认到文档末尾
-        
-        # 先找到参考文献开始位置
+        # 1. 找到正文开始位置和参考文献结束位置
+        body_start_idx = self._find_body_start_index(document)
         reference_start_idx = None
         for idx, paragraph in enumerate(document.paragraphs):
             para_text = paragraph.text.strip() if paragraph.text else ""
@@ -1875,229 +1809,139 @@ class DocumentService:
                 reference_start_idx = idx
                 break
         
+        reference_end_idx = len(document.paragraphs)  # 默认到文档末尾
         if reference_start_idx is not None:
             # 从参考文献开始位置向后查找，找到参考文献结束位置
-            # 参考文献结束的标志：遇到"致谢"、"附录"等，或者连续多个非参考文献格式的段落
             non_ref_count = 0
             for idx in range(reference_start_idx + 1, len(document.paragraphs)):
                 para = document.paragraphs[idx]
                 para_text = para.text.strip() if para.text else ""
-                
-                # 如果遇到新的章节（致谢、附录等），参考文献结束
                 if re.search(r'^(致谢|附录|Acknowledgement|Appendix)', para_text, re.IGNORECASE):
                     reference_end_idx = idx
                     break
-                
-                # 检查是否是参考文献格式（编号开头）
                 is_reference = False
                 if re.match(r'^\[\d+\]', para_text) or re.match(r'^\d+\.', para_text) or re.match(r'^\(\d+\)', para_text):
                     is_reference = True
-                
-                # 如果连续多个段落都不是参考文献格式，认为参考文献结束
                 if not is_reference and len(para_text) > 20:
                     non_ref_count += 1
-                    if non_ref_count >= 3:  # 连续3个非参考文献段落，认为参考文献结束
-                        reference_end_idx = idx - 2  # 回到第一个非参考文献段落之前
+                    if non_ref_count >= 3:
+                        reference_end_idx = idx - 2
                         break
                 else:
                     non_ref_count = 0
         
-        # 3. 确定检测范围：从正文开始到参考文献结束
+        # 确定检测范围：从正文开始到参考文献结束
         check_start_idx = body_start_idx
         check_end_idx = reference_end_idx
-        
-        # 如果正文开始位置在参考文献之后，不检测
         if check_start_idx >= check_end_idx:
             return issues
         
-        # 识别章节边界的模式
-        chapter_patterns = [
-            r'^第[一二三四五六七八九十\d]+章',  # 第一章、第二章等
-            r'^第[一二三四五六七八九十\d]+节',  # 第一节、第二节等
-            r'^\d+\.\d+',  # 1.1、2.1 等
-            r'^\d+\.\s+',  # 4. 剔除粗大误差（数字+点+空格+文字，标题通常较短）
-            r'^第\d+章',  # 第1章、第2章等
-            r'^Chapter\s+\d+',  # Chapter 1、Chapter 2等
-            r'^附录[一二三四五六七八九十\d]',  # 附录一、附录二
-            r'^绪论$',  # 绪论（精确匹配）
-            r'^概述$',  # 概述（精确匹配）
-            r'^1\s+绪论',  # 1 绪论
-            r'^1\s+概述',  # 1 概述
-        ]
-        
-        # 判断段落是否为章节标题
-        def is_chapter_title(paragraph) -> bool:
+        # 2. 识别大章节标题
+        # 大章节特征：1、2、3或一、二、三开头，字体三号（约16磅）
+        def is_major_chapter_title(paragraph) -> bool:
             para_text = paragraph.text.strip() if paragraph.text else ""
             if not para_text:
                 return False
             
-            # 检查是否符合章节标题模式
-            for pattern in chapter_patterns:
+            # 检查是否以数字1、2、3或中文一、二、三开头
+            # 支持格式：1 绪论、1. 绪论、第一章、第1章、一 绪论等
+            major_chapter_patterns = [
+                r'^[123]\s+',  # 1 、2 、3 开头（数字+空格）
+                r'^[123]\.',  # 1.、2.、3. 开头（数字+点）
+                r'^[一二三四五六七八九十]\s+',  # 一 、二 、三 开头（中文数字+空格）
+                r'^第[一二三四五六七八九十]章',  # 第一章、第二章等
+                r'^第[123]章',  # 第1章、第2章、第3章
+                r'^[123]\s+[^\d]',  # 1 绪论、2 概述等（数字+空格+非数字）
+            ]
+            
+            # 先检查文本模式
+            pattern_matched = False
+            for pattern in major_chapter_patterns:
                 if re.match(pattern, para_text):
-                    # 对于 "数字. 文字" 格式，需要进一步验证：标题通常较短（不超过30字符）
-                    if pattern == r'^\d+\.\s+':
-                        if len(para_text) <= 30:
-                            return True
-                    else:
-                        return True
+                    pattern_matched = True
+                    break
             
-            # 检查"绪论"或"概述"（精确匹配或独立出现）
-            if para_text == "绪论" or para_text == "概述":
-                return True
-            if para_text.startswith("1 绪论") or para_text.startswith("1 概述"):
-                return True
+            if not pattern_matched:
+                return False
             
-            # 检查是否为标题样式（通常标题样式名称包含"标题"或"Heading"）
-            style_name = paragraph.style.name if paragraph.style else ""
-            if '标题' in style_name or 'Heading' in style_name.lower():
-                # 进一步验证：标题通常较短且格式特殊
-                if len(para_text) < 50:  # 标题通常较短
-                    return True
+            # 检查字体大小是否为三号（约16磅，允许14-18磅的范围，因为可能有些偏差）
+            has_three_size_font = False
+            for run in paragraph.runs:
+                if run.text.strip():
+                    font_size = run.font.size.pt if run.font.size else None
+                    if font_size is not None:
+                        # 三号字通常是16磅，允许14-18磅的范围
+                        if 14 <= font_size <= 18:
+                            has_three_size_font = True
+                            break
+            
+            # 如果符合文本模式，且（有16磅字体 或 文本较短可能是标题）
+            if has_three_size_font or len(para_text) <= 30:
+                return True
             
             return False
         
-        # 判断段落是否为空（空白段落）
-        def is_blank_paragraph(paragraph) -> bool:
-            para_text = paragraph.text.strip() if paragraph.text else ""
-            # 空白段落：文本为空或只有空白字符
-            return len(para_text) == 0
-        
-        # 4. 只在检测范围内遍历段落，识别章节和空白
-        current_chapter_start = check_start_idx  # 当前章节的起始段落索引
-        consecutive_blanks = 0  # 连续空白段落计数
-        blank_start_idx = None  # 连续空白段的起始索引
+        # 3. 识别所有大章节的边界
+        major_chapters = []  # [(start_idx, end_idx), ...]
+        current_chapter_start = None
         
         for idx in range(check_start_idx, check_end_idx):
             paragraph = document.paragraphs[idx]
-            # 检查是否为章节标题
-            if is_chapter_title(paragraph):
-                # 遇到新章节标题
-                # 如果之前有连续空白，检查这些空白是否在章节标题前或后（都允许）
-                if consecutive_blanks >= 2 and blank_start_idx is not None:
-                    # 空白段在章节标题前，这是章节间的空白，允许（不标记）
-                    # 空白段在章节标题后，也是允许的
-                    # 所以遇到章节标题时，直接清除之前的空白计数，不标记
-                    pass
-                
-                # 开始新章节，重置计数（章节标题前后的空白都是允许的）
+            if is_major_chapter_title(paragraph):
+                # 如果之前有章节，结束之前的章节
+                if current_chapter_start is not None:
+                    major_chapters.append((current_chapter_start, idx))
+                # 开始新的大章节
                 current_chapter_start = idx
-                consecutive_blanks = 0
-                blank_start_idx = None
-            else:
-                # 检查是否为空白段落
+        
+        # 处理最后一个章节
+        if current_chapter_start is not None:
+            major_chapters.append((current_chapter_start, check_end_idx))
+        
+        # 如果没有找到大章节，将整个检测范围作为一个章节处理
+        if not major_chapters:
+            major_chapters = [(check_start_idx, check_end_idx)]
+        
+        # 4. 只在大章节内部检测空白行
+        def is_blank_paragraph(paragraph) -> bool:
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            return len(para_text) == 0
+        
+        for chapter_start, chapter_end in major_chapters:
+            consecutive_blanks = 0
+            blank_start_idx = None
+            
+            # 在大章节内部遍历
+            for idx in range(chapter_start + 1, chapter_end):  # +1 跳过章节标题本身
+                paragraph = document.paragraphs[idx]
+                
                 if is_blank_paragraph(paragraph):
                     if consecutive_blanks == 0:
-                        # 开始新的连续空白段
                         blank_start_idx = idx
                     consecutive_blanks += 1
                 else:
                     # 遇到非空白段落
-                    # 如果之前有连续空白，检查是否需要标记
                     if consecutive_blanks >= 2 and blank_start_idx is not None:
-                        # 检查空白段是否在目录页范围内（目录页末尾的空白行允许）
-                        is_in_toc = False
-                        if toc_start_idx is not None and toc_end_idx is not None:
-                            # 如果空白段的起始位置在目录页范围内，或者是目录页结束后的空白（目录页和正文开始之间），都允许
-                            if blank_start_idx >= toc_start_idx and blank_start_idx < toc_end_idx:
-                                is_in_toc = True
-                            # 如果空白段位于目录页结束和正文开始之间，也允许（这是章节间的空白）
-                            elif toc_end_idx is not None and body_start_idx is not None:
-                                if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
-                                    is_in_toc = True
-                        
-                        # 检查空白段之后是否有章节标题（如果空白段后面是章节标题，这是章节间的空白，允许）
-                        is_before_chapter = False
-                        # 缩小检查范围：只检查空白段之后紧邻的3个段落（章节间的空白通常紧邻章节标题）
-                        # 如果检查范围太大，会误判正文中的空行为章节间空白
-                        for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, check_end_idx, len(document.paragraphs))):
-                            if next_idx < len(document.paragraphs):
-                                next_para = document.paragraphs[next_idx]
-                                if is_chapter_title(next_para):
-                                    # 空白段后面是章节标题，这是章节间的空白，允许
-                                    is_before_chapter = True
-                                    break
-                        
-                        # 检查空白段之前是否有章节标题（如果空白段紧跟在章节标题后，也是允许的）
-                        is_after_chapter = False
-                        # 缩小检查范围：只检查空白段之前紧邻的2个段落（章节标题后的空白通常紧邻标题）
-                        # 如果检查范围太大，会误判正文中的空行为章节间空白
-                        for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
-                            if prev_idx < len(document.paragraphs):
-                                prev_para = document.paragraphs[prev_idx]
-                                if is_chapter_title(prev_para):
-                                    # 空白段前面有章节标题，这是章节间的空白，允许
-                                    is_after_chapter = True
-                                    break
-                        
-                        # 特别检查：如果空白段位于目录结束和正文开始之间，也允许（这是章节间的空白）
-                        if not is_after_chapter and toc_end_idx is not None and body_start_idx is not None:
-                            if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
-                                is_after_chapter = True
-                        
-                        # 只有当空白段既不在目录页范围内，也不在章节标题前，也不在章节标题后，且在同一章节内时，才标记为问题
-                        if not is_in_toc and not is_before_chapter and not is_after_chapter:
-                            issues.append({
-                                "type": "excessive_blanks_in_chapter",
-                                "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（正文章节内）",
-                                "suggestion": "请删除章节内的多余空白，章节之间可以保留适当空白",
-                                "chapter_start": current_chapter_start,
-                                "blank_start": blank_start_idx,
-                                "blank_count": consecutive_blanks,
-                                "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
-                            })
-                            # 记录需要标记的段落
-                            blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                        # 在大章节内部发现连续空白，标记为问题
+                        issues.append({
+                            "type": "excessive_blanks_in_chapter",
+                            "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
+                            "suggestion": "请删除章节内的多余空白",
+                            "blank_start": blank_start_idx,
+                            "blank_count": consecutive_blanks,
+                            "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
+                        })
+                        blank_paragraph_indices.extend(range(blank_start_idx, blank_start_idx + consecutive_blanks))
                     
-                    # 重置计数
                     consecutive_blanks = 0
                     blank_start_idx = None
-        
-        # 处理文档末尾的连续空白
-        if consecutive_blanks >= 2 and blank_start_idx is not None:
-            # 检查空白段是否在目录页范围内（目录页末尾的空白行允许）
-            is_in_toc = False
-            if toc_start_idx is not None and toc_end_idx is not None:
-                # 如果空白段的起始位置在目录页范围内，或者是目录页结束后的空白（目录页和正文开始之间），都允许
-                if blank_start_idx >= toc_start_idx and blank_start_idx < toc_end_idx:
-                    is_in_toc = True
-                # 如果空白段位于目录页结束和正文开始之间，也允许（这是章节间的空白）
-                elif toc_end_idx is not None and body_start_idx is not None:
-                    if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
-                        is_in_toc = True
             
-            # 检查是否在章节标题后（缩小检查范围，避免误判）
-            is_after_chapter = False
-            # 只检查空白段之前紧邻的2个段落（章节标题后的空白通常紧邻标题）
-            for prev_idx in range(max(0, blank_start_idx - 2), blank_start_idx):
-                if prev_idx < len(document.paragraphs):
-                    prev_para = document.paragraphs[prev_idx]
-                    if is_chapter_title(prev_para):
-                        # 空白段前面有章节标题，这是章节间的空白，允许
-                        is_after_chapter = True
-                        break
-            
-            # 特别检查：如果空白段位于目录结束和正文开始之间，也允许（这是章节间的空白）
-            if not is_after_chapter and toc_end_idx is not None and body_start_idx is not None:
-                if blank_start_idx >= toc_end_idx and blank_start_idx < body_start_idx:
-                    is_after_chapter = True
-            
-            # 检查空白段之后是否有章节标题（虽然已经到文档末尾，但也要检查）
-            is_before_chapter = False
-            # 缩小检查范围：只检查空白段之后紧邻的3个段落（章节间的空白通常紧邻章节标题）
-            for next_idx in range(blank_start_idx + consecutive_blanks, min(blank_start_idx + consecutive_blanks + 3, len(document.paragraphs))):
-                if next_idx < len(document.paragraphs):
-                    next_para = document.paragraphs[next_idx]
-                    if is_chapter_title(next_para):
-                        is_before_chapter = True
-                        break
-            
-            # 只有当空白段既不在目录页范围内，也不在章节标题前，也不在章节标题后时，才标记为问题
-            if not is_in_toc and not is_after_chapter and not is_before_chapter:
+            # 处理章节末尾的连续空白
+            if consecutive_blanks >= 2 and blank_start_idx is not None:
                 issues.append({
                     "type": "excessive_blanks_in_chapter",
-                    "message": f"正文末尾第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落",
-                    "suggestion": "请删除正文末尾的多余空白",
-                    "chapter_start": current_chapter_start,
+                    "message": f"第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间存在 {consecutive_blanks} 个连续空白段落（大章节内）",
+                    "suggestion": "请删除章节内的多余空白",
                     "blank_start": blank_start_idx,
                     "blank_count": consecutive_blanks,
                     "paragraph_indices": list(range(blank_start_idx, blank_start_idx + consecutive_blanks))
