@@ -787,15 +787,20 @@ class DocumentService:
                     # 或者检查是否是"绪论"、"概述"等标题
                     elif paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"):
                         is_heading = True
-                    # 或者检查是否以数字开头且较短
+                    # 或者检查是否以数字开头且较短（但需要更严格的判断，避免误判正文）
                     elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30:
-                        is_heading = True
+                        # 更严格的判断：只有纯数字编号格式（如"3.2.4"、"3.2"等）才认为是标题
+                        # 如果包含其他文字内容，则不是标题
+                        if re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text):
+                            is_heading = True
                 # 如果没有应用规则名称，使用备用判断逻辑
                 if not is_heading:
                     is_heading = (
                         (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
                         (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50) or
-                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30) or
+                        # 更严格的判断：只有纯数字编号格式才认为是标题
+                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) < 30 and 
+                         re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text)) or
                         (paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"))
                     )
                 
