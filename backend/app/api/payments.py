@@ -97,8 +97,8 @@ async def debug_payment_config() -> dict:
         "vercel_env": os.getenv("VERCEL_ENV", "未设置"),
     }
     
-    # 检查支付方式（与 PaymentService 逻辑一致）
-    payment_methods = ["mock"]
+    # 检查支付方式（与 PaymentService 逻辑一致，已移除模拟支付）
+    payment_methods = []
     if os.getenv("PAYJS_MCHID") and os.getenv("PAYJS_KEY"):
         payment_methods.append("payjs")
     if os.getenv("WECHAT_MCH_ID") and os.getenv("WECHAT_API_KEY"):

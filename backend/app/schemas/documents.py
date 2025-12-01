@@ -16,6 +16,7 @@ class DocumentDetailResponse(BaseModel):
     template_id: str = Field(..., description="模板 ID")
     status: str = Field(..., description="处理状态")
     paid: bool = Field(..., description="是否已付费")
+    download_token: Optional[str] = Field(None, description="下载验证 token（仅已支付时返回）")
     summary: Dict[str, Any] = Field(default_factory=dict, description="修复摘要")
     report_path: str = Field(..., description="修复报告路径")
     preview_path: str = Field(..., description="预览版文档路径")

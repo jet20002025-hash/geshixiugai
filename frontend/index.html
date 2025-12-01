@@ -584,6 +584,40 @@
         templateSelect.innerHTML = '<option value="">请先上传模板</option>';
       });
       loadUniversityTemplates();
+      
+      // 检测支付宝支付成功回调
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const outTradeNo = urlParams.get("out_trade_no");
+        const tradeStatus = urlParams.get("trade_status");
+        
+        // 如果URL中包含支付宝回调参数，说明是从支付宝跳转回来的
+        if (outTradeNo) {
+          console.log("检测到支付宝支付回调，订单号:", outTradeNo, "支付状态:", tradeStatus);
+          
+          // 设置latestDocumentId，以便后续刷新状态
+          latestDocumentId = outTradeNo;
+          
+          // 延迟一下，确保页面元素已加载
+          setTimeout(async () => {
+            try {
+              // 刷新文档状态
+              await refreshDocumentStatus();
+              
+              // 显示成功提示
+              if (resultStatus) {
+                showMessage(resultStatus, "支付成功！可以下载正式版文档了。", false);
+              }
+              
+              // 清理URL参数，避免刷新时重复检测
+              const cleanUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, cleanUrl);
+            } catch (error) {
+              console.error("刷新支付状态失败:", error);
+            }
+          }, 500);
+        }
+      })();
 
       // 文件大小限制：20 MB（支持毕业论文等大文件）
       const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -906,23 +940,28 @@
             payButton.style.display = "none";
             paidNotice.style.display = "block";
             
-            // 从 localStorage 获取下载 token
-            const downloadToken = localStorage.getItem(`download_token_${data.document_id}`);
+            // 从 metadata 中获取下载 token（支付成功后，token 在 metadata 中）
+            const downloadToken = data.download_token || localStorage.getItem(`download_token_${data.document_id}`);
             
             if (downloadToken) {
+              // 保存到 localStorage（方便后续使用）
+              localStorage.setItem(`download_token_${data.document_id}`, downloadToken);
+              
               // 显示下载链接（带 token 验证）
               const finalLink = document.createElement("a");
               finalLink.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
               finalLink.textContent = "下载正式版（已付费）";
               finalLink.target = "_blank";
               finalLink.className = "download-btn";
-              finalLink.style.marginLeft = "10px";
+              finalLink.style.cssText = "margin-left: 10px; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;";
               previewLinks.appendChild(finalLink);
             } else {
-              // 如果没有 token，提示用户重新支付或刷新页面
+              // 如果没有 token，尝试从 API 获取
+              console.warn("下载 token 未找到，尝试从 API 获取");
+              // 刷新页面会自动从 API 获取
               const noTokenMsg = document.createElement("p");
-              noTokenMsg.textContent = "⚠️ 下载 token 未找到，请刷新页面或重新支付";
-              noTokenMsg.style.color = "#f44336";
+              noTokenMsg.textContent = "⚠️ 正在加载下载链接，请稍候...";
+              noTokenMsg.style.color = "#666";
               noTokenMsg.style.marginLeft = "10px";
               previewLinks.appendChild(noTokenMsg);
             }
@@ -996,12 +1035,23 @@
           
           // 显示支付方式
           paymentMethods.innerHTML = "";
-          let selectedMethod = paymentData.payment_methods[0] || "mock";
+          let selectedMethod = paymentData.payment_methods[0] || null;
           
-          // 确保支付方式列表不为空
+          // 检查支付方式列表是否为空
           if (!paymentData.payment_methods || paymentData.payment_methods.length === 0) {
-            console.warn("支付方式列表为空，使用默认值");
-            paymentData.payment_methods = ["mock"];
+            console.warn("支付方式列表为空");
+            paymentMethods.innerHTML = "";
+            const noMethodDiv = document.createElement("div");
+            noMethodDiv.style.padding = "15px";
+            noMethodDiv.style.backgroundColor = "#fff3cd";
+            noMethodDiv.style.border = "2px solid #ffc107";
+            noMethodDiv.style.borderRadius = "5px";
+            noMethodDiv.style.color = "#856404";
+            noMethodDiv.textContent = "⚠️ 未配置任何支付方式，请联系管理员";
+            paymentMethods.appendChild(noMethodDiv);
+            paymentInfo.style.display = "block";
+            payButton.style.display = "none";
+            return;
           }
           
           console.log("开始渲染支付方式，数量:", paymentData.payment_methods.length);
@@ -1034,7 +1084,6 @@
             }
             
              const methodName = {
-               "mock": "模拟支付（测试）",
                "payjs": "PayJS 支付（支付宝/微信）",
                "alipay": "支付宝",
                "wechat": "微信支付",
@@ -1113,32 +1162,16 @@
         // 显示默认价格
         paymentAmount.textContent = "¥9.90";
         
-        // 显示默认支付方式（模拟支付）
-        paymentMethods.innerHTML = "";
-        const methodDiv = document.createElement("div");
-        methodDiv.style.marginBottom = "10px";
-        
-        const label = document.createElement("label");
-        label.style.display = "flex";
-        label.style.alignItems = "center";
-        label.style.cursor = "pointer";
-        label.style.padding = "10px";
-        label.style.border = "2px solid #4CAF50";
-        label.style.borderRadius = "5px";
-        label.style.backgroundColor = "#f1f8f4";
-        
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.id = "paymentMethod_mock_default";
-        radio.name = "paymentMethod";
-        radio.value = "mock";
-        radio.checked = true;
-        radio.style.marginRight = "10px";
-        
-        label.appendChild(radio);
-        label.appendChild(document.createTextNode("模拟支付（测试）"));
-        methodDiv.appendChild(label);
-        paymentMethods.appendChild(methodDiv);
+          // 如果没有支付方式，显示提示
+          paymentMethods.innerHTML = "";
+          const noMethodDiv = document.createElement("div");
+          noMethodDiv.style.padding = "15px";
+          noMethodDiv.style.backgroundColor = "#fff3cd";
+          noMethodDiv.style.border = "2px solid #ffc107";
+          noMethodDiv.style.borderRadius = "5px";
+          noMethodDiv.style.color = "#856404";
+          noMethodDiv.textContent = "⚠️ 未配置任何支付方式，请联系管理员";
+          paymentMethods.appendChild(noMethodDiv);
         
         // 显示支付界面
         paymentInfo.style.display = "block";
@@ -1200,33 +1233,7 @@
         try {
           showMessage(resultStatus, "处理支付中...", false);
           
-          if (paymentMethod === "mock") {
-            // 模拟支付
-            const response = await fetch("/payments/mock", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                document_id: documentId,
-                payment_method: paymentMethod
-              }),
-            });
-            
-            if (!response.ok) {
-              const detail = await response.json();
-              throw new Error(detail.detail || "支付失败");
-            }
-            
-            const paymentResult = await response.json();
-            
-            // 保存下载 token 到 localStorage，用于后续下载验证
-            if (paymentResult.download_token) {
-              localStorage.setItem(`download_token_${documentId}`, paymentResult.download_token);
-              console.log("已保存下载 token:", paymentResult.download_token);
-            }
-            
-            showMessage(resultStatus, "支付成功，正式版已解锁！", false);
-            await refreshDocumentStatus();
-          } else if (paymentMethod === "payjs") {
+          if (paymentMethod === "payjs") {
             // PayJS 支付
             const response = await fetch("/payments/payjs/create", {
               method: "POST",

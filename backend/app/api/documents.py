@@ -44,12 +44,35 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB（代码限制，但受 Vercel 限制�
     response_model=DocumentCreateResponse,
     summary="上传待修复文档",
 )
-async def upload_document(request: Request, template_id: str, file: UploadFile) -> DocumentCreateResponse:
+async def upload_document(
+    request: Request, 
+    file: UploadFile,
+    template_id: str = None,
+    university_id: str = None
+) -> DocumentCreateResponse:
     """
-    上传待修复文档，只能使用自己上传的模板
+    上传待修复文档
+    
+    支持两种方式：
+    1. 使用预设大学模板：提供 university_id（如 "tsinghua", "pku"）
+    2. 使用自定义模板：提供 template_id（用户上传的模板）
+    
+    注意：template_id 和 university_id 必须二选一，不能同时提供
     
     注意：文件大小限制为 20 MB
     """
+    # 验证参数
+    if not template_id and not university_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="必须提供 template_id 或 university_id 之一"
+        )
+    if template_id and university_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能同时提供 template_id 和 university_id"
+        )
+    
     # 检查文件大小
     if file.size and file.size > VERCEL_LIMIT:
         file_size_mb = file.size / (1024 * 1024)
@@ -69,29 +92,36 @@ async def upload_document(request: Request, template_id: str, file: UploadFile) 
                 detail=f"文件太大（{file_size_mb:.2f} MB），超过 Vercel 限制（4.5 MB）。请压缩文档中的图片（Word → 图片格式 → 压缩图片 → 压缩文档中的所有图片）或配置对象存储后再上传。"
             )
     
-    # 获取用户 session_id
-    session_id = get_or_create_session_id(request)
-    
-    # 验证模板是否属于当前用户
-    template_service = TemplateService(base_dir=TEMPLATE_DIR)
-    if not template_service.is_template_owner(template_id, session_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权使用此模板，只能使用自己上传的模板"
-        )
+    # 如果使用自定义模板，验证模板是否属于当前用户
+    if template_id:
+        session_id = get_or_create_session_id(request)
+        template_service = TemplateService(base_dir=TEMPLATE_DIR)
+        if not template_service.is_template_owner(template_id, session_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权使用此模板，只能使用自己上传的模板"
+            )
     
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     try:
-        doc_id, report = await service.process_document(template_id=template_id, upload=file)
-    except FileNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+        doc_id, report = await service.process_document(
+            template_id=template_id,
+            university_id=university_id,
+            upload=file
+        )
+    except FileNotFoundError as e:
+        error_msg = str(e)
+        if "university" in error_msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     metadata = service.get_document_metadata(doc_id)
     return DocumentCreateResponse(
         document_id=doc_id,
-        template_id=template_id,
+        template_id=template_id or f"university_{university_id}",
         status=metadata["status"],
         summary=report,
     )
@@ -108,7 +138,12 @@ async def document_detail(document_id: str) -> DocumentDetailResponse:
     if not metadata:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
 
-    return DocumentDetailResponse(**metadata)
+    # 只在已支付时返回 download_token
+    response_data = metadata.copy()
+    if not metadata.get("paid"):
+        response_data["download_token"] = None
+    
+    return DocumentDetailResponse(**response_data)
 
 
 @router.get(

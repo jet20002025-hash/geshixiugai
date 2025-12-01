@@ -7,7 +7,7 @@ from .document_service import DocumentService
 
 class PaymentService:
     # 默认价格（元）- 可以通过环境变量覆盖
-    DEFAULT_PRICE = 9.9
+    DEFAULT_PRICE = 0.99
     
     def __init__(self, document_dir: Path, template_dir: Path) -> None:
         self.document_dir = document_dir
@@ -61,8 +61,8 @@ class PaymentService:
                 "paid": True,
             }
         
-        # 可用的支付方式
-        payment_methods = ["mock"]  # 默认只有模拟支付
+        # 可用的支付方式（已移除模拟支付）
+        payment_methods = []
         
         # 检查环境变量（添加调试日志）
         wechat_mch_id = os.getenv("WECHAT_MCH_ID", "")
@@ -84,6 +84,10 @@ class PaymentService:
             payment_methods.append("alipay")
         if os.getenv("STRIPE_SECRET_KEY"):
             payment_methods.append("stripe")
+        
+        # 如果没有配置任何支付方式，返回错误提示
+        if not payment_methods:
+            print(f"[PaymentService] 警告：未配置任何支付方式")
         
         print(f"[PaymentService] 最终支付方式列表: {payment_methods}")
         
