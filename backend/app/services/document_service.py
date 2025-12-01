@@ -29,6 +29,7 @@ from .thesis_format_standard import (
     PAGE_SETTINGS,
     HEADER_SETTINGS,
     PAGE_NUMBER_FORMAT,
+    REFERENCE_REQUIREMENTS,
 )
 
 
@@ -41,11 +42,26 @@ class DocumentService:
         self.storage = get_storage()
         self.use_storage = self.storage is not None
 
-    async def process_document(self, template_id: str, upload: UploadFile) -> Tuple[str, Dict]:
-        if not upload.filename or not upload.filename.lower().endswith(".docx"):
+    async def process_document(
+        self, 
+        template_id: Optional[str] = None, 
+        university_id: Optional[str] = None,
+        upload: Optional[UploadFile] = None
+    ) -> Tuple[str, Dict]:
+        if not upload or not upload.filename or not upload.filename.lower().endswith(".docx"):
             raise ValueError("仅支持 docx 文档")
-
-        template_metadata = self._load_template(template_id)
+        
+        # 验证参数：template_id 和 university_id 必须二选一
+        if not template_id and not university_id:
+            raise ValueError("必须提供 template_id 或 university_id 之一")
+        if template_id and university_id:
+            raise ValueError("不能同时提供 template_id 和 university_id")
+        
+        # 加载模板元数据
+        if university_id:
+            template_metadata = self._load_university_template(university_id)
+        else:
+            template_metadata = self._load_template(template_id)
         document_id = uuid.uuid4().hex
         # 生成唯一的下载 token，用于验证用户身份
         download_token = uuid.uuid4().hex
@@ -65,7 +81,15 @@ class DocumentService:
         # 不再自动应用页眉，只检测是否存在
         
         # 合并模板规则和标准规则（标准优先）
-        template_rules = template_metadata.get("styles", {})
+        # 如果是预设模板，使用 parameters；如果是自定义模板，使用 styles
+        if template_metadata.get("university_id"):
+            # 预设模板：从 parameters 中提取格式规则
+            university_params = template_metadata.get("parameters", {})
+            template_rules = self._convert_university_params_to_rules(university_params)
+        else:
+            # 自定义模板：使用 styles
+            template_rules = template_metadata.get("styles", {})
+        
         merged_rules = self._merge_rules_with_standard(template_rules)
         
         final_doc, stats = self._apply_rules(
@@ -185,10 +209,35 @@ class DocumentService:
         return data
 
     def _load_template(self, template_id: str) -> Dict:
+        """加载用户上传的自定义模板"""
         metadata_path = self.template_dir / template_id / "metadata.json"
         if not metadata_path.exists():
             raise FileNotFoundError("template not found")
         return json.loads(metadata_path.read_text(encoding="utf-8"))
+    
+    def _load_university_template(self, university_id: str) -> Dict:
+        """加载预设大学模板"""
+        from .university_template_service import UniversityTemplateService
+        
+        service = UniversityTemplateService()
+        template = service.get_university_template(university_id)
+        if not template:
+            raise FileNotFoundError(f"未找到大学模板: {university_id}")
+        
+        # 将预设模板转换为与自定义模板相同的格式
+        parameters = template.get("parameters", {})
+        
+        # 构建模板元数据格式
+        metadata = {
+            "template_id": f"university_{university_id}",
+            "name": template.get("display_name", template.get("name")),
+            "university_id": university_id,
+            "styles": {},  # 预设模板不使用 styles，而是使用 parameters
+            "parameters": parameters,  # 预设模板的参数
+            "default_style": "body_text",
+        }
+        
+        return metadata
 
     def _paragraph_has_image_or_equation(self, paragraph) -> bool:
         """判断段落是否包含图片或公式"""
@@ -375,6 +424,40 @@ class DocumentService:
             })
         
         return issues
+    
+    def _convert_university_params_to_rules(self, university_params: Dict) -> Dict[str, Dict]:
+        """
+        将预设大学模板的参数转换为格式规则
+        
+        Args:
+            university_params: 大学模板参数字典，包含 body_text, page_settings 等
+            
+        Returns:
+            格式规则字典，格式与 FONT_STANDARDS 相同
+        """
+        rules = {}
+        
+        # 复制标准规则作为基础
+        for style_name, style_config in FONT_STANDARDS.items():
+            rules[style_name] = style_config.copy()
+        
+        # 应用预设模板的参数覆盖
+        # 主要覆盖 body_text 的行距等参数
+        if "body_text" in university_params:
+            body_params = university_params["body_text"]
+            if "body_text" in rules:
+                # 覆盖 body_text 的参数
+                for key, value in body_params.items():
+                    rules["body_text"][key] = value
+        
+        # 如果预设模板有其他样式参数，也可以覆盖
+        for style_name, style_params in university_params.items():
+            if style_name != "body_text" and style_name != "page_settings":
+                if style_name in rules:
+                    for key, value in style_params.items():
+                        rules[style_name][key] = value
+        
+        return rules
     
     def _merge_rules_with_standard(self, template_rules: Dict[str, Dict]) -> Dict[str, Dict]:
         """
@@ -1417,6 +1500,19 @@ class DocumentService:
                 "suggestion": "请确保参考文献部分包含编号的参考文献条目"
             })
             return issues
+        
+        # 2.5. 检查参考文献数量是否满足要求（至少10篇）
+        reference_count = len(reference_items)
+        min_required = REFERENCE_REQUIREMENTS.get("min_total", 10)
+        if reference_count < min_required:
+            issues.append({
+                "type": "insufficient_references",
+                "message": f"参考文献数量不足：当前 {reference_count} 篇，至少需要 {min_required} 篇",
+                "suggestion": f"请添加更多参考文献，至少需要 {min_required} 篇",
+                "current_count": reference_count,
+                "required_count": min_required,
+                "missing_count": min_required - reference_count
+            })
         
         # 3. 检查正文中是否有引用标注，并找出被引用的参考文献编号
         # 正文部分：从封面结束到参考文献部分之前

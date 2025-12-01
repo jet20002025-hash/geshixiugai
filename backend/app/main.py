@@ -1,11 +1,20 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .routers import template_router, document_router, payment_router
+
+# 加载 .env 文件（如果存在）
+env_path = Path(__file__).parent.parent.parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # 也尝试从当前目录加载
+    load_dotenv()
 
 
 def create_app() -> FastAPI:

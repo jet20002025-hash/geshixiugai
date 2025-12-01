@@ -1,0 +1,24 @@
+# Systemd 服务文件模板
+# 位置：/etc/systemd/system/geshixiugai.service
+# 使用方法：复制到服务器并启用
+
+[Unit]
+Description=Geshixiugai API Service
+After=network.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/geshixiugai
+Environment="PATH=/var/www/geshixiugai/venv/bin"
+EnvironmentFile=/var/www/geshixiugai/.env
+ExecStart=/var/www/geshixiugai/venv/bin/gunicorn -c gunicorn_config.py backend.app.main:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+
+

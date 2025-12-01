@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, UploadFile, sta
 
 from ..schemas.templates import TemplateCreateResponse, TemplateDetailResponse
 from ..services.template_service import TemplateService
+from ..services.university_template_service import UniversityTemplateService
 from ..utils.session_utils import get_or_create_session_id, set_session_cookie
 
 router = APIRouter()
@@ -119,4 +120,25 @@ async def get_template(request: Request, template_id: str) -> TemplateDetailResp
         default_style=metadata.get("default_style"),
         created_at=metadata.get("created_at"),
     )
+
+
+@router.get(
+    "/presets",
+    summary="获取预设大学模板列表",
+)
+async def list_university_templates() -> list[dict]:
+    """
+    获取所有预设大学模板列表
+    返回格式：[
+        {
+            "id": "tsinghua",
+            "name": "清华大学",
+            "display_name": "清华大学",
+            "description": "清华大学毕业论文格式规范"
+        },
+        ...
+    ]
+    """
+    service = UniversityTemplateService()
+    return service.get_all_universities()
 
