@@ -355,10 +355,28 @@
         <h2>2. 上传您的文档</h2>
       </div>
       <form id="documentForm">
-        <label for="templateSelect">选择模板</label>
-        <select id="templateSelect" required>
-          <option value="">请先上传模板</option>
+        <label for="templateType">模板类型</label>
+        <select id="templateType" required>
+          <option value="preset">使用预设模板（选择大学）</option>
+          <option value="custom">使用自定义模板</option>
         </select>
+        
+        <!-- 预设模板：大学选择 -->
+        <div id="presetTemplateSection">
+          <label for="universitySelect">选择您的大学</label>
+          <select id="universitySelect">
+            <option value="">加载中...</option>
+          </select>
+        </div>
+        
+        <!-- 自定义模板：模板选择 -->
+        <div id="customTemplateSection" style="display: none;">
+          <label for="templateSelect">选择模板</label>
+          <select id="templateSelect">
+            <option value="">请先上传模板</option>
+          </select>
+        </div>
+        
         <label for="documentFile">选择您的文档（.docx）</label>
         <input id="documentFile" type="file" accept=".docx" required />
         <button type="submit">上传并自动修复</button>
@@ -424,12 +442,23 @@
       </p>
     </section>
 
+    <!-- 备案号 -->
+    <footer style="text-align: center; padding: 20px; color: #666; font-size: 12px; border-top: 1px solid #eee; margin-top: 40px;">
+      <p style="margin: 0;">
+        备案号：<a href="https://beian.miit.gov.cn/" target="_blank" style="color: #666; text-decoration: none;">浙ICP备2025213303号</a>
+      </p>
+    </footer>
+
     <script>
       const templateForm = document.getElementById("templateForm");
       const documentForm = document.getElementById("documentForm");
       const templateStatus = document.getElementById("templateStatus");
       const documentStatus = document.getElementById("documentStatus");
       const resultStatus = document.getElementById("resultStatus");
+      const templateType = document.getElementById("templateType");
+      const presetTemplateSection = document.getElementById("presetTemplateSection");
+      const customTemplateSection = document.getElementById("customTemplateSection");
+      const universitySelect = document.getElementById("universitySelect");
       const templateSelect = document.getElementById("templateSelect");
       const resultCard = document.getElementById("result");
       const docIdSpan = document.getElementById("docId");
@@ -505,12 +534,56 @@
         }
       }
 
-      // 页面加载时获取用户模板列表（添加错误处理，确保不会影响页面显示）
+      // 加载预设大学模板列表
+      async function loadUniversityTemplates() {
+        try {
+          const response = await fetch("/templates/presets");
+          if (!response.ok) {
+            console.warn("加载大学模板列表失败:", response.status);
+            universitySelect.innerHTML = '<option value="">加载失败</option>';
+            return;
+          }
+          
+          const universities = await response.json();
+          universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
+          
+          universities.forEach(uni => {
+            const option = document.createElement("option");
+            option.value = uni.id;
+            option.textContent = uni.display_name || uni.name;
+            if (uni.description) {
+              option.title = uni.description;
+            }
+            universitySelect.appendChild(option);
+          });
+        } catch (error) {
+          console.warn("加载大学模板列表失败:", error.message || error);
+          universitySelect.innerHTML = '<option value="">加载失败</option>';
+        }
+      }
+
+      // 模板类型切换
+      templateType.addEventListener("change", function() {
+        const type = templateType.value;
+        if (type === "preset") {
+          presetTemplateSection.style.display = "block";
+          customTemplateSection.style.display = "none";
+          universitySelect.required = true;
+          templateSelect.required = false;
+        } else {
+          presetTemplateSection.style.display = "none";
+          customTemplateSection.style.display = "block";
+          universitySelect.required = false;
+          templateSelect.required = true;
+        }
+      });
+
+      // 页面加载时获取用户模板列表和大学模板列表
       loadUserTemplates().catch(function(error) {
-        // 静默处理，不显示错误，确保不影响页面显示
         console.warn("模板列表加载失败（不影响使用）:", error.message || error);
         templateSelect.innerHTML = '<option value="">请先上传模板</option>';
       });
+      loadUniversityTemplates();
 
       // 文件大小限制：20 MB（支持毕业论文等大文件）
       const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -580,13 +653,24 @@
 
       documentForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const templateTypeValue = templateType.value;
         const templateId = templateSelect.value;
+        const universityId = universitySelect.value;
         const file = document.getElementById("documentFile").files[0];
 
-        if (!templateId) {
-          showMessage(documentStatus, "请先选择模板", true);
-          return;
+        // 验证模板选择
+        if (templateTypeValue === "preset") {
+          if (!universityId) {
+            showMessage(documentStatus, "请先选择您的大学", true);
+            return;
+          }
+        } else {
+          if (!templateId) {
+            showMessage(documentStatus, "请先选择模板", true);
+            return;
+          }
         }
+        
         if (!file) {
           showMessage(documentStatus, "请选择您的文档", true);
           return;
@@ -601,10 +685,18 @@
 
         const formData = new FormData();
         formData.append("file", file);
+        
+        // 根据模板类型添加相应参数
+        let url = "/documents";
+        if (templateTypeValue === "preset") {
+          url += `?university_id=${encodeURIComponent(universityId)}`;
+        } else {
+          url += `?template_id=${encodeURIComponent(templateId)}`;
+        }
 
         try {
           showMessage(documentStatus, "处理中，请稍候...", false);
-          const response = await fetch(`/documents?template_id=${templateId}`, {
+          const response = await fetch(url, {
             method: "POST",
             body: formData,
           });
@@ -748,6 +840,12 @@
                   }
                   html += '</ul>';
                 }
+              } else if (issue.type === "insufficient_references") {
+                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
+                if (issue.current_count !== undefined && issue.required_count !== undefined) {
+                  html += `<p style="color: #666; margin-top: 5px;">当前有 <strong style="color: #c62828;">${issue.current_count}</strong> 篇参考文献，需要至少 <strong style="color: #c62828;">${issue.required_count}</strong> 篇，还缺少 <strong style="color: #c62828;">${issue.missing_count}</strong> 篇。</p>`;
+                }
+                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
               } else if (issue.type === "missing_citations") {
                 html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
                 if (issue.reference_count) {
