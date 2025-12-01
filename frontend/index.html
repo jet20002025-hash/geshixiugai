@@ -935,36 +935,43 @@
 
           // 处理已支付状态
           if (data.paid) {
+            console.log("文档已支付，准备显示下载按钮", { document_id: data.document_id, download_token: data.download_token });
+            
             // 隐藏所有支付相关元素
             paymentInfo.style.display = "none";
             payButton.style.display = "none";
             paidNotice.style.display = "block";
             
             // 从 metadata 中获取下载 token（支付成功后，token 在 metadata 中）
-            const downloadToken = data.download_token || localStorage.getItem(`download_token_${data.document_id}`);
+            let downloadToken = data.download_token || localStorage.getItem(`download_token_${data.document_id}`);
             
-            if (downloadToken) {
-              // 保存到 localStorage（方便后续使用）
-              localStorage.setItem(`download_token_${data.document_id}`, downloadToken);
-              
-              // 显示下载链接（带 token 验证）
-              const finalLink = document.createElement("a");
-              finalLink.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
-              finalLink.textContent = "下载正式版（已付费）";
-              finalLink.target = "_blank";
-              finalLink.className = "download-btn";
-              finalLink.style.cssText = "margin-left: 10px; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;";
-              previewLinks.appendChild(finalLink);
-            } else {
-              // 如果没有 token，尝试从 API 获取
-              console.warn("下载 token 未找到，尝试从 API 获取");
-              // 刷新页面会自动从 API 获取
-              const noTokenMsg = document.createElement("p");
-              noTokenMsg.textContent = "⚠️ 正在加载下载链接，请稍候...";
-              noTokenMsg.style.color = "#666";
-              noTokenMsg.style.marginLeft = "10px";
-              previewLinks.appendChild(noTokenMsg);
+            // 如果没有 token，尝试从 metadata 中获取（可能 API 返回的字段名不同）
+            if (!downloadToken && data.download_token === undefined) {
+              console.warn("API 未返回 download_token，尝试从完整 metadata 获取");
+              // 如果 API 返回的是完整 metadata，可能 token 在其他字段
+              // 这里我们直接显示下载按钮，后端会验证支付状态
             }
+            
+            // 显示下载链接
+            const finalLink = document.createElement("a");
+            if (downloadToken) {
+              // 有 token，使用 token 下载
+              finalLink.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
+              localStorage.setItem(`download_token_${data.document_id}`, downloadToken);
+            } else {
+              // 没有 token，使用文档ID作为临时token（后端会验证支付状态）
+              // 后端已修改，允许已支付但无token的情况
+              finalLink.href = `/documents/${data.document_id}/download?token=${data.document_id}`;
+              console.warn("下载 token 未找到，使用文档ID作为临时token");
+            }
+            
+            finalLink.textContent = "下载正式版（已付费）";
+            finalLink.target = "_blank";
+            finalLink.className = "download-btn";
+            finalLink.style.cssText = "margin-left: 10px; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; cursor: pointer;";
+            previewLinks.appendChild(finalLink);
+            
+            console.log("下载按钮已添加", { href: finalLink.href, hasToken: !!downloadToken });
           } else {
             // 未支付，确保支付信息显示
             paidNotice.style.display = "none";

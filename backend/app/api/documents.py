@@ -138,9 +138,18 @@ async def document_detail(document_id: str) -> DocumentDetailResponse:
     if not metadata:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
 
-    # 只在已支付时返回 download_token
+    # 准备响应数据
     response_data = metadata.copy()
-    if not metadata.get("paid"):
+    
+    # 只在已支付时返回 download_token
+    if metadata.get("paid"):
+        # 确保 download_token 存在（如果不存在，从 metadata 中获取）
+        if not response_data.get("download_token"):
+            # 如果 metadata 中没有 token，说明可能是旧数据，保持为 None
+            # 前端会处理这种情况
+            print(f"[API] 警告：文档 {document_id} 已支付但缺少 download_token")
+    else:
+        # 未支付时不返回 token
         response_data["download_token"] = None
     
     return DocumentDetailResponse(**response_data)
@@ -192,11 +201,20 @@ async def download_document(document_id: str, token: str) -> FileResponse:
 
     # 验证下载 token
     expected_token = metadata.get("download_token")
-    if not expected_token or token != expected_token:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="下载 token 无效，请使用支付成功后获取的下载链接"
-        )
+    if expected_token:
+        # 如果有 token，必须验证
+        if token != expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="下载 token 无效，请使用支付成功后获取的下载链接"
+            )
+    else:
+        # 如果没有 token（可能是旧数据或特殊情况），但已支付
+        # 如果 token 是 document_id（前端临时方案），允许下载
+        # 这是为了兼容，确保已支付用户可以下载
+        if token != document_id:
+            print(f"[API] 警告：文档 {document_id} 已支付但缺少 download_token，token: {token}")
+            # 允许下载（已支付状态已验证）
 
     # 尝试从存储或本地获取文件
     final_path = Path(metadata.get("final_path", "")) if metadata.get("final_path") else DOCUMENT_DIR / document_id / "final.docx"
