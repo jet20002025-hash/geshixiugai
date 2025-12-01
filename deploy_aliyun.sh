@@ -177,8 +177,21 @@ else
 fi
 
 echo -e "${GREEN}📋 步骤 10: 配置 Nginx${NC}"
-if [ ! -f "/etc/nginx/sites-available/geshixiugai" ]; then
-    cat > /etc/nginx/sites-available/geshixiugai << 'EOF'
+
+# 根据系统类型设置 Nginx 配置目录
+if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+    NGINX_CONF_DIR="/etc/nginx/sites-available"
+    NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
+    NGINX_CONF_FILE="$NGINX_CONF_DIR/geshixiugai"
+else
+    # CentOS/RHEL/Alinux 使用 conf.d 目录
+    NGINX_CONF_DIR="/etc/nginx/conf.d"
+    NGINX_ENABLED_DIR=""
+    NGINX_CONF_FILE="$NGINX_CONF_DIR/geshixiugai.conf"
+fi
+
+if [ ! -f "$NGINX_CONF_FILE" ]; then
+    cat > "$NGINX_CONF_FILE" << 'EOF'
 server {
     listen 80;
     server_name geshixiugai.cn www.geshixiugai.cn;
@@ -209,15 +222,17 @@ server {
     }
 }
 EOF
-    echo "Nginx 配置文件已创建"
+    echo "Nginx 配置文件已创建: $NGINX_CONF_FILE"
 else
     echo "Nginx 配置文件已存在"
 fi
 
-# 启用站点
-if [ ! -L "/etc/nginx/sites-enabled/geshixiugai" ]; then
-    ln -s /etc/nginx/sites-available/geshixiugai /etc/nginx/sites-enabled/
-    echo "Nginx 站点已启用"
+# 启用站点（仅 Ubuntu/Debian 需要）
+if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+    if [ ! -L "/etc/nginx/sites-enabled/geshixiugai" ]; then
+        ln -s /etc/nginx/sites-available/geshixiugai /etc/nginx/sites-enabled/
+        echo "Nginx 站点已启用"
+    fi
 fi
 
 # 测试 Nginx 配置
