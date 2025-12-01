@@ -23,24 +23,89 @@ fi
 PROJECT_DIR="/var/www/geshixiugai"
 LOG_DIR="/var/log/geshixiugai"
 
+# 检测系统类型
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    echo -e "${RED}❌ 无法检测系统类型${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}📋 检测到系统类型: $OS${NC}"
+
+# 根据系统类型设置包管理器
+if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+    PKG_MANAGER="apt"
+    PKG_INSTALL="apt install -y"
+    PKG_UPDATE="apt update"
+    PKG_UPGRADE="apt upgrade -y"
+    BUILD_ESSENTIAL="build-essential"
+    PYTHON_DEV="python3.12-dev"
+    NGINX_USER="www-data"
+elif [[ "$OS" == "centos" ]] || [[ "$OS" == "rhel" ]] || [[ "$OS" == "rocky" ]] || [[ "$OS" == "almalinux" ]]; then
+    if command -v dnf &> /dev/null; then
+        PKG_MANAGER="dnf"
+        PKG_INSTALL="dnf install -y"
+        PKG_UPDATE="dnf update -y"
+        PKG_UPGRADE="dnf upgrade -y"
+    else
+        PKG_MANAGER="yum"
+        PKG_INSTALL="yum install -y"
+        PKG_UPDATE="yum update -y"
+        PKG_UPGRADE="yum upgrade -y"
+    fi
+    BUILD_ESSENTIAL="gcc gcc-c++ make"
+    PYTHON_DEV="python3-devel"
+    NGINX_USER="nginx"
+else
+    echo -e "${RED}❌ 不支持的系统类型: $OS${NC}"
+    exit 1
+fi
+
 echo -e "${GREEN}📋 步骤 1: 更新系统包${NC}"
-apt update && apt upgrade -y
+$PKG_UPDATE && $PKG_UPGRADE
 
 echo -e "${GREEN}📋 步骤 2: 安装基础工具${NC}"
-apt install -y git curl wget vim software-properties-common build-essential libssl-dev libffi-dev
+if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+    $PKG_INSTALL git curl wget vim software-properties-common $BUILD_ESSENTIAL libssl-dev libffi-dev
+else
+    $PKG_INSTALL git curl wget vim $BUILD_ESSENTIAL openssl-devel libffi-devel
+fi
 
 echo -e "${GREEN}📋 步骤 3: 安装 Python 3.12${NC}"
 if ! command -v python3.12 &> /dev/null; then
-    add-apt-repository ppa:deadsnakes/ppa -y
-    apt update
-    apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
+    if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+        add-apt-repository ppa:deadsnakes/ppa -y
+        $PKG_UPDATE
+        $PKG_INSTALL python3.12 python3.12-venv $PYTHON_DEV python3-pip
+    else
+        # CentOS/RHEL 需要从源码编译或使用其他源
+        echo -e "${YELLOW}⚠️  CentOS/RHEL 系统，尝试安装 Python 3.12...${NC}"
+        # 先检查是否有 python3.12
+        if ! $PKG_INSTALL python3.12 python3.12-devel python3-pip 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  系统仓库可能没有 Python 3.12，尝试安装 Python 3.11 或 3.10...${NC}"
+            # 尝试安装 Python 3.11
+            if $PKG_INSTALL python3.11 python3.11-devel python3-pip 2>/dev/null; then
+                echo "已安装 Python 3.11"
+                # 创建 python3.12 的符号链接（如果系统有的话）
+                if command -v python3.11 &> /dev/null; then
+                    ln -sf /usr/bin/python3.11 /usr/bin/python3.12 2>/dev/null || true
+                fi
+            else
+                # 最后尝试安装 python3
+                $PKG_INSTALL python3 python3-devel python3-pip
+                echo "已安装系统默认 Python 3"
+            fi
+        fi
+    fi
 else
     echo "Python 3.12 已安装"
 fi
 
 echo -e "${GREEN}📋 步骤 4: 安装 Nginx${NC}"
 if ! command -v nginx &> /dev/null; then
-    apt install -y nginx
+    $PKG_INSTALL nginx
     systemctl start nginx
     systemctl enable nginx
 else
@@ -50,7 +115,7 @@ fi
 echo -e "${GREEN}📋 步骤 5: 创建项目目录${NC}"
 mkdir -p $PROJECT_DIR
 mkdir -p $LOG_DIR
-chown -R www-data:www-data $LOG_DIR
+chown -R $NGINX_USER:$NGINX_USER $LOG_DIR
 
 echo -e "${GREEN}📋 步骤 6: 检查代码是否已克隆${NC}"
 if [ ! -d "$PROJECT_DIR/.git" ]; then
@@ -102,7 +167,7 @@ SUPABASE_BUCKET=word-formatter-storage
 # ALIPAY_PRIVATE_KEY=你的支付宝私钥
 # ALIPAY_PUBLIC_KEY=支付宝公钥
 EOF
-    chown www-data:www-data $PROJECT_DIR/.env
+    chown $NGINX_USER:$NGINX_USER $PROJECT_DIR/.env
     chmod 600 $PROJECT_DIR/.env
     echo -e "${YELLOW}⚠️  请编辑 .env 文件并填入正确的配置信息${NC}"
     echo "   文件位置: $PROJECT_DIR/.env"
@@ -174,8 +239,8 @@ After=network.target
 
 [Service]
 Type=notify
-User=www-data
-Group=www-data
+User=$NGINX_USER
+Group=$NGINX_USER
 WorkingDirectory=$PROJECT_DIR
 Environment="PATH=$PROJECT_DIR/venv/bin"
 EnvironmentFile=$PROJECT_DIR/.env
@@ -220,7 +285,11 @@ echo "   - 主机记录: @ 和 www"
 echo "   - 记录值: 你的服务器公网 IP"
 echo ""
 echo "2. 配置 SSL 证书："
-echo "   sudo apt install -y certbot python3-certbot-nginx"
+if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
+    echo "   sudo apt install -y certbot python3-certbot-nginx"
+else
+    echo "   sudo $PKG_INSTALL certbot python3-certbot-nginx"
+fi
 echo "   sudo certbot --nginx -d geshixiugai.cn -d www.geshixiugai.cn"
 echo ""
 echo "3. 查看服务状态："
