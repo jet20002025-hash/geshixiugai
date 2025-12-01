@@ -43,7 +43,7 @@ if [[ "$OS" == "ubuntu" ]] || [[ "$OS" == "debian" ]]; then
     BUILD_ESSENTIAL="build-essential"
     PYTHON_DEV="python3.12-dev"
     NGINX_USER="www-data"
-elif [[ "$OS" == "centos" ]] || [[ "$OS" == "rhel" ]] || [[ "$OS" == "rocky" ]] || [[ "$OS" == "almalinux" ]]; then
+elif [[ "$OS" == "centos" ]] || [[ "$OS" == "rhel" ]] || [[ "$OS" == "rocky" ]] || [[ "$OS" == "almalinux" ]] || [[ "$OS" == "alinux" ]]; then
     if command -v dnf &> /dev/null; then
         PKG_MANAGER="dnf"
         PKG_INSTALL="dnf install -y"
