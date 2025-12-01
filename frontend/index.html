@@ -598,11 +598,82 @@
           // 设置latestDocumentId，以便后续刷新状态
           latestDocumentId = outTradeNo;
           
+          // 确保结果卡片显示
+          if (resultCard) {
+            resultCard.style.display = "block";
+          }
+          
           // 延迟一下，确保页面元素已加载
           setTimeout(async () => {
             try {
+              console.log("开始刷新文档状态，documentId:", latestDocumentId);
+              
+              // 确保结果卡片显示
+              if (resultCard) {
+                resultCard.style.display = "block";
+                console.log("结果卡片已显示");
+              }
+              
               // 刷新文档状态
               await refreshDocumentStatus();
+              
+              // 再次确保结果卡片显示
+              if (resultCard) {
+                resultCard.style.display = "block";
+              }
+              
+              // 再次检查并添加下载按钮（双重保险）
+              setTimeout(() => {
+                fetch(`/documents/${latestDocumentId}`)
+                  .then(r => r.json())
+                  .then(data => {
+                    console.log("双重检查：文档状态", { paid: data.paid, document_id: data.document_id });
+                    if (data.paid && previewLinks) {
+                      // 确保结果卡片显示
+                      if (resultCard) {
+                        resultCard.style.display = "block";
+                      }
+                      
+                      // 更新已付费状态显示
+                      if (docPaidSpan) {
+                        docPaidSpan.textContent = "是";
+                        docPaidSpan.style.color = "#4CAF50";
+                        docPaidSpan.style.fontWeight = "bold";
+                      }
+                      
+                      // 隐藏支付相关元素
+                      if (paymentInfo) paymentInfo.style.display = "none";
+                      if (payButton) payButton.style.display = "none";
+                      if (paidNotice) paidNotice.style.display = "block";
+                      
+                      // 更新预览按钮文本
+                      const previewBtn = previewLinks.querySelector('.preview-btn');
+                      if (previewBtn) {
+                        previewBtn.textContent = "查看正式版文档";
+                        const downloadToken = data.download_token || latestDocumentId;
+                        previewBtn.onclick = () => {
+                          window.open(`/documents/${latestDocumentId}/download?token=${encodeURIComponent(downloadToken)}`, '_blank');
+                        };
+                      }
+                      
+                      // 检查并添加下载按钮
+                      const existingBtn = previewLinks.querySelector('.download-btn');
+                      if (!existingBtn) {
+                        console.log("检测到已支付但无下载按钮，强制添加");
+                        const finalLink = document.createElement("a");
+                        const downloadToken = data.download_token || latestDocumentId;
+                        finalLink.href = `/documents/${latestDocumentId}/download?token=${encodeURIComponent(downloadToken)}`;
+                        finalLink.textContent = "⬇️ 下载正式版文档（已付费）";
+                        finalLink.target = "_blank";
+                        finalLink.className = "download-btn";
+                        finalLink.style.cssText = "margin-left: 10px; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);";
+                        previewLinks.appendChild(finalLink);
+                        console.log("强制添加下载按钮完成");
+                      }
+                    }
+                  })
+                  .catch(err => console.error("强制添加下载按钮失败:", err));
+              }, 1000);
               
               // 显示成功提示
               if (resultStatus) {
@@ -612,8 +683,14 @@
               // 清理URL参数，避免刷新时重复检测
               const cleanUrl = window.location.pathname;
               window.history.replaceState({}, document.title, cleanUrl);
+              
+              console.log("支付状态刷新完成");
             } catch (error) {
               console.error("刷新支付状态失败:", error);
+              // 即使出错，也尝试显示结果卡片
+              if (resultCard) {
+                resultCard.style.display = "block";
+              }
             }
           }, 500);
         }
@@ -924,57 +1001,111 @@
 
           previewLinks.innerHTML = "";
           
-          // 预览按钮（仅查看，不可下载）
+          // 预览按钮（根据支付状态显示不同文本）
           const previewBtn = document.createElement("button");
-          previewBtn.textContent = "预览文档（仅查看，不可下载）";
-          previewBtn.className = "preview-btn";
-          previewBtn.onclick = () => {
-            window.open(`/documents/${data.document_id}/preview`, '_blank', 'width=1200,height=800');
-          };
+          if (data.paid) {
+            // 已支付，显示正式版查看按钮
+            previewBtn.textContent = "查看正式版文档";
+            previewBtn.className = "preview-btn";
+            previewBtn.onclick = () => {
+              // 已支付后，预览页面应该显示正式版（不带水印）
+              // 或者直接打开下载链接
+              const downloadToken = data.download_token || data.document_id;
+              window.open(`/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`, '_blank');
+            };
+          } else {
+            // 未支付，显示预览按钮（仅查看，不可下载）
+            previewBtn.textContent = "预览文档（仅查看，不可下载）";
+            previewBtn.className = "preview-btn";
+            previewBtn.onclick = () => {
+              window.open(`/documents/${data.document_id}/preview`, '_blank', 'width=1200,height=800');
+            };
+          }
           previewLinks.appendChild(previewBtn);
 
           // 处理已支付状态
           if (data.paid) {
-            console.log("文档已支付，准备显示下载按钮", { document_id: data.document_id, download_token: data.download_token });
+            console.log("文档已支付，准备显示下载按钮", { 
+              document_id: data.document_id, 
+              download_token: data.download_token,
+              previewLinks: !!previewLinks 
+            });
             
             // 隐藏所有支付相关元素
-            paymentInfo.style.display = "none";
-            payButton.style.display = "none";
-            paidNotice.style.display = "block";
+            if (paymentInfo) paymentInfo.style.display = "none";
+            if (payButton) payButton.style.display = "none";
+            if (paidNotice) paidNotice.style.display = "block";
+            
+            // 更新"已付费"状态显示
+            if (docPaidSpan) {
+              docPaidSpan.textContent = "是";
+              docPaidSpan.style.color = "#4CAF50";
+              docPaidSpan.style.fontWeight = "bold";
+            }
             
             // 从 metadata 中获取下载 token（支付成功后，token 在 metadata 中）
             let downloadToken = data.download_token || localStorage.getItem(`download_token_${data.document_id}`);
             
-            // 如果没有 token，尝试从 metadata 中获取（可能 API 返回的字段名不同）
-            if (!downloadToken && data.download_token === undefined) {
-              console.warn("API 未返回 download_token，尝试从完整 metadata 获取");
-              // 如果 API 返回的是完整 metadata，可能 token 在其他字段
-              // 这里我们直接显示下载按钮，后端会验证支付状态
+            // 确保 previewLinks 元素存在
+            if (!previewLinks) {
+              console.error("previewLinks 元素不存在！");
+              return;
             }
             
-            // 显示下载链接
+            // 检查是否已经添加了下载按钮（避免重复添加）
+            const existingDownloadBtn = previewLinks.querySelector('.download-btn');
+            if (existingDownloadBtn) {
+              console.log("下载按钮已存在，跳过添加");
+              // 更新现有按钮的href（确保token正确）
+              if (downloadToken && downloadToken !== data.document_id) {
+                existingDownloadBtn.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
+              }
+              return;
+            }
+            
+            // 显示下载链接（大按钮，突出显示）
             const finalLink = document.createElement("a");
-            if (downloadToken) {
+            if (downloadToken && downloadToken !== data.document_id) {
               // 有 token，使用 token 下载
               finalLink.href = `/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`;
               localStorage.setItem(`download_token_${data.document_id}`, downloadToken);
             } else {
               // 没有 token，使用文档ID作为临时token（后端会验证支付状态）
-              // 后端已修改，允许已支付但无token的情况
               finalLink.href = `/documents/${data.document_id}/download?token=${data.document_id}`;
               console.warn("下载 token 未找到，使用文档ID作为临时token");
             }
             
-            finalLink.textContent = "下载正式版（已付费）";
+            finalLink.textContent = "⬇️ 下载正式版文档（已付费）";
             finalLink.target = "_blank";
             finalLink.className = "download-btn";
-            finalLink.style.cssText = "margin-left: 10px; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; cursor: pointer;";
+            finalLink.style.cssText = "margin-left: 10px; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3); transition: all 0.3s;";
+            
+            // 添加悬停效果
+            finalLink.onmouseover = function() {
+              this.style.background = "#45a049";
+              this.style.transform = "translateY(-2px)";
+              this.style.boxShadow = "0 6px 12px rgba(76, 175, 80, 0.4)";
+            };
+            finalLink.onmouseout = function() {
+              this.style.background = "#4CAF50";
+              this.style.transform = "translateY(0)";
+              this.style.boxShadow = "0 4px 6px rgba(76, 175, 80, 0.3)";
+            };
+            
             previewLinks.appendChild(finalLink);
             
-            console.log("下载按钮已添加", { href: finalLink.href, hasToken: !!downloadToken });
+            console.log("下载按钮已添加", { 
+              href: finalLink.href, 
+              hasToken: !!downloadToken,
+              previewLinksChildren: previewLinks.children.length
+            });
           } else {
             // 未支付，确保支付信息显示
-            paidNotice.style.display = "none";
+            if (paidNotice) paidNotice.style.display = "none";
+            if (docPaidSpan) {
+              docPaidSpan.textContent = "否";
+              docPaidSpan.style.color = "#666";
+            }
           }
 
           resultCard.style.display = "block";
