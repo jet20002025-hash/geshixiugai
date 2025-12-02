@@ -355,26 +355,17 @@
         <h2>2. 上传您的文档</h2>
       </div>
       <form id="documentForm">
-        <!-- 模板类型选择（根据用户是否有模板动态显示/隐藏） -->
-        <div id="templateTypeSection" style="display: none;">
-          <label for="templateType">模板类型</label>
-          <select id="templateType" required>
-            <option value="preset">使用预设模板（选择大学）</option>
-            <option value="custom">使用自定义模板</option>
-          </select>
-        </div>
-        
-        <!-- 预设模板：大学选择 -->
-        <div id="presetTemplateSection" style="display: none;">
+        <!-- 预设模板：大学选择（默认显示） -->
+        <div id="presetTemplateSection">
           <label for="universitySelect">选择您的大学</label>
-          <select id="universitySelect">
+          <select id="universitySelect" required>
             <option value="">加载中...</option>
           </select>
         </div>
         
-        <!-- 自定义模板：模板选择 -->
+        <!-- 自定义模板：模板选择（仅当用户上传了模板时显示） -->
         <div id="customTemplateSection" style="display: none;">
-          <label for="templateSelect">选择模板</label>
+          <label for="templateSelect">或使用您上传的模板</label>
           <select id="templateSelect">
             <option value="">请先上传模板</option>
           </select>
@@ -591,24 +582,15 @@
         }
       }
 
-      // 模板类型切换
-      templateType.addEventListener("change", function() {
-        const type = templateType.value;
-        if (type === "preset") {
-          presetTemplateSection.style.display = "block";
-          customTemplateSection.style.display = "none";
-          universitySelect.required = true;
-          templateSelect.required = false;
-        } else {
-          presetTemplateSection.style.display = "none";
-          customTemplateSection.style.display = "block";
-          universitySelect.required = false;
-          templateSelect.required = true;
-        }
-      });
-
       // 根据用户是否有模板来决定显示逻辑
       async function initializeTemplateSelection() {
+        // 加载预设模板列表（始终加载，默认显示）
+        await loadUniversityTemplates();
+        
+        // 默认显示预设模板
+        presetTemplateSection.style.display = "block";
+        universitySelect.required = true;
+        
         // 加载用户模板列表
         const userTemplates = await loadUserTemplates().catch(function(error) {
           console.warn("模板列表加载失败（不影响使用）:", error.message || error);
@@ -616,30 +598,14 @@
           return [];
         });
         
-        // 加载预设模板列表
-        await loadUniversityTemplates();
-        
-        // 根据用户是否有模板来决定显示
+        // 如果用户有自定义模板，显示自定义模板选项（作为可选选项）
         if (userTemplates && userTemplates.length > 0) {
-          // 用户有自定义模板：显示模板类型选择，让用户可以选择使用自定义模板或预设模板
-          console.log("用户有自定义模板，显示模板类型选择");
-          templateTypeSection.style.display = "block"; // 显示模板类型选择
-          // 默认显示预设模板，用户可以切换到自定义模板
-          templateType.value = "preset";
-          presetTemplateSection.style.display = "block"; // 显示预设模板
-          customTemplateSection.style.display = "none"; // 隐藏自定义模板
-          universitySelect.required = true;
-          templateSelect.required = false;
+          console.log("用户有自定义模板，显示自定义模板选项");
+          customTemplateSection.style.display = "block";
+          templateSelect.required = false; // 自定义模板是可选的
         } else {
-          // 用户没有自定义模板：只显示预设模板选项
-          console.log("用户没有自定义模板，只显示预设模板选项");
-          templateTypeSection.style.display = "none"; // 隐藏模板类型选择
-          presetTemplateSection.style.display = "block"; // 显示预设模板
-          customTemplateSection.style.display = "none"; // 隐藏自定义模板
-          universitySelect.required = true;
-          templateSelect.required = false;
-          // 设置默认选择为预设模板
-          templateType.value = "preset";
+          console.log("用户没有自定义模板，只显示预设模板");
+          customTemplateSection.style.display = "none";
         }
       }
 
@@ -890,22 +856,14 @@
 
       documentForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const templateTypeValue = templateType.value;
         const templateId = templateSelect.value;
         const universityId = universitySelect.value;
         const file = document.getElementById("documentFile").files[0];
 
-        // 验证模板选择
-        if (templateTypeValue === "preset") {
-          if (!universityId) {
-            showMessage(documentStatus, "请先选择您的大学", true);
-            return;
-          }
-        } else {
-          if (!templateId) {
-            showMessage(documentStatus, "请先选择模板", true);
-            return;
-          }
+        // 验证：必须选择预设模板或自定义模板之一
+        if (!universityId && !templateId) {
+          showMessage(documentStatus, "请先选择您的大学或上传的模板", true);
+          return;
         }
         
         if (!file) {
@@ -923,12 +881,14 @@
         const formData = new FormData();
         formData.append("file", file);
         
-        // 根据模板类型添加相应参数
+        // 优先使用自定义模板，如果未选择则使用预设模板
         let url = "/documents";
-        if (templateTypeValue === "preset") {
-          url += `?university_id=${encodeURIComponent(universityId)}`;
-        } else {
+        if (templateId) {
+          // 用户选择了自定义模板
           url += `?template_id=${encodeURIComponent(templateId)}`;
+        } else {
+          // 使用预设模板
+          url += `?university_id=${encodeURIComponent(universityId)}`;
         }
 
         try {
