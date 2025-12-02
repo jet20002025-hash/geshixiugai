@@ -553,59 +553,67 @@
         }
       }
 
-      // 加载预设大学模板列表
+      // 加载大学模板列表（包含预设模板和用户上传的模板）
       async function loadUniversityTemplates() {
         try {
-          const response = await fetch("/templates/presets");
-          if (!response.ok) {
-            console.warn("加载大学模板列表失败:", response.status);
-            universitySelect.innerHTML = '<option value="">加载失败</option>';
-            return;
+          // 加载预设大学模板
+          const presetResponse = await fetch("/templates/presets");
+          let presetUniversities = [];
+          if (presetResponse.ok) {
+            presetUniversities = await presetResponse.json();
           }
           
-          const universities = await response.json();
+          // 加载用户上传的模板（名称包含"大学"的）
+          const userTemplates = await loadUserTemplates().catch(function(error) {
+            console.warn("加载用户模板列表失败（不影响使用）:", error.message || error);
+            return [];
+          });
+          
+          // 清空下拉框
           universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
           
-          universities.forEach(uni => {
+          // 先添加预设模板
+          presetUniversities.forEach(uni => {
             const option = document.createElement("option");
-            option.value = uni.id;
+            option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
             option.textContent = uni.display_name || uni.name;
             if (uni.description) {
               option.title = uni.description;
             }
             universitySelect.appendChild(option);
           });
+          
+          // 再添加用户上传的模板（名称包含"大学"的）
+          if (userTemplates && userTemplates.length > 0) {
+            userTemplates.forEach(template => {
+              const option = document.createElement("option");
+              option.value = `custom_${template.template_id}`; // 使用 custom_ 前缀区分自定义模板
+              // 提取模板名称（去掉 .docx 扩展名）
+              let displayName = template.name || "未命名模板";
+              if (displayName.toLowerCase().endsWith(".docx")) {
+                displayName = displayName.slice(0, -5);
+              }
+              option.textContent = displayName;
+              universitySelect.appendChild(option);
+            });
+          }
         } catch (error) {
           console.warn("加载大学模板列表失败:", error.message || error);
           universitySelect.innerHTML = '<option value="">加载失败</option>';
         }
       }
 
-      // 根据用户是否有模板来决定显示逻辑
+      // 初始化模板选择（加载所有大学模板到下拉框）
       async function initializeTemplateSelection() {
-        // 加载预设模板列表（始终加载，默认显示）
+        // 加载所有大学模板（预设模板 + 用户上传的模板）
         await loadUniversityTemplates();
         
-        // 默认显示预设模板
+        // 始终显示大学模板选择
         presetTemplateSection.style.display = "block";
         universitySelect.required = true;
         
-        // 加载用户模板列表
-        const userTemplates = await loadUserTemplates().catch(function(error) {
-          console.warn("模板列表加载失败（不影响使用）:", error.message || error);
-          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
-          return [];
-        });
-        
-        // 如果用户有自定义模板，显示自定义模板选项（作为可选选项）
-        if (userTemplates && userTemplates.length > 0) {
-          console.log("用户有自定义模板，显示自定义模板选项");
-          customTemplateSection.style.display = "block";
-          templateSelect.required = false; // 自定义模板是可选的
-        } else {
-          console.log("用户没有自定义模板，只显示预设模板");
-          customTemplateSection.style.display = "none";
-        }
+        // 不再需要单独的自定义模板选择框
+        customTemplateSection.style.display = "none";
       }
 
       // 页面加载时初始化模板选择
