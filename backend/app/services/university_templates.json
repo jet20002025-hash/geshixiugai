@@ -4,7 +4,7 @@
       "id": "hdu",
       "name": "杭州电子科技大学",
       "display_name": "杭州电子科技大学",
-      "description": "杭州电子科技大学毕业论文格式规范（默认标准）",
+      "description": "杭州电子科技大学毕业论文格式规范（2026届）",
       "parameters": {
         "body_text": {
           "line_spacing": 20,
@@ -20,127 +20,82 @@
             "left": 3.0,
             "right": 2.0,
             "gutter": 1.0
-          }
-        }
-      }
-    },
-    {
-      "id": "tsinghua",
-      "name": "清华大学",
-      "display_name": "清华大学",
-      "description": "清华大学毕业论文格式规范",
-      "parameters": {
-        "body_text": {
-          "line_spacing": 22,
-          "font_size": 12,
-          "font_name": "宋体",
-          "first_line_indent": 24,
-          "bold": false
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
         },
-        "page_settings": {
-          "margins": {
-            "top": 3.0,
-            "bottom": 2.0,
-            "left": 3.0,
-            "right": 2.0,
-            "gutter": 1.0
-          }
-        }
-      }
-    },
-    {
-      "id": "pku",
-      "name": "北京大学",
-      "display_name": "北京大学",
-      "description": "北京大学毕业论文格式规范",
-      "parameters": {
-        "body_text": {
-          "line_spacing": 20,
-          "font_size": 12,
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
           "font_name": "宋体",
-          "first_line_indent": 24,
-          "bold": false
+          "font_size": 10.5,
+          "alignment": "center"
         },
-        "page_settings": {
-          "margins": {
-            "top": 3.0,
-            "bottom": 2.0,
-            "left": 3.0,
-            "right": 2.0,
-            "gutter": 1.0
-          }
-        }
-      }
-    },
-    {
-      "id": "zju",
-      "name": "浙江大学",
-      "display_name": "浙江大学",
-      "description": "浙江大学毕业论文格式规范",
-      "parameters": {
-        "body_text": {
-          "line_spacing": 21,
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
           "font_size": 12,
-          "font_name": "宋体",
-          "first_line_indent": 24,
-          "bold": false
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
         },
-        "page_settings": {
-          "margins": {
-            "top": 3.0,
-            "bottom": 2.0,
-            "left": 3.0,
-            "right": 2.0,
-            "gutter": 1.0
-          }
-        }
-      }
-    },
-    {
-      "id": "fudan",
-      "name": "复旦大学",
-      "display_name": "复旦大学",
-      "description": "复旦大学毕业论文格式规范",
-      "parameters": {
-        "body_text": {
-          "line_spacing": 20,
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
           "font_size": 12,
-          "font_name": "宋体",
-          "first_line_indent": 24,
-          "bold": false
+          "alignment": "left"
         },
-        "page_settings": {
-          "margins": {
-            "top": 3.0,
-            "bottom": 2.0,
-            "left": 3.0,
-            "right": 2.0,
-            "gutter": 1.0
-          }
-        }
-      }
-    },
-    {
-      "id": "sjtu",
-      "name": "上海交通大学",
-      "display_name": "上海交通大学",
-      "description": "上海交通大学毕业论文格式规范",
-      "parameters": {
-        "body_text": {
-          "line_spacing": 22,
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
           "font_size": 12,
-          "font_name": "宋体",
-          "first_line_indent": 24,
-          "bold": false
+          "line_spacing": 20
         },
-        "page_settings": {
-          "margins": {
-            "top": 3.0,
-            "bottom": 2.0,
-            "left": 3.0,
-            "right": 2.0,
-            "gutter": 1.0
-          }
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     },
@@ -148,7 +103,7 @@
       "id": "zjgsu",
       "name": "浙江工商大学",
       "display_name": "浙江工商大学",
-      "description": "浙江工商大学毕业论文格式规范（与杭州电子科技大学相同）",
+      "description": "浙江工商大学毕业论文格式规范（2026届）",
       "parameters": {
         "body_text": {
           "line_spacing": 20,
@@ -164,7 +119,82 @@
             "left": 3.0,
             "right": 2.0,
             "gutter": 1.0
-          }
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
+        },
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
+          "font_size": 12,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "alignment": "left"
+        },
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "line_spacing": 20
+        },
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     },
@@ -172,7 +202,7 @@
       "id": "cjlu",
       "name": "中国计量大学",
       "display_name": "中国计量大学",
-      "description": "中国计量大学毕业论文格式规范（与杭州电子科技大学相同）",
+      "description": "中国计量大学毕业论文格式规范（2026届）",
       "parameters": {
         "body_text": {
           "line_spacing": 20,
@@ -188,7 +218,82 @@
             "left": 3.0,
             "right": 2.0,
             "gutter": 1.0
-          }
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
+        },
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
+          "font_size": 12,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "alignment": "left"
+        },
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "line_spacing": 20
+        },
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     },
@@ -196,7 +301,7 @@
       "id": "zufe",
       "name": "浙江财经大学",
       "display_name": "浙江财经大学",
-      "description": "浙江财经大学毕业论文格式规范（与杭州电子科技大学相同）",
+      "description": "浙江财经大学毕业论文格式规范（2026届）",
       "parameters": {
         "body_text": {
           "line_spacing": 20,
@@ -212,7 +317,82 @@
             "left": 3.0,
             "right": 2.0,
             "gutter": 1.0
-          }
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
+        },
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
+          "font_size": 12,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "alignment": "left"
+        },
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "line_spacing": 20
+        },
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     },
@@ -220,7 +400,7 @@
       "id": "zstu",
       "name": "浙江理工大学",
       "display_name": "浙江理工大学",
-      "description": "浙江理工大学毕业论文格式规范（与杭州电子科技大学相同）",
+      "description": "浙江理工大学毕业论文格式规范（2026届）",
       "parameters": {
         "body_text": {
           "line_spacing": 20,
@@ -236,7 +416,82 @@
             "left": 3.0,
             "right": 2.0,
             "gutter": 1.0
-          }
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
+        },
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
+          "font_size": 12,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "alignment": "left"
+        },
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "line_spacing": 20
+        },
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     },
@@ -292,9 +547,52 @@
           "bold": true,
           "alignment": "left",
           "line_spacing": 20
+        },
+        "figure_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "table_caption": {
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "reference_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "reference_item": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "alignment": "left"
+        },
+        "acknowledgement_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
+        },
+        "acknowledgement_content": {
+          "font_name": "宋体",
+          "font_size": 12,
+          "line_spacing": 20
+        },
+        "appendix_title": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24
         }
       }
     }
   ]
 }
-
