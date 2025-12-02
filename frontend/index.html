@@ -355,19 +355,11 @@
         <h2>2. 上传您的文档</h2>
       </div>
       <form id="documentForm">
-        <!-- 预设模板：大学选择（默认显示） -->
+        <!-- 大学模板选择（包含预设模板和用户上传的模板） -->
         <div id="presetTemplateSection">
           <label for="universitySelect">选择您的大学</label>
           <select id="universitySelect" required>
             <option value="">加载中...</option>
-          </select>
-        </div>
-        
-        <!-- 自定义模板：模板选择（仅当用户上传了模板时显示） -->
-        <div id="customTemplateSection" style="display: none;">
-          <label for="templateSelect">或使用您上传的模板</label>
-          <select id="templateSelect">
-            <option value="">请先上传模板</option>
           </select>
         </div>
         
