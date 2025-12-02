@@ -629,9 +629,12 @@
                   .then(data => {
                     console.log("双重检查：文档状态", { paid: data.paid, document_id: data.document_id });
                     if (data.paid && previewLinks) {
+                      console.log("双重检查：确认文档已支付，开始更新页面");
+                      
                       // 确保结果卡片显示
                       if (resultCard) {
                         resultCard.style.display = "block";
+                        console.log("结果卡片已显示");
                       }
                       
                       // 更新已付费状态显示
@@ -639,12 +642,25 @@
                         docPaidSpan.textContent = "是";
                         docPaidSpan.style.color = "#4CAF50";
                         docPaidSpan.style.fontWeight = "bold";
+                        console.log("已付费状态已更新");
                       }
                       
-                      // 隐藏支付相关元素
-                      if (paymentInfo) paymentInfo.style.display = "none";
-                      if (payButton) payButton.style.display = "none";
-                      if (paidNotice) paidNotice.style.display = "block";
+                      // 强制隐藏支付相关元素（使用 !important 样式）
+                      if (paymentInfo) {
+                        paymentInfo.style.display = "none";
+                        paymentInfo.style.setProperty("display", "none", "important");
+                        console.log("支付信息已强制隐藏");
+                      }
+                      if (payButton) {
+                        payButton.style.display = "none";
+                        payButton.style.setProperty("display", "none", "important");
+                        console.log("支付按钮已强制隐藏");
+                      }
+                      if (paidNotice) {
+                        paidNotice.style.display = "block";
+                        paidNotice.style.setProperty("display", "block", "important");
+                        console.log("已支付提示已显示");
+                      }
                       
                       // 更新预览按钮文本
                       const previewBtn = previewLinks.querySelector('.preview-btn');
@@ -654,6 +670,7 @@
                         previewBtn.onclick = () => {
                           window.open(`/documents/${latestDocumentId}/download?token=${encodeURIComponent(downloadToken)}`, '_blank');
                         };
+                        console.log("预览按钮已更新为查看正式版");
                       }
                       
                       // 检查并添加下载按钮
@@ -668,8 +685,12 @@
                         finalLink.className = "download-btn";
                         finalLink.style.cssText = "margin-left: 10px; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);";
                         previewLinks.appendChild(finalLink);
-                        console.log("强制添加下载按钮完成");
+                        console.log("强制添加下载按钮完成", { href: finalLink.href });
+                      } else {
+                        console.log("下载按钮已存在");
                       }
+                    } else {
+                      console.warn("双重检查：文档未支付或previewLinks不存在", { paid: data.paid, previewLinks: !!previewLinks });
                     }
                   })
                   .catch(err => console.error("强制添加下载按钮失败:", err));
@@ -1111,25 +1132,35 @@
           resultCard.style.display = "block";
           resultStatus.style.display = "none";
           
-          // 加载支付信息
-          console.log("准备加载支付信息，documentId:", data.document_id, "paid:", data.paid);
-          try {
-            await loadPaymentInfo(data.document_id, data.paid);
-            console.log("支付信息加载完成，函数已返回");
-          } catch (paymentError) {
-            console.error("加载支付信息时出错:", paymentError);
-            // 即使出错，也显示默认支付信息
-            console.log("使用默认支付信息");
-            showDefaultPaymentInfo(data.document_id);
-          }
-          
-          // 确保支付信息区域可见（双重保险）
-          setTimeout(() => {
-            if (paymentInfo.style.display === "none" && !data.paid) {
-              console.warn("支付信息区域被隐藏，强制显示");
+          // 根据支付状态决定是否加载支付信息
+          if (data.paid) {
+            // 已支付，确保支付信息隐藏，不加载支付信息
+            console.log("文档已支付，跳过加载支付信息，确保支付信息隐藏");
+            if (paymentInfo) {
+              paymentInfo.style.display = "none";
+              console.log("支付信息已隐藏");
+            }
+            if (payButton) {
+              payButton.style.display = "none";
+              console.log("支付按钮已隐藏");
+            }
+            if (paidNotice) {
+              paidNotice.style.display = "block";
+              console.log("已支付提示已显示");
+            }
+          } else {
+            // 未支付，加载支付信息
+            console.log("准备加载支付信息，documentId:", data.document_id, "paid:", data.paid);
+            try {
+              await loadPaymentInfo(data.document_id, data.paid);
+              console.log("支付信息加载完成，函数已返回");
+            } catch (paymentError) {
+              console.error("加载支付信息时出错:", paymentError);
+              // 即使出错，也显示默认支付信息
+              console.log("使用默认支付信息");
               showDefaultPaymentInfo(data.document_id);
             }
-          }, 500);
+          }
         } catch (error) {
           console.error("刷新文档状态时出错:", error);
           showMessage(resultStatus, error.message, true);
