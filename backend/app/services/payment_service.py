@@ -7,7 +7,7 @@ from .document_service import DocumentService
 
 class PaymentService:
     # 默认价格（元）- 可以通过环境变量覆盖
-    DEFAULT_PRICE = 0.99
+    DEFAULT_PRICE = 0.09
     
     def __init__(self, document_dir: Path, template_dir: Path) -> None:
         self.document_dir = document_dir
