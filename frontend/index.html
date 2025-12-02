@@ -863,13 +863,12 @@
 
       documentForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const templateId = templateSelect.value;
-        const universityId = universitySelect.value;
+        const selectedValue = universitySelect.value;
         const file = document.getElementById("documentFile").files[0];
 
-        // 验证：必须选择预设模板或自定义模板之一
-        if (!universityId && !templateId) {
-          showMessage(documentStatus, "请先选择您的大学或上传的模板", true);
+        // 验证：必须选择模板
+        if (!selectedValue) {
+          showMessage(documentStatus, "请先选择您的大学", true);
           return;
         }
         
@@ -888,14 +887,19 @@
         const formData = new FormData();
         formData.append("file", file);
         
-        // 优先使用自定义模板，如果未选择则使用预设模板
+        // 根据选择的值判断是预设模板还是自定义模板
         let url = "/documents";
-        if (templateId) {
-          // 用户选择了自定义模板
+        if (selectedValue.startsWith("preset_")) {
+          // 预设模板
+          const universityId = selectedValue.replace("preset_", "");
+          url += `?university_id=${encodeURIComponent(universityId)}`;
+        } else if (selectedValue.startsWith("custom_")) {
+          // 用户上传的模板
+          const templateId = selectedValue.replace("custom_", "");
           url += `?template_id=${encodeURIComponent(templateId)}`;
         } else {
-          // 使用预设模板
-          url += `?university_id=${encodeURIComponent(universityId)}`;
+          // 兼容旧格式（直接是ID）
+          url += `?university_id=${encodeURIComponent(selectedValue)}`;
         }
 
         try {
