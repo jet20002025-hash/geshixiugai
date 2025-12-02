@@ -84,17 +84,22 @@ class TemplateService:
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
                 # 只返回属于当前用户的模板
                 if metadata.get("session_id") == session_id:
-                    templates.append({
-                        "template_id": metadata.get("template_id"),
-                        "name": metadata.get("name", "未命名模板"),
-                        "created_at": metadata.get("created_at"),
-                    })
+                    template_name = metadata.get("name", "未命名模板")
+                    # 只保留名称中包含"大学"的模板
+                    if "大学" in template_name:
+                        templates.append({
+                            "template_id": metadata.get("template_id"),
+                            "name": template_name,
+                            "created_at": metadata.get("created_at"),
+                        })
             except (json.JSONDecodeError, KeyError):
                 continue
         
         # 按创建时间倒序排列（最新的在前）
         templates.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return templates
+        
+        # 只返回最新的10个模板，避免列表过长
+        return templates[:10]
     
     def is_template_owner(self, template_id: str, session_id: str) -> bool:
         """
