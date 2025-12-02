@@ -501,11 +501,15 @@
           });
           
           // 清空下拉框
+          if (!universitySelect) {
+            console.error("universitySelect 元素不存在");
+            return;
+          }
           universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
           
           // 如果用户有自定义模板，只显示用户模板
           if (userTemplates && userTemplates.length > 0) {
-            console.log("用户有自定义模板，只显示用户模板");
+            console.log("用户有自定义模板，只显示用户模板，数量:", userTemplates.length);
             userTemplates.forEach(template => {
               const option = document.createElement("option");
               option.value = `custom_${template.template_id}`; // 使用 custom_ 前缀区分自定义模板
@@ -519,24 +523,40 @@
             });
           } else {
             // 如果用户没有自定义模板，只显示预设模板
-            console.log("用户没有自定义模板，只显示预设模板");
-            const presetResponse = await fetch("/templates/presets");
-            if (presetResponse.ok) {
-              const presetUniversities = await presetResponse.json();
-              presetUniversities.forEach(uni => {
-                const option = document.createElement("option");
-                option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
-                option.textContent = uni.display_name || uni.name;
-                if (uni.description) {
-                  option.title = uni.description;
+            console.log("用户没有自定义模板，加载预设模板");
+            try {
+              const presetResponse = await fetch("/templates/presets");
+              if (presetResponse.ok) {
+                const presetUniversities = await presetResponse.json();
+                console.log("加载到预设模板数量:", presetUniversities.length);
+                if (presetUniversities && presetUniversities.length > 0) {
+                  presetUniversities.forEach(uni => {
+                    const option = document.createElement("option");
+                    option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
+                    option.textContent = uni.display_name || uni.name;
+                    if (uni.description) {
+                      option.title = uni.description;
+                    }
+                    universitySelect.appendChild(option);
+                  });
+                } else {
+                  console.warn("预设模板列表为空");
+                  universitySelect.innerHTML = '<option value="">暂无预设模板</option>';
                 }
-                universitySelect.appendChild(option);
-              });
+              } else {
+                console.error("加载预设模板失败，状态码:", presetResponse.status);
+                universitySelect.innerHTML = '<option value="">加载预设模板失败</option>';
+              }
+            } catch (presetError) {
+              console.error("加载预设模板出错:", presetError);
+              universitySelect.innerHTML = '<option value="">加载预设模板出错</option>';
             }
           }
         } catch (error) {
-          console.warn("加载大学模板列表失败:", error.message || error);
-          universitySelect.innerHTML = '<option value="">加载失败</option>';
+          console.error("加载大学模板列表失败:", error);
+          if (universitySelect) {
+            universitySelect.innerHTML = '<option value="">加载失败</option>';
+          }
         }
       }
 
