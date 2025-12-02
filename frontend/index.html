@@ -442,9 +442,7 @@
       const documentStatus = document.getElementById("documentStatus");
       const resultStatus = document.getElementById("resultStatus");
       const presetTemplateSection = document.getElementById("presetTemplateSection");
-      const customTemplateSection = document.getElementById("customTemplateSection");
       const universitySelect = document.getElementById("universitySelect");
-      const templateSelect = document.getElementById("templateSelect");
       const resultCard = document.getElementById("result");
       const docIdSpan = document.getElementById("docId");
       const docStatusSpan = document.getElementById("docStatus");
@@ -475,72 +473,20 @@
         element.style.display = "block";
       }
 
-      function addTemplateOption(templateId, label) {
-        const option = document.createElement("option");
-        option.value = templateId;
-        option.textContent = `${label} (${templateId.slice(0, 8)})`;
-        templateSelect.appendChild(option);
-        templateSelect.value = templateId;
-      }
-
-      // 加载用户模板列表
+      // 加载用户模板列表（仅返回数据，不操作DOM）
       async function loadUserTemplates() {
         try {
           const response = await fetch("/templates");
           if (!response.ok) {
             console.warn("加载模板列表失败:", response.status);
-            // 设置默认选项
-            templateSelect.innerHTML = '<option value="">请先上传模板</option>';
             return [];
           }
           
           const templates = await response.json();
-          
-          // 清空现有选项（保留第一个空选项）
-          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
-          
-          if (templates.length === 0) {
-            const option = document.createElement("option");
-            option.value = "";
-            option.textContent = "暂无模板，请先上传";
-            templateSelect.appendChild(option);
-            return [];
-          }
-          
-          // 添加用户模板（只显示最新的，后端已限制为10个）
-          templates.forEach(template => {
-            // 显示模板名称和创建时间（如果有）
-            let displayName = template.name || "未命名模板";
-            if (template.created_at) {
-              try {
-                const date = new Date(template.created_at);
-                const dateStr = date.toLocaleDateString('zh-CN', { 
-                  year: 'numeric', 
-                  month: '2-digit', 
-                  day: '2-digit' 
-                });
-                displayName = `${displayName} (${dateStr})`;
-              } catch (e) {
-                // 如果日期解析失败，只显示名称
-              }
-            }
-            addTemplateOption(template.template_id, displayName);
-          });
-          
-          // 如果模板数量达到10个，显示提示
-          if (templates.length >= 10) {
-            const option = document.createElement("option");
-            option.disabled = true;
-            option.textContent = "--- 仅显示最新10个模板 ---";
-            templateSelect.appendChild(option);
-          }
-          
-          return templates;
+          return templates || [];
         } catch (error) {
           // 网络错误或其他错误，静默处理，不影响页面显示
           console.warn("加载模板列表失败（可能是后端服务未启动）:", error.message || error);
-          // 设置默认选项，确保页面可以正常使用
-          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
           return [];
         }
       }
@@ -600,11 +546,12 @@
         await loadUniversityTemplates();
         
         // 始终显示大学模板选择
-        presetTemplateSection.style.display = "block";
-        universitySelect.required = true;
-        
-        // 不再需要单独的自定义模板选择框
-        customTemplateSection.style.display = "none";
+        if (presetTemplateSection) {
+          presetTemplateSection.style.display = "block";
+        }
+        if (universitySelect) {
+          universitySelect.required = true;
+        }
       }
 
       // 页面加载时初始化模板选择
