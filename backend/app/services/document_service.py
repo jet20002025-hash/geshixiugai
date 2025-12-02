@@ -1755,9 +1755,9 @@ class DocumentService:
         print(f"[DocumentService] 引用位置记录: {citation_locations}")
         
         # 5. 在参考文献段落中标记引用信息
-        # 逻辑：把文献分为两类
-        # 1. 找到标注页码的：把页码放在文献后面
-        # 2. 未找到标注页码的：显示"未找到标注页"
+        # 逻辑：只标记未找到引用的参考文献
+        # 1. 找到引用的：不添加任何标记
+        # 2. 未找到引用的：显示"未找到标注页"（红色标记）
         for ref_item in reference_items:
             ref_num = ref_item["number"]
             para = ref_item["paragraph"]
@@ -1765,37 +1765,11 @@ class DocumentService:
             # 获取引用位置（段落索引列表）
             locations = citation_locations.get(ref_num, [])
             
-            # 检查是否找到了页码：必须在 cited_reference_numbers 中，并且有位置记录
+            # 检查是否找到了引用：必须在 cited_reference_numbers 中，并且有位置记录
+            # 如果找到了引用，不添加任何标记（已删除页码信息）
             if ref_num in cited_reference_numbers and locations:
-                # 找到了页码，在文献后面添加页码信息
-                try:
-                    # 尝试估算页码（假设每页约25个段落，从文档开头计算整篇文章的页码）
-                    # 注意：这是估算值，表示整篇文章的第几页（从封面开始计数）
-                    # python-docx无法直接获取Word文档页面底部的实际页码，只能通过段落索引估算
-                    # 如果需要页面底部的实际页码，需要打开Word文档查看
-                    pages = []
-                    for para_idx in sorted(set(locations)):
-                        # 估算页码：从文档开头开始计算整篇文章的页码
-                        # 假设每页约25个段落
-                        # 整篇文章的页码 = 段落索引 / 每页段落数 + 1
-                        estimated_page = max(1, para_idx // 25 + 1)
-                        pages.append(estimated_page)
-                    
-                    # 去重并排序页码
-                    unique_pages = sorted(set(pages))
-                    # 去重段落索引（避免同一个引用在同一个段落中被记录多次）
-                    unique_locations = sorted(set(locations))
-                    if unique_pages:
-                        page_info = "、".join([str(p) for p in unique_pages])
-                        marker_text = f"（引用页码：{page_info}）"
-                        
-                        # 在段落末尾添加页码信息
-                        new_run = para.add_run(marker_text)
-                        new_run.font.color.rgb = RGBColor(0, 128, 0)  # 绿色
-                        new_run.font.bold = False
-                        print(f"[DocumentService] 为参考文献 {ref_num} 添加引用页码: {page_info} (段落位置: {unique_locations}, 估算页码: {unique_pages})")
-                except Exception as e:
-                    print(f"[DocumentService] 添加引用页码失败: {e}")
+                # 找到了引用，不添加任何标记
+                print(f"[DocumentService] 参考文献 {ref_num} 已找到引用，不添加页码信息")
             else:
                 # 未找到标注页码，标记为"未找到标注页"
                 try:
