@@ -239,6 +239,61 @@
           }
         }
       }
+    },
+    {
+      "id": "hdu_ce",
+      "name": "杭州电子科技大学继续教育学院",
+      "display_name": "杭州电子科技大学继续教育学院",
+      "description": "杭州电子科技大学继续教育学院本科毕业论文格式规范（2026届）",
+      "parameters": {
+        "body_text": {
+          "line_spacing": 20,
+          "font_size": 12,
+          "font_name": "宋体",
+          "first_line_indent": 24,
+          "bold": false
+        },
+        "page_settings": {
+          "margins": {
+            "top": 3.0,
+            "bottom": 2.0,
+            "left": 3.0,
+            "right": 2.0,
+            "gutter": 1.0
+          },
+          "header_distance": 2.0,
+          "footer_distance": 1.0
+        },
+        "header": {
+          "text": "杭州电子科技大学继续教育学院本科毕业论文",
+          "font_name": "宋体",
+          "font_size": 10.5,
+          "alignment": "center"
+        },
+        "title_level_1": {
+          "font_name": "黑体",
+          "font_size": 16,
+          "bold": true,
+          "alignment": "center",
+          "space_before": 24,
+          "space_after": 24,
+          "line_spacing": "single"
+        },
+        "title_level_2": {
+          "font_name": "黑体",
+          "font_size": 14,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        },
+        "title_level_3": {
+          "font_name": "黑体",
+          "font_size": 12,
+          "bold": true,
+          "alignment": "left",
+          "line_spacing": 20
+        }
+      }
     }
   ]
 }
