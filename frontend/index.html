@@ -355,14 +355,17 @@
         <h2>2. 上传您的文档</h2>
       </div>
       <form id="documentForm">
-        <label for="templateType">模板类型</label>
-        <select id="templateType" required>
-          <option value="preset">使用预设模板（选择大学）</option>
-          <option value="custom">使用自定义模板</option>
-        </select>
+        <!-- 模板类型选择（根据用户是否有模板动态显示/隐藏） -->
+        <div id="templateTypeSection" style="display: none;">
+          <label for="templateType">模板类型</label>
+          <select id="templateType" required>
+            <option value="preset">使用预设模板（选择大学）</option>
+            <option value="custom">使用自定义模板</option>
+          </select>
+        </div>
         
         <!-- 预设模板：大学选择 -->
-        <div id="presetTemplateSection">
+        <div id="presetTemplateSection" style="display: none;">
           <label for="universitySelect">选择您的大学</label>
           <select id="universitySelect">
             <option value="">加载中...</option>
@@ -506,7 +509,7 @@
             console.warn("加载模板列表失败:", response.status);
             // 设置默认选项
             templateSelect.innerHTML = '<option value="">请先上传模板</option>';
-            return;
+            return [];
           }
           
           const templates = await response.json();
@@ -519,18 +522,21 @@
             option.value = "";
             option.textContent = "暂无模板，请先上传";
             templateSelect.appendChild(option);
-            return;
+            return [];
           }
           
           // 添加用户模板
           templates.forEach(template => {
             addTemplateOption(template.template_id, template.name);
           });
+          
+          return templates;
         } catch (error) {
           // 网络错误或其他错误，静默处理，不影响页面显示
           console.warn("加载模板列表失败（可能是后端服务未启动）:", error.message || error);
           // 设置默认选项，确保页面可以正常使用
           templateSelect.innerHTML = '<option value="">请先上传模板</option>';
+          return [];
         }
       }
 
@@ -578,12 +584,44 @@
         }
       });
 
-      // 页面加载时获取用户模板列表和大学模板列表
-      loadUserTemplates().catch(function(error) {
-        console.warn("模板列表加载失败（不影响使用）:", error.message || error);
-        templateSelect.innerHTML = '<option value="">请先上传模板</option>';
-      });
-      loadUniversityTemplates();
+      // 根据用户是否有模板来决定显示逻辑
+      async function initializeTemplateSelection() {
+        // 加载用户模板列表
+        const userTemplates = await loadUserTemplates().catch(function(error) {
+          console.warn("模板列表加载失败（不影响使用）:", error.message || error);
+          templateSelect.innerHTML = '<option value="">请先上传模板</option>';
+          return [];
+        });
+        
+        // 加载预设模板列表
+        await loadUniversityTemplates();
+        
+        // 根据用户是否有模板来决定显示
+        if (userTemplates && userTemplates.length > 0) {
+          // 用户有自定义模板：只显示自定义模板选项
+          console.log("用户有自定义模板，只显示自定义模板选项");
+          templateTypeSection.style.display = "none"; // 隐藏模板类型选择
+          presetTemplateSection.style.display = "none"; // 隐藏预设模板
+          customTemplateSection.style.display = "block"; // 显示自定义模板
+          templateSelect.required = true;
+          universitySelect.required = false;
+          // 设置默认选择为自定义模板
+          templateType.value = "custom";
+        } else {
+          // 用户没有自定义模板：只显示预设模板选项
+          console.log("用户没有自定义模板，只显示预设模板选项");
+          templateTypeSection.style.display = "none"; // 隐藏模板类型选择
+          presetTemplateSection.style.display = "block"; // 显示预设模板
+          customTemplateSection.style.display = "none"; // 隐藏自定义模板
+          universitySelect.required = true;
+          templateSelect.required = false;
+          // 设置默认选择为预设模板
+          templateType.value = "preset";
+        }
+      }
+
+      // 页面加载时初始化模板选择
+      initializeTemplateSelection();
       
       // 检测支付宝支付成功回调
       (function() {
@@ -816,8 +854,8 @@
           if (contentType && contentType.includes("application/json")) {
             const data = await response.json();
             showMessage(templateStatus, `模板上传成功：${data.name}（样式数 ${data.style_count}）`);
-            // 刷新模板列表
-            await loadUserTemplates();
+            // 刷新模板列表并重新初始化模板选择（如果有模板了，会自动切换到自定义模板）
+            await initializeTemplateSelection();
           } else {
             throw new Error("服务器返回了意外的响应格式");
           }

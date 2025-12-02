@@ -91,6 +91,36 @@ async def list_user_templates(request: Request) -> list[dict]:
 
 
 @router.get(
+    "/presets",
+    summary="获取预设大学模板列表",
+)
+async def list_university_templates() -> list[dict]:
+    """
+    获取所有预设大学模板列表
+    返回格式：[
+        {
+            "id": "tsinghua",
+            "name": "清华大学",
+            "display_name": "清华大学",
+            "description": "清华大学毕业论文格式规范"
+        },
+        ...
+    ]
+    """
+    try:
+        service = UniversityTemplateService()
+        universities = service.get_all_universities()
+        print(f"[Templates API] 获取预设模板列表，找到 {len(universities)} 所大学")
+        return universities
+    except Exception as e:
+        print(f"[Templates API] 获取预设模板列表失败: {e}")
+        import traceback
+        print(f"[Templates API] 错误堆栈: {traceback.format_exc()}")
+        # 返回空列表而不是抛出异常，避免前端显示错误
+        return []
+
+
+@router.get(
     "/{template_id}",
     response_model=TemplateDetailResponse,
     summary="查看模板解析结果",
@@ -120,25 +150,4 @@ async def get_template(request: Request, template_id: str) -> TemplateDetailResp
         default_style=metadata.get("default_style"),
         created_at=metadata.get("created_at"),
     )
-
-
-@router.get(
-    "/presets",
-    summary="获取预设大学模板列表",
-)
-async def list_university_templates() -> list[dict]:
-    """
-    获取所有预设大学模板列表
-    返回格式：[
-        {
-            "id": "tsinghua",
-            "name": "清华大学",
-            "display_name": "清华大学",
-            "description": "清华大学毕业论文格式规范"
-        },
-        ...
-    ]
-    """
-    service = UniversityTemplateService()
-    return service.get_all_universities()
 
