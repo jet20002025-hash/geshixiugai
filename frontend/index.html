@@ -598,6 +598,75 @@
           // 设置latestDocumentId，以便后续刷新状态
           latestDocumentId = outTradeNo;
           
+          // 主动确认支付（基于同步返回参数）
+          const tradeNo = urlParams.get("trade_no");
+          const totalAmount = urlParams.get("total_amount");
+          const sign = urlParams.get("sign");
+          
+          // 打印所有URL参数，用于调试
+          console.log("支付宝返回的所有参数:", {
+            out_trade_no: outTradeNo,
+            trade_status: tradeStatus,
+            trade_no: urlParams.get("trade_no"),
+            total_amount: urlParams.get("total_amount"),
+            method: urlParams.get("method"),
+            all_params: Object.fromEntries(urlParams.entries())
+          });
+          
+          if (tradeNo && totalAmount) {
+            console.log("检测到支付宝同步返回参数，主动确认支付", {
+              out_trade_no: outTradeNo,
+              trade_no: tradeNo,
+              total_amount: totalAmount
+            });
+            
+            fetch("/payments/alipay/confirm", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                out_trade_no: outTradeNo,
+                trade_no: tradeNo,
+                total_amount: totalAmount,
+                sign: sign,
+              }),
+            })
+              .then(async r => {
+                console.log("支付确认API响应状态:", r.status, r.statusText);
+                if (!r.ok) {
+                  const errorText = await r.text();
+                  console.error("支付确认API返回错误:", errorText);
+                  throw new Error(`API返回错误: ${r.status} ${errorText}`);
+                }
+                return r.json();
+              })
+              .then(result => {
+                console.log("支付确认结果:", result);
+                if (result.success && result.paid) {
+                  console.log("✅ 支付已确认，文档已标记为已支付");
+                  // 立即刷新文档状态
+                  setTimeout(() => {
+                    refreshDocumentStatus().then(() => {
+                      console.log("文档状态已刷新");
+                    });
+                  }, 500);
+                } else {
+                  console.warn("⚠️ 支付确认返回结果异常:", result);
+                }
+              })
+              .catch(err => {
+                console.error("❌ 支付确认失败:", err);
+                // 即使确认失败，也继续轮询检查
+              });
+          } else {
+            console.warn("⚠️ 缺少必要的支付参数", {
+              trade_no: tradeNo,
+              total_amount: totalAmount,
+              all_params: Object.fromEntries(urlParams.entries())
+            });
+          }
+          
           // 确保结果卡片显示
           if (resultCard) {
             resultCard.style.display = "block";

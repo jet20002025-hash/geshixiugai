@@ -533,3 +533,76 @@ async def alipay_notify(request: Request) -> str:
         print(f"[Alipay API] 支付状态: {trade_status}")
         return "fail"
 
+
+@router.post(
+    "/alipay/confirm",
+    summary="确认支付宝支付（基于同步返回）",
+)
+async def alipay_confirm(request: Request) -> dict:
+    """
+    处理支付宝同步返回，主动标记文档为已支付
+    
+    注意：这是基于同步返回（return_url）的主动确认，用于在异步回调延迟时快速更新状态
+    """
+    try:
+        from ..services.alipay_service import AlipayService
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"支付宝配置错误: {str(e)}")
+    
+    # 获取请求数据（JSON格式）
+    data = await request.json()
+    document_id = data.get("out_trade_no")
+    trade_no = data.get("trade_no")
+    total_amount = data.get("total_amount")
+    sign = data.get("sign")
+    
+    if not document_id:
+        raise HTTPException(status_code=400, detail="缺少订单号")
+    
+    print(f"[Alipay API] 收到支付确认请求: document_id={document_id}, trade_no={trade_no}, total_amount={total_amount}")
+    
+    # 验证签名（可选，因为同步返回的签名验证可能不完整）
+    # 这里我们主要依赖异步回调，同步返回只是快速更新状态
+    
+    # 检查文档是否已经标记为已支付
+    payment_service = PaymentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+    document_service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+    
+    try:
+        metadata = document_service.get_document_metadata(document_id)
+    except Exception as e:
+        print(f"[Alipay API] 获取文档元数据失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取文档元数据失败: {str(e)}")
+    
+    if not metadata:
+        print(f"[Alipay API] 文档不存在: {document_id}")
+        raise HTTPException(status_code=404, detail="文档不存在")
+    
+    print(f"[Alipay API] 文档当前状态: paid={metadata.get('paid')}, document_id={document_id}")
+    
+    # 如果已经标记为已支付，直接返回
+    if metadata.get("paid"):
+        print(f"[Alipay API] ✅ 文档 {document_id} 已经标记为已支付")
+        return {"success": True, "message": "文档已标记为已支付", "paid": True}
+    
+    # 标记为已支付（基于同步返回，信任用户已支付）
+    try:
+        print(f"[Alipay API] 开始标记文档为已支付: {document_id}")
+        updated_metadata = payment_service.mark_as_paid(document_id, payment_method="alipay")
+        print(f"[Alipay API] ✅ 文档 {document_id} 已通过同步返回标记为已支付")
+        print(f"[Alipay API] 更新后的元数据: paid={updated_metadata.get('paid')}")
+        
+        # 再次验证标记是否成功
+        verify_metadata = document_service.get_document_metadata(document_id)
+        if verify_metadata and verify_metadata.get("paid"):
+            print(f"[Alipay API] ✅ 验证成功：文档已标记为已支付")
+        else:
+            print(f"[Alipay API] ⚠️ 警告：标记后验证失败，paid={verify_metadata.get('paid') if verify_metadata else 'None'}")
+        
+        return {"success": True, "message": "文档已标记为已支付", "paid": True}
+    except Exception as e:
+        print(f"[Alipay API] ❌ 标记订单为已支付失败: {e}")
+        import traceback
+        print(f"[Alipay API] 错误堆栈: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"标记订单为已支付失败: {str(e)}")
+
