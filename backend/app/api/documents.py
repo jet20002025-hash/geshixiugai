@@ -141,6 +141,10 @@ async def document_detail(document_id: str) -> DocumentDetailResponse:
     # 准备响应数据
     response_data = metadata.copy()
     
+    # 确保 template_id 不为 None（兼容旧数据）
+    if not response_data.get("template_id"):
+        response_data["template_id"] = "unknown"
+    
     # 只在已支付时返回 download_token
     if metadata.get("paid"):
         # 确保 download_token 存在（如果不存在，从 metadata 中获取）

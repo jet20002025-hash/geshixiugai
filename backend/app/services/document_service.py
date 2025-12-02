@@ -145,9 +145,12 @@ class DocumentService:
                 "report": report_path,
             })
 
+        # 确保 template_id 不为 None（如果使用 university_id，则使用 university_id 作为标识）
+        final_template_id = template_id if template_id else (f"university_{university_id}" if university_id else "unknown")
+        
         metadata = {
             "document_id": document_id,
-            "template_id": template_id,
+            "template_id": final_template_id,
             "status": "completed",
             "paid": False,
             "download_token": download_token,  # 下载验证 token
