@@ -545,17 +545,10 @@
         }
       }
 
-      // 加载大学模板列表（包含预设模板和用户上传的模板）
+      // 加载大学模板列表
       async function loadUniversityTemplates() {
         try {
-          // 加载预设大学模板
-          const presetResponse = await fetch("/templates/presets");
-          let presetUniversities = [];
-          if (presetResponse.ok) {
-            presetUniversities = await presetResponse.json();
-          }
-          
-          // 加载用户上传的模板（名称包含"大学"的）
+          // 先加载用户上传的模板（名称包含"大学"的）
           const userTemplates = await loadUserTemplates().catch(function(error) {
             console.warn("加载用户模板列表失败（不影响使用）:", error.message || error);
             return [];
@@ -564,19 +557,9 @@
           // 清空下拉框
           universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
           
-          // 先添加预设模板
-          presetUniversities.forEach(uni => {
-            const option = document.createElement("option");
-            option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
-            option.textContent = uni.display_name || uni.name;
-            if (uni.description) {
-              option.title = uni.description;
-            }
-            universitySelect.appendChild(option);
-          });
-          
-          // 再添加用户上传的模板（名称包含"大学"的）
+          // 如果用户有自定义模板，只显示用户模板
           if (userTemplates && userTemplates.length > 0) {
+            console.log("用户有自定义模板，只显示用户模板");
             userTemplates.forEach(template => {
               const option = document.createElement("option");
               option.value = `custom_${template.template_id}`; // 使用 custom_ 前缀区分自定义模板
@@ -588,6 +571,22 @@
               option.textContent = displayName;
               universitySelect.appendChild(option);
             });
+          } else {
+            // 如果用户没有自定义模板，只显示预设模板
+            console.log("用户没有自定义模板，只显示预设模板");
+            const presetResponse = await fetch("/templates/presets");
+            if (presetResponse.ok) {
+              const presetUniversities = await presetResponse.json();
+              presetUniversities.forEach(uni => {
+                const option = document.createElement("option");
+                option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
+                option.textContent = uni.display_name || uni.name;
+                if (uni.description) {
+                  option.title = uni.description;
+                }
+                universitySelect.appendChild(option);
+              });
+            }
           }
         } catch (error) {
           console.warn("加载大学模板列表失败:", error.message || error);
