@@ -491,7 +491,7 @@
         }
       }
 
-      // 加载大学模板列表
+      // 加载大学模板列表（方案2：优先显示用户模板，预设模板作为备选）
       async function loadUniversityTemplates() {
         try {
           // 先加载用户上传的模板（名称包含"大学"的）
@@ -507,9 +507,11 @@
           }
           universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
           
-          // 如果用户有自定义模板，只显示用户模板
+          // 如果用户有自定义模板，优先显示用户模板
           if (userTemplates && userTemplates.length > 0) {
-            console.log("用户有自定义模板，只显示用户模板，数量:", userTemplates.length);
+            console.log("用户有自定义模板，优先显示用户模板，数量:", userTemplates.length);
+            
+            // 先添加用户模板
             userTemplates.forEach(template => {
               const option = document.createElement("option");
               option.value = `custom_${template.template_id}`; // 使用 custom_ 前缀区分自定义模板
@@ -521,36 +523,44 @@
               option.textContent = displayName;
               universitySelect.appendChild(option);
             });
-          } else {
-            // 如果用户没有自定义模板，只显示预设模板
-            console.log("用户没有自定义模板，加载预设模板");
-            try {
-              const presetResponse = await fetch("/templates/presets");
-              if (presetResponse.ok) {
-                const presetUniversities = await presetResponse.json();
-                console.log("加载到预设模板数量:", presetUniversities.length);
-                if (presetUniversities && presetUniversities.length > 0) {
-                  presetUniversities.forEach(uni => {
-                    const option = document.createElement("option");
-                    option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
-                    option.textContent = uni.display_name || uni.name;
-                    if (uni.description) {
-                      option.title = uni.description;
-                    }
-                    universitySelect.appendChild(option);
-                  });
-                } else {
-                  console.warn("预设模板列表为空");
-                  universitySelect.innerHTML = '<option value="">暂无预设模板</option>';
-                }
+            
+            // 添加分隔线（可选）
+            const separator = document.createElement("option");
+            separator.disabled = true;
+            separator.textContent = "────────── 预设模板 ──────────";
+            universitySelect.appendChild(separator);
+          }
+          
+          // 加载并显示预设模板（无论用户是否有自定义模板，都显示预设模板作为备选）
+          console.log("加载预设模板作为备选");
+          try {
+            const presetResponse = await fetch("/templates/presets");
+            if (presetResponse.ok) {
+              const presetUniversities = await presetResponse.json();
+              console.log("加载到预设模板数量:", presetUniversities.length);
+              if (presetUniversities && presetUniversities.length > 0) {
+                presetUniversities.forEach(uni => {
+                  const option = document.createElement("option");
+                  option.value = `preset_${uni.id}`; // 使用 preset_ 前缀区分预设模板
+                  option.textContent = uni.display_name || uni.name;
+                  if (uni.description) {
+                    option.title = uni.description;
+                  }
+                  universitySelect.appendChild(option);
+                });
               } else {
-                console.error("加载预设模板失败，状态码:", presetResponse.status);
-                universitySelect.innerHTML = '<option value="">加载预设模板失败</option>';
+                console.warn("预设模板列表为空");
               }
-            } catch (presetError) {
-              console.error("加载预设模板出错:", presetError);
-              universitySelect.innerHTML = '<option value="">加载预设模板出错</option>';
+            } else {
+              console.error("加载预设模板失败，状态码:", presetResponse.status);
             }
+          } catch (presetError) {
+            console.error("加载预设模板出错:", presetError);
+          }
+          
+          // 如果既没有用户模板也没有预设模板，显示提示
+          if (universitySelect.options.length === 1) {
+            universitySelect.innerHTML = '<option value="">暂无可用模板</option>';
           }
         } catch (error) {
           console.error("加载大学模板列表失败:", error);
