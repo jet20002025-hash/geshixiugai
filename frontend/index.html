@@ -621,15 +621,17 @@
         
         // 根据用户是否有模板来决定显示
         if (userTemplates && userTemplates.length > 0) {
-          // 用户有自定义模板：只显示自定义模板选项
-          console.log("用户有自定义模板，只显示自定义模板选项");
-          templateTypeSection.style.display = "none"; // 隐藏模板类型选择
-          presetTemplateSection.style.display = "none"; // 隐藏预设模板
+          // 用户有自定义模板：显示模板类型选择，让用户可以选择使用自定义模板或预设模板
+          console.log("用户有自定义模板，显示模板类型选择");
+          templateTypeSection.style.display = "block"; // 显示模板类型选择
+          presetTemplateSection.style.display = "block"; // 显示预设模板
           customTemplateSection.style.display = "block"; // 显示自定义模板
-          templateSelect.required = true;
-          universitySelect.required = false;
-          // 设置默认选择为自定义模板
-          templateType.value = "custom";
+          // 默认显示预设模板，用户可以切换到自定义模板
+          templateType.value = "preset";
+          presetTemplateSection.style.display = "block";
+          customTemplateSection.style.display = "none";
+          universitySelect.required = true;
+          templateSelect.required = false;
         } else {
           // 用户没有自定义模板：只显示预设模板选项
           console.log("用户没有自定义模板，只显示预设模板选项");
