@@ -49,6 +49,13 @@ async def upload_template(request: Request, response: Response, file: UploadFile
             detail="仅支持 docx 模板文件，请先将模板转换为 docx 格式",
         )
     
+    # 检查文件名是否包含"大学"，只有包含"大学"的模板才会被保存
+    if "大学" not in file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="模板文件名必须包含'大学'两个字才能保存。如果您的模板不是大学模板，请使用预设模板功能。",
+        )
+    
     # 检查文件大小
     if file.size and file.size > MAX_FILE_SIZE:
         file_size_mb = file.size / (1024 * 1024)
