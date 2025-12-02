@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from ..schemas.payments import PaymentInfo, PaymentRequest, PaymentResponse
 from ..services.payment_service import PaymentService
+from ..services.document_service import DocumentService
 
 router = APIRouter()
 
