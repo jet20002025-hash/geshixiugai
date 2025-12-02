@@ -82,16 +82,13 @@ class TemplateService:
             
             try:
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-                # 只返回属于当前用户的模板
+                # 只返回属于当前用户的模板（用户上传的所有模板都显示，不过滤）
                 if metadata.get("session_id") == session_id:
-                    template_name = metadata.get("name", "未命名模板")
-                    # 只保留名称中包含"大学"的模板
-                    if "大学" in template_name:
-                        templates.append({
-                            "template_id": metadata.get("template_id"),
-                            "name": template_name,
-                            "created_at": metadata.get("created_at"),
-                        })
+                    templates.append({
+                        "template_id": metadata.get("template_id"),
+                        "name": metadata.get("name", "未命名模板"),
+                        "created_at": metadata.get("created_at"),
+                    })
             except (json.JSONDecodeError, KeyError):
                 continue
         
