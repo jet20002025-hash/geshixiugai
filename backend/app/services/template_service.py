@@ -95,8 +95,34 @@ class TemplateService:
         # 按创建时间倒序排列（最新的在前）
         templates.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         
+        # 同名模板去重：只保留每个名称最新的一个（忽略括号内的编号）
+        seen_names = {}
+        unique_templates = []
+        
+        for template in templates:
+            # 提取模板名称（去掉文件扩展名和括号内容）
+            template_name = template.get("name", "未命名模板")
+            # 去掉 .docx 扩展名
+            if template_name.lower().endswith(".docx"):
+                template_name = template_name[:-5]
+            
+            # 如果这个名称还没有出现过，或者当前模板更新，则保留
+            if template_name not in seen_names:
+                seen_names[template_name] = template
+                unique_templates.append(template)
+            else:
+                # 如果已存在同名模板，比较创建时间，保留最新的
+                existing = seen_names[template_name]
+                existing_time = existing.get("created_at", "")
+                current_time = template.get("created_at", "")
+                if current_time > existing_time:
+                    # 替换为更新的模板
+                    unique_templates.remove(existing)
+                    seen_names[template_name] = template
+                    unique_templates.append(template)
+        
         # 只返回最新的10个模板，避免列表过长
-        return templates[:10]
+        return unique_templates[:10]
     
     def is_template_owner(self, template_id: str, session_id: str) -> bool:
         """
