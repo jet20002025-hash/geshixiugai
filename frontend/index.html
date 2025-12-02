@@ -624,12 +624,10 @@
           // 用户有自定义模板：显示模板类型选择，让用户可以选择使用自定义模板或预设模板
           console.log("用户有自定义模板，显示模板类型选择");
           templateTypeSection.style.display = "block"; // 显示模板类型选择
-          presetTemplateSection.style.display = "block"; // 显示预设模板
-          customTemplateSection.style.display = "block"; // 显示自定义模板
           // 默认显示预设模板，用户可以切换到自定义模板
           templateType.value = "preset";
-          presetTemplateSection.style.display = "block";
-          customTemplateSection.style.display = "none";
+          presetTemplateSection.style.display = "block"; // 显示预设模板
+          customTemplateSection.style.display = "none"; // 隐藏自定义模板
           universitySelect.required = true;
           templateSelect.required = false;
         } else {
