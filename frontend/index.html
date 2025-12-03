@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="tencent-site-verification" content="38bda04bff445daf1af22d90800d9ec0"/>
     <title>论文格式自动修复</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E" />
     <!-- 不再使用Google字体，使用系统默认字体确保显示 -->
@@ -419,6 +420,51 @@
       </div>
       <div id="resultStatus" class="status" style="display: none"></div>
     </section>
+
+    <!-- 腾讯广告联盟 - 横幅广告位 -->
+    <!-- 
+    重要提示：
+    1. 73845359 是广告主账户ID，不能用于展示广告
+    2. 需要注册媒体主账户，创建广告位后获取广告位ID
+    3. 获取广告位ID后，替换下面的 TENCENT_AD_ID
+    -->
+    <!--
+    <section id="tencent-ad-section" style="text-align: center; margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 12px; min-height: 250px;">
+      <div id="tencent-ad-banner" style="display: inline-block; width: 100%; max-width: 728px;">
+        <!-- 腾讯广告联盟代码 -->
+        <script type="text/javascript">
+          // 腾讯广告位ID（需要从媒体主后台获取，不是广告主账户ID）
+          var TENCENT_AD_ID = "YOUR_AD_POSITION_ID_HERE";
+          
+          // 加载腾讯广告联盟脚本
+          (function() {
+            var script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = 'https://qzs.qq.com/qzone/biz/res/i.js';
+            script.charset = 'utf-8';
+            script.async = true;
+            script.onload = function() {
+              console.log('腾讯广告脚本加载成功');
+              // 初始化广告
+              if (typeof window.AD_TAG !== 'undefined') {
+                window.AD_TAG = TENCENT_AD_ID;
+                window.AD_WIDTH = 728;
+                window.AD_HEIGHT = 90;
+              }
+            };
+            script.onerror = function() {
+              console.error('腾讯广告脚本加载失败');
+            };
+            document.head.appendChild(script);
+          })();
+        </script>
+        <!-- 广告容器 -->
+        <div id="ad_container" style="width: 100%; min-height: 90px;">
+          <!-- 广告将在这里显示 -->
+        </div>
+      </div>
+    </section>
+    -->
 
     <!-- 联系方式 -->
     <section style="text-align: center; padding: 20px; background: #f9fafb; border-radius: 12px; margin-top: 2rem;">
@@ -1664,6 +1710,83 @@
           showMessage(resultStatus, error.message || "支付失败，请稍后重试", true);
         }
       }
+
+      // ==================== 腾讯广告联盟集成 ====================
+      // 使用说明：
+      // 1. 注册腾讯广告联盟：https://e.qq.com/ads/
+      // 2. 创建媒体和广告位，获取广告位ID
+      // 3. 调用 loadTencentAd('您的广告位ID') 加载广告
+      
+      /**
+       * 加载腾讯广告联盟广告
+       * @param {string} adId - 广告位ID
+       * @param {string} containerId - 广告容器ID（可选，默认为 'tencent-ad-banner'）
+       */
+      function loadTencentAd(adId, containerId = 'tencent-ad-banner') {
+        if (!adId || adId === 'YOUR_AD_ID_HERE') {
+          console.warn('请先配置腾讯广告位ID');
+          return;
+        }
+        
+        const container = document.getElementById(containerId);
+        if (!container) {
+          console.warn('广告容器不存在:', containerId);
+          return;
+        }
+        
+        // 加载腾讯广告联盟脚本
+        if (document.getElementById('tencent-ad-script')) {
+          // 脚本已加载，直接初始化广告
+          initTencentAd(adId, container);
+        } else {
+          const script = document.createElement('script');
+          script.id = 'tencent-ad-script';
+          script.type = 'text/javascript';
+          script.src = 'https://qzs.qq.com/qzone/biz/res/i.js';
+          script.charset = 'utf-8';
+          script.onload = function() {
+            initTencentAd(adId, container);
+          };
+          script.onerror = function() {
+            console.error('腾讯广告脚本加载失败');
+          };
+          document.head.appendChild(script);
+        }
+      }
+      
+      /**
+       * 初始化腾讯广告
+       */
+      function initTencentAd(adId, container) {
+        try {
+          // 根据腾讯广告联盟的API初始化广告
+          // 注意：这里需要根据腾讯提供的实际API进行调整
+          if (typeof window.AD_TAG !== 'undefined') {
+            window.AD_TAG = adId;
+            window.AD_WIDTH = 300;
+            window.AD_HEIGHT = 250;
+            console.log('腾讯广告初始化成功，广告位ID:', adId);
+          } else {
+            // 如果API不同，使用iframe方式加载
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://qzs.qq.com/qzone/biz/res/ad.html?ad_id=${adId}`;
+            iframe.style.width = '100%';
+            iframe.style.height = '250px';
+            iframe.style.border = 'none';
+            iframe.scrolling = 'no';
+            container.appendChild(iframe);
+          }
+        } catch (error) {
+          console.error('腾讯广告初始化失败:', error);
+        }
+      }
+      
+      // 页面加载完成后自动加载腾讯广告
+      // 注意：需要先注册媒体主账户，获取广告位ID后才能使用
+      // document.addEventListener('DOMContentLoaded', function() {
+      //   // 使用广告位ID加载广告（不是广告主账户ID）
+      //   loadTencentAd('YOUR_AD_POSITION_ID_HERE', 'tencent-ad-banner');
+      // });
 
     </script>
   </body>
