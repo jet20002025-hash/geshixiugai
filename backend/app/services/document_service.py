@@ -3260,13 +3260,24 @@ class DocumentService:
                 margin-bottom: {margin_bottom};
                 margin-left: {margin_left};
                 margin-right: {margin_right};
+                /* 添加页面边框，让分页更明显 */
+                border: 1px solid #cccccc;
+                /* 或者使用更明显的边框 */
+                /* border: 2px solid #999999; */
             }}
             body {{
                 font-family: "SimSun", "宋体", "Times New Roman", serif;
+                /* 确保内容区域有足够的空间 */
+                padding: 0;
+                margin: 0;
             }}
             /* 分页控制 */
             .page-break {{
                 page-break-before: always;
+                /* 在分页处添加明显的分隔线 */
+                border-top: 2px dashed #999999;
+                margin-top: 20px;
+                padding-top: 20px;
             }}
             /* 避免在标题前分页 */
             h1, h2, h3, h4, h5, h6 {{
@@ -3280,6 +3291,11 @@ class DocumentService:
             /* 图片和表格分页控制 */
             img, table {{
                 page-break-inside: avoid;
+            }}
+            /* 文档容器样式 */
+            .document-container {{
+                /* 确保每页内容清晰分离 */
+                min-height: 100vh;
             }}
             .watermark {{
                 position: fixed;
