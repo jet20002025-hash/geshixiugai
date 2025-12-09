@@ -3661,13 +3661,23 @@ read_file
             
             print(f"[PDF预览] 执行LibreOffice PDF转换命令: {' '.join(cmd)}")
             
+            # 准备环境变量，确保包含必要的 PATH
+            env = os.environ.copy()
+            # 确保 PATH 包含 /usr/bin 和 /bin（uname 等命令需要）
+            current_path = env.get('PATH', '')
+            if '/usr/bin' not in current_path:
+                env['PATH'] = f"/usr/bin:/bin:{current_path}"
+            if '/bin' not in env['PATH']:
+                env['PATH'] = f"/bin:{env['PATH']}"
+            
             # 执行转换（超时60秒）
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=60,
-                cwd=str(output_dir)
+                cwd=str(output_dir),
+                env=env  # 使用包含完整 PATH 的环境变量
             )
             
             if result.returncode != 0:
