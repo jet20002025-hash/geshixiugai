@@ -161,10 +161,12 @@ async def document_detail(document_id: str) -> DocumentDetailResponse:
 
 @router.get(
     "/{document_id}/preview",
-    summary="网页预览水印版（仅查看，不可下载）",
+    summary="预览水印版（PDF优先，HTML回退）",
 )
-async def preview_document(document_id: str) -> HTMLResponse:
-    """返回HTML预览页面，用户只能查看，无法下载"""
+async def preview_document(document_id: str) -> Response:
+    """返回PDF或HTML预览页面，用户只能查看，无法下载"""
+    from fastapi.responses import FileResponse
+    
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     metadata = service.get_document_metadata(document_id)
     if not metadata:
@@ -173,18 +175,32 @@ async def preview_document(document_id: str) -> HTMLResponse:
             detail=f"未找到文档 {document_id}，请确认文档ID是否正确"
         )
 
-    # 尝试从存储或本地获取 HTML 文件
+    # 优先查找PDF预览文件
     preview_path = Path(metadata.get("preview_path", ""))
+    pdf_path = preview_path.with_suffix('.pdf') if preview_path else DOCUMENT_DIR / document_id / "preview.pdf"
     html_path = preview_path.with_suffix('.html') if preview_path else DOCUMENT_DIR / document_id / "preview.html"
     
-    print(f"[Preview] 查找HTML文件: {html_path}")
+    print(f"[Preview] 查找预览文件 - PDF: {pdf_path}, HTML: {html_path}")
     print(f"[Preview] 文档元数据: {metadata.get('status', 'unknown')}")
     
-    # 从存储或本地加载文件
+    # 优先返回PDF
+    pdf_file = service._get_file_from_storage_or_local(document_id, "pdf", "pdf", pdf_path)
+    if pdf_file and pdf_file.exists():
+        print(f"[Preview] 返回PDF预览: {pdf_file}")
+        return FileResponse(
+            path=str(pdf_file),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "inline; filename=preview.pdf",
+                "Cache-Control": "no-cache"
+            }
+        )
+    
+    # 回退到HTML预览
     html_file = service._get_file_from_storage_or_local(document_id, "html", "html", html_path)
     
     if not html_file:
-        print(f"[Preview] HTML文件不存在: {html_path}")
+        print(f"[Preview] 预览文件不存在")
         # 检查文档状态
         doc_status = metadata.get("status", "unknown")
         if doc_status != "completed":

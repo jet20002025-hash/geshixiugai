@@ -406,6 +406,36 @@
                     console.warn('警告: 响应类型不是HTML:', contentType);
                 }
                 
+                // 检查响应类型
+                const contentType = response.headers.get('content-type') || '';
+                console.log('响应Content-Type:', contentType);
+                
+                // 如果是PDF，直接显示
+                if (contentType.includes('application/pdf') || contentType.includes('pdf')) {
+                    logStep('PDF检测', '检测到PDF预览');
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    const iframe = document.getElementById('previewFrame');
+                    iframe.src = blobUrl;
+                    
+                    iframe.onload = () => {
+                        const totalTime = performance.now() - perf.start;
+                        logStep('PDF加载完成', `PDF预览加载完成 (总耗时: ${totalTime.toFixed(2)}ms)`);
+                        document.getElementById('loading').style.display = 'none';
+                        iframe.style.display = 'block';
+                    };
+                    
+                    iframe.onerror = () => {
+                        showError('PDF加载失败', '无法加载PDF预览，请稍后重试');
+                    };
+                    
+                    return;
+                }
+                
+                // 如果是HTML，按原逻辑处理
+                logStep('HTML检测', '检测到HTML预览');
+                
                 // 获取预览HTML内容
                 logStep('读取中', '正在读取HTML内容');
                 const readStart = performance.now();

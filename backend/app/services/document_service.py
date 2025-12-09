@@ -124,8 +124,16 @@ class DocumentService:
 
         preview_path = task_dir / "preview.docx"
         self._generate_watermarked_preview(final_path, preview_path)
-        html_path = preview_path.with_suffix('.html')
-        self._generate_html_preview(preview_path, html_path, stats)
+        
+        # 生成PDF预览（优先，格式完美）
+        pdf_path = preview_path.with_suffix('.pdf')
+        if self._generate_pdf_preview(preview_path, pdf_path, stats):
+            print(f"[预览] PDF预览生成成功: {pdf_path}")
+        else:
+            # 回退到HTML预览
+            html_path = preview_path.with_suffix('.html')
+            self._generate_html_preview(preview_path, html_path, stats)
+            print(f"[预览] HTML预览生成成功: {html_path}")
 
         report_data = {
             "document_id": document_id,
@@ -138,13 +146,22 @@ class DocumentService:
 
         # 如果使用云存储，将文件上传到云存储
         if self.use_storage:
-            self._save_to_storage(document_id, {
+            files_to_save = {
                 "original": original_path,
                 "final": final_path,
                 "preview": preview_path,
-                "html": html_path,
                 "report": report_path,
-            })
+            }
+            # 添加PDF或HTML预览文件
+            pdf_path = preview_path.with_suffix('.pdf')
+            if pdf_path.exists():
+                files_to_save["pdf"] = pdf_path
+            else:
+                html_path = preview_path.with_suffix('.html')
+                if html_path.exists():
+                    files_to_save["html"] = html_path
+            
+            self._save_to_storage(document_id, files_to_save)
 
         # 确保 template_id 不为 None（如果使用 university_id，则使用 university_id 作为标识）
         final_template_id = template_id if template_id else (f"university_{university_id}" if university_id else "unknown")
@@ -2894,6 +2911,76 @@ class DocumentService:
             print(f"[HTML预览] 提取图片时发生错误: {e}")
         
         return images_html
+    
+    def _generate_pdf_preview(self, docx_path: Path, pdf_path: Path, stats: Dict) -> bool:
+        """将Word文档转换为PDF预览（使用weasyprint从HTML转PDF）"""
+        try:
+            from weasyprint import HTML, CSS
+            from weasyprint.text.fonts import FontConfiguration
+        except ImportError:
+            print("[PDF预览] weasyprint未安装，跳过PDF生成")
+            return False
+        
+        try:
+            # 先生成HTML（用于PDF转换）
+            html_path = pdf_path.with_suffix('.html')
+            self._generate_html_preview(docx_path, html_path, stats)
+            
+            # 读取HTML内容
+            html_content = html_path.read_text(encoding='utf-8')
+            
+            # 添加PDF专用样式
+            pdf_css = """
+            @page {
+                size: A4;
+                margin: 2cm;
+            }
+            body {
+                font-family: "SimSun", "宋体", "Times New Roman", serif;
+            }
+            .watermark {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                font-size: 72px;
+                color: rgba(209, 15, 15, 0.15);
+                font-weight: bold;
+                pointer-events: none;
+                z-index: 1;
+            }
+            """
+            
+            # 在HTML的head中添加CSS
+            if '</head>' in html_content:
+                html_content = html_content.replace('</head>', f'<style>{pdf_css}</style></head>')
+            else:
+                # 如果没有head标签，添加一个
+                if '<html' in html_content:
+                    html_content = html_content.replace('<html', '<html><head><style>' + pdf_css + '</style></head>')
+            
+            print(f"[PDF预览] 开始转换HTML到PDF，HTML大小: {len(html_content) / 1024:.2f} KB")
+            
+            # 使用weasyprint转换
+            font_config = FontConfiguration()
+            html_doc = HTML(string=html_content)
+            
+            # 生成PDF
+            html_doc.write_pdf(
+                pdf_path,
+                font_config=font_config
+            )
+            
+            pdf_size = pdf_path.stat().st_size
+            print(f"[PDF预览] PDF生成成功，大小: {pdf_size / 1024:.2f} KB")
+            
+            return True
+            
+        except Exception as e:
+            print(f"[PDF预览] 生成PDF失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def _try_libreoffice_conversion(self, docx_path: Path, html_path: Path, stats: Dict) -> bool:
         """尝试使用LibreOffice将Word文档转换为HTML（保留格式最好）"""
