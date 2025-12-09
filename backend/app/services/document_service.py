@@ -3129,11 +3129,15 @@ class DocumentService:
         3. 更好的跨浏览器兼容性
         4. 更接近原始Word文档的显示效果
         """
+        print(f"[PDF预览] 开始生成PDF预览，输入文件: {docx_path}, 输出文件: {pdf_path}")
         try:
             from weasyprint import HTML, CSS
             from weasyprint.text.fonts import FontConfiguration
-        except ImportError:
-            print("[PDF预览] weasyprint未安装，跳过PDF生成")
+            print("[PDF预览] WeasyPrint导入成功")
+        except ImportError as e:
+            print(f"[PDF预览] ❌ weasyprint未安装，跳过PDF生成: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         
         try:
