@@ -3579,4 +3579,82 @@ read_file
         except Exception as e:
             print(f"[HTML预览] LibreOffice转换出错: {e}")
             return False
+    
+    def _try_libreoffice_pdf_conversion(self, docx_path: Path, pdf_path: Path) -> bool:
+        """尝试使用LibreOffice将Word文档直接转换为PDF（最接近Word效果）"""
+        import subprocess
+        import shutil
+        
+        # 检查LibreOffice是否可用
+        libreoffice_cmd = None
+        for cmd in ['libreoffice', 'soffice']:
+            if shutil.which(cmd):
+                libreoffice_cmd = cmd
+                break
+        
+        if not libreoffice_cmd:
+            print("[PDF预览] LibreOffice未安装，无法使用LibreOffice转换PDF")
+            return False
+        
+        try:
+            # 准备输出目录
+            output_dir = pdf_path.parent
+            
+            # 使用LibreOffice转换
+            # --headless: 无界面模式
+            # --convert-to pdf: 转换为PDF
+            # --outdir: 输出目录
+            cmd = [
+                libreoffice_cmd,
+                '--headless',
+                '--convert-to', 'pdf',
+                '--outdir', str(output_dir),
+                str(docx_path)
+            ]
+            
+            print(f"[PDF预览] 执行LibreOffice PDF转换命令: {' '.join(cmd)}")
+            
+            # 执行转换（超时60秒）
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=str(output_dir)
+            )
+            
+            if result.returncode != 0:
+                print(f"[PDF预览] LibreOffice PDF转换失败: {result.stderr}")
+                return False
+            
+            # LibreOffice 会在输出目录生成与输入文件同名的PDF
+            # 例如：input.docx -> input.pdf
+            generated_pdf = output_dir / f"{docx_path.stem}.pdf"
+            
+            if not generated_pdf.exists():
+                print(f"[PDF预览] LibreOffice生成的PDF文件不存在: {generated_pdf}")
+                return False
+            
+            # 移动到目标位置
+            if generated_pdf != pdf_path:
+                shutil.move(str(generated_pdf), str(pdf_path))
+            
+            pdf_size = pdf_path.stat().st_size
+            print(f"[PDF预览] LibreOffice PDF转换成功，大小: {pdf_size / 1024:.2f} KB")
+            
+            # 验证PDF文件是否有效（至少应该有一定大小）
+            if pdf_size < 1024:  # 小于1KB可能有问题
+                print(f"[PDF预览] 警告: PDF文件大小异常小 ({pdf_size} 字节)，可能生成失败")
+                return False
+            
+            return True
+            
+        except subprocess.TimeoutExpired:
+            print("[PDF预览] LibreOffice PDF转换超时（超过60秒）")
+            return False
+        except Exception as e:
+            print(f"[PDF预览] LibreOffice PDF转换出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
