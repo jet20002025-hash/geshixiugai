@@ -2991,6 +2991,14 @@ class DocumentService:
                                     
                                     # 确定图片格式
                                     content_type = image_part.content_type if hasattr(image_part, 'content_type') else ''
+                                    
+                                    # 检查是否为不支持的格式（WMF、EMF等）
+                                    if 'wmf' in content_type.lower() or 'emf' in content_type.lower() or 'x-wmf' in content_type.lower():
+                                        print(f"[HTML预览] ⚠️ 跳过不支持的图片格式: {content_type} (WeasyPrint不支持WMF/EMF格式)")
+                                        # 可以添加一个占位符图片
+                                        images_html += f'<div style="border: 1px dashed #ccc; padding: 20px; text-align: center; color: #999; margin: 10px 0;">[图片格式不支持: {content_type}]</div>'
+                                        continue
+                                    
                                     if 'jpeg' in content_type or 'jpg' in content_type:
                                         img_format = 'jpeg'
                                     elif 'png' in content_type:
@@ -3002,7 +3010,21 @@ class DocumentService:
                                     elif 'webp' in content_type:
                                         img_format = 'webp'
                                     else:
-                                        img_format = 'png'  # 默认
+                                        # 检查文件头来确定格式
+                                        if image_data.startswith(b'\x89PNG'):
+                                            img_format = 'png'
+                                        elif image_data.startswith(b'\xff\xd8\xff'):
+                                            img_format = 'jpeg'
+                                        elif image_data.startswith(b'GIF'):
+                                            img_format = 'gif'
+                                        elif image_data.startswith(b'BM'):
+                                            img_format = 'bmp'
+                                        elif image_data.startswith(b'RIFF') and b'WEBP' in image_data[:12]:
+                                            img_format = 'webp'
+                                        else:
+                                            print(f"[HTML预览] ⚠️ 未知图片格式: {content_type}，跳过")
+                                            images_html += f'<div style="border: 1px dashed #ccc; padding: 20px; text-align: center; color: #999; margin: 10px 0;">[图片格式未知: {content_type}]</div>'
+                                            continue
                                     
                                     # 转换为base64
                                     base64_data = base64.b64encode(image_data).decode('utf-8')
