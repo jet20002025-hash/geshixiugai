@@ -1,5 +1,4 @@
-Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-web/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import io
