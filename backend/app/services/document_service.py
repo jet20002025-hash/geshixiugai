@@ -3281,21 +3281,9 @@ read_file
                 margin: 0;
                 background: #ffffff;
             }}
-            /* 分页控制 - 添加明显的分隔线 */
+            /* 分页控制 - 使用CSS分页，不添加可见分隔线 */
             .page-break {{
                 page-break-before: always;
-                border-top: 3px solid #999999 !important;
-                margin-top: 30px !important;
-                padding-top: 20px !important;
-                background: linear-gradient(to bottom, #f0f0f0 0%, #ffffff 30px) !important;
-                min-height: 50px;
-            }}
-            /* 分页分隔线样式 */
-            hr.page-divider {{
-                border: none;
-                border-top: 3px solid #999999;
-                margin: 30px 0;
-                page-break-after: always;
             }}
             /* 在每个段落后添加轻微的分隔（帮助识别分页） */
             p {{
