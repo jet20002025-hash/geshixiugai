@@ -141,8 +141,8 @@ class DocumentService:
         if not pdf_success:
             # 回退到HTML预览
             print(f"[预览] PDF生成失败，回退到HTML预览")
-        html_path = preview_path.with_suffix('.html')
-        self._generate_html_preview(preview_path, html_path, stats)
+            html_path = preview_path.with_suffix('.html')
+            self._generate_html_preview(preview_path, html_path, stats)
             if html_path.exists():
                 html_size = html_path.stat().st_size
                 print(f"[预览] HTML预览生成成功: {html_path}, 大小: {html_size / 1024:.2f} KB")
