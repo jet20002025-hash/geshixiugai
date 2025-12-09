@@ -2697,8 +2697,28 @@ class DocumentService:
         {figure_issues_html}
 """
         
-        for paragraph in document.paragraphs:
+        for idx, paragraph in enumerate(document.paragraphs):
             text = paragraph.text.strip()
+            
+            # 检查段落格式中是否有分页符
+            # python-docx中，分页符通常通过paragraph_format.page_break_before或runs中的break元素表示
+            page_break_before = False
+            if paragraph.paragraph_format.page_break_before:
+                page_break_before = True
+                print(f"[HTML预览] 检测到分页符（段落 {idx}）")
+            
+            # 检查runs中是否有分页符
+            for run in paragraph.runs:
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        page_break_before = True
+                        print(f"[HTML预览] 检测到run中的分页符（段落 {idx}）")
+                        break
+            
+            # 如果检测到分页符，添加分页标记
+            if page_break_before:
+                html_content += '<div class="page-break"></div>\n'
             
             # 检查段落是否包含图片
             has_image = self._paragraph_has_image_or_equation(paragraph)
