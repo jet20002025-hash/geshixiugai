@@ -251,6 +251,10 @@
         <div class="loading" id="loading">
             <div class="loading-spinner"></div>
             <p>正在加载预览...</p>
+            <div id="loadingDetails" style="margin-top: 1rem; font-size: 0.9rem; color: #6b7280;">
+                <div>步骤: <span id="loadingStep">初始化</span></div>
+                <div>耗时: <span id="loadingTime">0</span>ms</div>
+            </div>
         </div>
         
         <div class="error" id="error" style="display: none;">
@@ -317,16 +321,67 @@
             }
         }
         
+        // 性能监控
+        const perf = {
+            start: performance.now(),
+            steps: {}
+        };
+        
+        function logStep(step, message) {
+            const now = performance.now();
+            const elapsed = now - perf.start;
+            perf.steps[step] = { time: elapsed, message };
+            console.log(`[性能] ${step}: ${elapsed.toFixed(2)}ms - ${message}`);
+            
+            // 更新加载提示
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl) {
+                const stepEl = document.getElementById('loadingStep');
+                const timeEl = document.getElementById('loadingTime');
+                if (stepEl) stepEl.textContent = message;
+                if (timeEl) timeEl.textContent = elapsed.toFixed(0);
+            }
+        }
+        
         // 加载预览内容
         async function loadPreview() {
+            perf.start = performance.now();
+            logStep('开始', '初始化预览加载');
             console.log('开始加载预览，文档ID:', docId);
             
             try {
+                logStep('请求前', '准备发送预览请求');
                 console.log('请求预览接口:', `/documents/${docId}/preview`);
-                const response = await fetch(`/documents/${docId}/preview`);
                 
+                const requestStart = performance.now();
+                
+                // 添加请求超时控制
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                    logStep('请求超时', '请求超过30秒未响应');
+                }, 30000);
+                
+                let response;
+                try {
+                    response = await fetch(`/documents/${docId}/preview`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    if (error.name === 'AbortError') {
+                        throw new Error('请求超时：服务器响应时间超过30秒，可能是文档太大或服务器负载过高');
+                    }
+                    throw error;
+                }
+                
+                const requestTime = performance.now() - requestStart;
+                
+                logStep('响应收到', `收到响应 (${requestTime.toFixed(2)}ms)`);
                 console.log('响应状态:', response.status, response.statusText);
                 console.log('响应Content-Type:', response.headers.get('content-type'));
+                console.log('响应大小:', response.headers.get('content-length') || '未知');
                 
                 if (!response.ok) {
                     let errorMessage = `加载失败 (${response.status})`;
@@ -351,8 +406,14 @@
                 }
                 
                 // 获取预览HTML内容
+                logStep('读取中', '正在读取HTML内容');
+                const readStart = performance.now();
                 const htmlContent = await response.text();
-                console.log('获取到HTML内容长度:', htmlContent.length);
+                const readTime = performance.now() - readStart;
+                
+                logStep('读取完成', `HTML内容读取完成 (${readTime.toFixed(2)}ms)`);
+                console.log('获取到HTML内容长度:', htmlContent.length, '字符');
+                console.log('HTML内容大小:', (htmlContent.length / 1024).toFixed(2), 'KB');
                 
                 // 如果内容为空，显示错误
                 if (!htmlContent || htmlContent.trim().length === 0) {
@@ -365,26 +426,44 @@
                 }
                 
                 // 创建blob URL
+                logStep('创建Blob', '正在创建Blob对象');
+                const blobStart = performance.now();
                 const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
                 const blobUrl = URL.createObjectURL(blob);
+                const blobTime = performance.now() - blobStart;
+                
+                logStep('Blob创建完成', `Blob创建完成 (${blobTime.toFixed(2)}ms)`);
                 console.log('创建Blob URL:', blobUrl);
                 
                 // 加载到iframe
                 const iframe = document.getElementById('previewFrame');
                 let loaded = false;
                 
-                // 设置加载超时（10秒）
+                // 设置加载超时（30秒）
                 const loadTimeout = setTimeout(() => {
                     if (!loaded) {
-                        console.error('iframe加载超时');
-                        showError('加载超时', '预览内容加载时间过长，请检查网络连接或稍后重试');
+                        const totalTime = performance.now() - perf.start;
+                        console.error('iframe加载超时，总耗时:', totalTime.toFixed(2), 'ms');
+                        console.log('性能摘要:', perf.steps);
+                        showError('加载超时', `预览内容加载时间过长（已等待${(totalTime/1000).toFixed(1)}秒），请检查网络连接或稍后重试。查看控制台了解详细性能信息。`);
                     }
-                }, 10000);
+                }, 30000);
                 
                 // 隐藏加载提示，显示iframe
                 iframe.onload = () => {
                     loaded = true;
                     clearTimeout(loadTimeout);
+                    const totalTime = performance.now() - perf.start;
+                    logStep('加载完成', `预览加载完成 (总耗时: ${totalTime.toFixed(2)}ms)`);
+                    
+                    // 打印性能摘要
+                    console.log('=== 性能摘要 ===');
+                    Object.entries(perf.steps).forEach(([step, data]) => {
+                        console.log(`${step}: ${data.time.toFixed(2)}ms - ${data.message}`);
+                    });
+                    console.log(`总耗时: ${totalTime.toFixed(2)}ms`);
+                    console.log('===============');
+                    
                     console.log('iframe加载成功');
                     document.getElementById('loading').style.display = 'none';
                     iframe.style.display = 'block';
@@ -406,10 +485,12 @@
                 console.log('设置iframe src');
                 iframe.src = blobUrl;
                 
-                // 备选方案：如果iframe在3秒内没有加载，尝试直接显示内容
+                // 备选方案：如果iframe在5秒内没有加载，尝试直接显示内容
                 setTimeout(() => {
                     if (!loaded && document.getElementById('loading').style.display !== 'none') {
-                        console.log('iframe加载较慢，尝试直接显示内容');
+                        const waitTime = performance.now() - perf.start;
+                        console.log(`iframe加载较慢（已等待${waitTime.toFixed(2)}ms），尝试直接显示内容`);
+                        logStep('备选方案', 'iframe加载慢，切换到直接显示');
                         try {
                             const previewContent = document.getElementById('previewContent');
                             previewContent.innerHTML = htmlContent;
@@ -417,12 +498,15 @@
                             previewContent.style.display = 'block';
                             loaded = true;
                             clearTimeout(loadTimeout);
+                            const totalTime = performance.now() - perf.start;
+                            logStep('直接显示完成', `直接显示内容成功 (总耗时: ${totalTime.toFixed(2)}ms)`);
                             console.log('直接显示内容成功');
                         } catch (e) {
                             console.error('直接显示内容失败:', e);
+                            showError('显示失败', `无法显示预览内容: ${e.message}`);
                         }
                     }
-                }, 3000);
+                }, 5000);
                 
                 // 检查支付状态（不阻塞预览加载）
                 checkPaymentStatus().catch(err => {

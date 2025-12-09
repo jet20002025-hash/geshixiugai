@@ -214,11 +214,21 @@ async def preview_document(document_id: str) -> HTMLResponse:
                 detail="预览文件内容为空，请重新处理文档"
             )
         
+        # 计算响应大小
+        content_size = len(html_content.encode('utf-8'))
+        print(f"[Preview] HTML内容大小: {content_size / 1024:.2f} KB")
+        
+        # 如果内容太大，记录警告
+        if content_size > 5 * 1024 * 1024:  # 5MB
+            print(f"[Preview] 警告: HTML内容较大 ({content_size / 1024 / 1024:.2f} MB)，可能影响加载速度")
+        
         return HTMLResponse(
             content=html_content,
             headers={
                 "Content-Type": "text/html; charset=utf-8",
-                "Cache-Control": "no-cache"
+                "Cache-Control": "no-cache",
+                "Content-Length": str(content_size),
+                "X-Content-Size-KB": str(int(content_size / 1024))
             }
         )
     except Exception as e:
