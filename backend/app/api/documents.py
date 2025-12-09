@@ -257,23 +257,27 @@ async def preview_document(document_id: str) -> Response:
 
 @router.get(
     "/{document_id}/download",
-    summary="下载正式版文档",
+    summary="下载带水印的PDF文档",
 )
 async def download_document(document_id: str, token: str) -> FileResponse:
     """
-    下载正式版文档，需要提供下载 token 验证身份
+    下载带水印的PDF文档，需要提供下载 token 验证身份
+    
+    注意：下载版和预览版是同一个带水印的PDF文件
     
     Args:
         document_id: 文档ID
         token: 下载验证 token（支付成功后获取）
     """
+    from fastapi.responses import FileResponse
+    
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     metadata = service.get_document_metadata(document_id)
     if not metadata:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
 
     if not metadata.get("paid"):
-        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="尚未支付，无法下载正式版")
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="尚未支付，无法下载文档")
 
     # 验证下载 token
     expected_token = metadata.get("download_token")
@@ -292,19 +296,40 @@ async def download_document(document_id: str, token: str) -> FileResponse:
             print(f"[API] 警告：文档 {document_id} 已支付但缺少 download_token，token: {token}")
             # 允许下载（已支付状态已验证）
 
-    # 尝试从存储或本地获取文件
-    final_path = Path(metadata.get("final_path", "")) if metadata.get("final_path") else DOCUMENT_DIR / document_id / "final.docx"
+    # 优先返回带水印的PDF文件（与预览版相同）
+    preview_path = Path(metadata.get("preview_path", "")) if metadata.get("preview_path") else DOCUMENT_DIR / document_id / "preview.pdf"
+    pdf_path = preview_path.with_suffix('.pdf') if preview_path.suffix != '.pdf' else preview_path
     
-    # 从存储或本地加载文件
-    final_file = service._get_file_from_storage_or_local(document_id, "final", "docx", final_path)
-    if not final_file or not final_file.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="正式版文件不存在")
-
-    return FileResponse(
-        final_file,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=f"{document_id}.docx",
-    )
+    # 从存储或本地加载PDF文件
+    pdf_file = service._get_file_from_storage_or_local(document_id, "pdf", "pdf", pdf_path)
+    
+    if pdf_file and pdf_file.exists():
+        print(f"[Download] 返回带水印的PDF文件: {pdf_file}")
+        return FileResponse(
+            path=str(pdf_file),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{document_id}_带水印版.pdf"',
+                "Cache-Control": "no-cache"
+            }
+        )
+    
+    # 如果PDF不存在，回退到HTML（转换为PDF下载）
+    html_path = preview_path.with_suffix('.html') if preview_path.suffix != '.html' else preview_path
+    html_file = service._get_file_from_storage_or_local(document_id, "html", "html", html_path)
+    
+    if html_file and html_file.exists():
+        print(f"[Download] PDF不存在，返回HTML文件: {html_file}")
+        return FileResponse(
+            path=str(html_file),
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f'attachment; filename="{document_id}_预览版.html"',
+                "Cache-Control": "no-cache"
+            }
+        )
+    
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档文件不存在，请重新处理文档")
 
 
 @router.get(
