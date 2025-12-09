@@ -2978,7 +2978,86 @@ class DocumentService:
                     import traceback
                     print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
                     pass
+            
+            # 方法3: 如果前两种方法都没找到图片，尝试直接从zip文件中提取
+            # 这适用于某些特殊格式的图片或关系ID查找失败的情况
+            if not images_html and hasattr(document, 'part') and hasattr(document.part, 'package'):
+                try:
+                    # 获取docx文件的路径
+                    docx_file_path = None
+                    if hasattr(document.part.package, 'name'):
+                        docx_file_path = document.part.package.name
+                    elif hasattr(document.part.package, '__file__'):
+                        docx_file_path = document.part.package.__file__
                     
+                    if docx_file_path:
+                        import zipfile
+                        from pathlib import Path
+                        
+                        docx_path = Path(docx_file_path)
+                        if docx_path.exists() and docx_path.suffix.lower() == '.docx':
+                            print(f"[HTML预览] 尝试从zip文件直接提取图片: {docx_path}")
+                            
+                            with zipfile.ZipFile(docx_path, 'r') as zip_ref:
+                                # 查找所有图片文件（通常在word/media/目录下）
+                                image_files = [f for f in zip_ref.namelist() 
+                                             if f.startswith('word/media/') and 
+                                             any(f.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'])]
+                                
+                                print(f"[HTML预览] 在zip文件中找到 {len(image_files)} 个图片文件")
+                                
+                                # 尝试从段落XML中查找引用的图片文件名
+                                para_xml = str(paragraph._element.xml) if hasattr(paragraph, '_element') else ''
+                                
+                                for img_file in image_files:
+                                    # 检查这个图片是否可能属于当前段落
+                                    # 通过检查图片文件名是否在段落XML中被引用
+                                    img_filename = Path(img_file).name
+                                    
+                                    # 如果段落包含drawing或图片相关元素，尝试匹配
+                                    if ('drawing' in para_xml.lower() or 'pic:pic' in para_xml.lower() or 'a:blip' in para_xml.lower()):
+                                        try:
+                                            # 读取图片数据
+                                            image_data = zip_ref.read(img_file)
+                                            
+                                            # 确定图片格式
+                                            img_format = 'png'  # 默认
+                                            if img_file.lower().endswith('.jpg') or img_file.lower().endswith('.jpeg'):
+                                                img_format = 'jpeg'
+                                            elif img_file.lower().endswith('.png'):
+                                                img_format = 'png'
+                                            elif img_file.lower().endswith('.gif'):
+                                                img_format = 'gif'
+                                            elif img_file.lower().endswith('.bmp'):
+                                                img_format = 'bmp'
+                                            elif img_file.lower().endswith('.webp'):
+                                                img_format = 'webp'
+                                            
+                                            # 转换为base64
+                                            base64_data = base64.b64encode(image_data).decode('utf-8')
+                                            data_uri = f"data:image/{img_format};base64,{base64_data}"
+                                            
+                                            # 创建img标签（只添加一次，避免重复）
+                                            if img_filename not in images_html:
+                                                images_html += f'<img src="{data_uri}" style="max-width: 100%; height: auto; margin: 10px 0;" alt="图片 {image_count + 1}" />'
+                                                image_count += 1
+                                                print(f"[HTML预览] 从zip文件成功提取图片 {image_count}: {img_filename}，格式: {img_format}，大小: {len(image_data)} 字节")
+                                                
+                                                # 如果已经找到一个图片，就停止（避免一个段落显示多个图片）
+                                                # 如果需要显示多个图片，可以移除这个break
+                                                if image_count >= 1:
+                                                    break
+                                                    
+                                        except Exception as e:
+                                            print(f"[HTML预览] 从zip文件读取图片失败 {img_file}: {e}")
+                                            continue
+                                            
+                except Exception as e:
+                    print(f"[HTML预览] 从zip文件提取图片时出错: {e}")
+                    import traceback
+                    print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
+                    pass
+        
         except Exception as e:
             print(f"[HTML预览] 提取图片时发生错误: {e}")
             import traceback
@@ -2987,7 +3066,11 @@ class DocumentService:
         if images_html:
             print(f"[HTML预览] 段落图片提取完成，共提取 {image_count} 张图片")
         else:
-            print(f"[HTML预览] 段落中未找到图片")
+            # 如果没找到图片，但段落包含drawing元素，记录警告
+            if hasattr(paragraph, '_element'):
+                para_xml = str(paragraph._element.xml)
+                if 'drawing' in para_xml.lower() or 'pic:pic' in para_xml.lower():
+                    print(f"[HTML预览] 警告: 段落包含drawing元素但未提取到图片，XML片段: {para_xml[:200]}")
         
         return images_html
     
