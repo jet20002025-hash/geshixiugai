@@ -539,6 +539,7 @@
 
       // 加载大学模板列表（方案2：优先显示用户模板，预设模板作为备选）
       async function loadUniversityTemplates() {
+        console.log("[大学列表] 开始加载大学模板列表");
         try {
           // 先加载用户上传的模板（名称包含"大学"的）
           const userTemplates = await loadUserTemplates().catch(function(error) {
@@ -548,9 +549,10 @@
           
           // 清空下拉框
           if (!universitySelect) {
-            console.error("universitySelect 元素不存在");
+            console.error("[大学列表] universitySelect 元素不存在");
             return;
           }
+          console.log("[大学列表] 清空下拉框，准备加载选项");
           universitySelect.innerHTML = '<option value="">请选择您的大学</option>';
           
           // 如果用户有自定义模板，优先显示用户模板
@@ -578,12 +580,14 @@
           }
           
           // 加载并显示预设模板（无论用户是否有自定义模板，都显示预设模板作为备选）
-          console.log("加载预设模板作为备选");
+          console.log("[大学列表] 开始加载预设模板");
           try {
             const presetResponse = await fetch("/templates/presets");
+            console.log("[大学列表] API响应状态:", presetResponse.status, presetResponse.statusText);
             if (presetResponse.ok) {
               const presetUniversities = await presetResponse.json();
-              console.log("加载到预设模板数量:", presetUniversities.length);
+              console.log("[大学列表] 加载到预设模板数量:", presetUniversities.length);
+              console.log("[大学列表] 预设模板数据:", presetUniversities);
               if (presetUniversities && presetUniversities.length > 0) {
                 presetUniversities.forEach(uni => {
                   const option = document.createElement("option");
@@ -594,14 +598,17 @@
                   }
                   universitySelect.appendChild(option);
                 });
+                console.log("[大学列表] 预设模板已添加到下拉框，当前选项数:", universitySelect.options.length);
               } else {
-                console.warn("预设模板列表为空");
+                console.warn("[大学列表] 预设模板列表为空");
               }
             } else {
-              console.error("加载预设模板失败，状态码:", presetResponse.status);
+              const errorText = await presetResponse.text().catch(() => "无法读取错误信息");
+              console.error("[大学列表] 加载预设模板失败，状态码:", presetResponse.status, "错误:", errorText);
             }
           } catch (presetError) {
-            console.error("加载预设模板出错:", presetError);
+            console.error("[大学列表] 加载预设模板出错:", presetError);
+            console.error("[大学列表] 错误详情:", presetError.message, presetError.stack);
           }
           
           // 如果既没有用户模板也没有预设模板，显示提示
@@ -618,20 +625,31 @@
 
       // 初始化模板选择（加载所有大学模板到下拉框）
       async function initializeTemplateSelection() {
-        // 加载所有大学模板（预设模板 + 用户上传的模板）
-        await loadUniversityTemplates();
-        
-        // 始终显示大学模板选择
-        if (presetTemplateSection) {
-          presetTemplateSection.style.display = "block";
-        }
-        if (universitySelect) {
-          universitySelect.required = true;
+        console.log("[大学列表] 开始初始化模板选择");
+        try {
+          // 加载所有大学模板（预设模板 + 用户上传的模板）
+          await loadUniversityTemplates();
+          console.log("[大学列表] 模板选择初始化完成，下拉框选项数:", universitySelect ? universitySelect.options.length : 0);
+          
+          // 始终显示大学模板选择
+          if (presetTemplateSection) {
+            presetTemplateSection.style.display = "block";
+          }
+          if (universitySelect) {
+            universitySelect.required = true;
+          }
+        } catch (error) {
+          console.error("[大学列表] 初始化模板选择失败:", error);
         }
       }
 
       // 页面加载时初始化模板选择
-      initializeTemplateSelection();
+      console.log("[大学列表] 页面加载，准备初始化模板选择");
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeTemplateSelection);
+      } else {
+        initializeTemplateSelection();
+      }
       
       // 检测支付宝支付成功回调
       (function() {
