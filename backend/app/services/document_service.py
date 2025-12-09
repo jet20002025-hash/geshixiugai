@@ -2450,12 +2450,21 @@ class DocumentService:
         # 保存所有文件
         for file_type, file_path in files.items():
             if file_path.exists():
-                key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                # 对于PDF文件，确保使用正确的扩展名
+                if file_type == "pdf":
+                    key = f"{prefix}/pdf.pdf"
+                else:
+                    key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                
+                file_size = file_path.stat().st_size
+                print(f"[Storage] 准备上传文件: {file_type} -> {key}, 大小: {file_size / 1024:.2f} KB")
                 content = file_path.read_bytes()
                 if self._save_file_to_storage(key, content):
-                    print(f"[Storage] Saved {key}")
+                    print(f"[Storage] ✅ 成功上传: {key}")
                 else:
-                    print(f"[Storage] Failed to save {key}")
+                    print(f"[Storage] ❌ 上传失败: {key}")
+            else:
+                print(f"[Storage] ⚠️ 文件不存在，跳过上传: {file_type} -> {file_path}")
 
     def _get_file_from_storage_or_local(self, document_id: str, file_type: str, extension: str, local_path: Path) -> Optional[Path]:
         """
@@ -2463,8 +2472,8 @@ class DocumentService:
         
         Args:
             document_id: 文档ID
-            file_type: 文件类型（original, final, preview, html, report）
-            extension: 文件扩展名（docx, html, json）
+            file_type: 文件类型（original, final, preview, html, report, pdf）
+            extension: 文件扩展名（docx, html, json, pdf）
             local_path: 本地文件路径（用于回退）
         
         Returns:
@@ -2473,19 +2482,31 @@ class DocumentService:
         # 优先从云存储读取
         if self.use_storage:
             key = f"documents/{document_id}/{file_type}.{extension}"
+            print(f"[Storage] 查找文件: key={key}, file_type={file_type}, extension={extension}")
             if self.storage.file_exists(key):
+                print(f"[Storage] 文件存在于云存储: {key}")
                 content = self._load_file_from_storage(key)
                 if content:
+                    print(f"[Storage] 成功下载文件: {key}, 大小: {len(content) / 1024:.2f} KB")
                     # 确保本地目录存在
                     local_path.parent.mkdir(parents=True, exist_ok=True)
                     # 写入本地临时文件
                     local_path.write_bytes(content)
-                    print(f"[Storage] Loaded {key} to {local_path}")
+                    print(f"[Storage] 已保存到本地: {local_path}")
                     return local_path
+                else:
+                    print(f"[Storage] ⚠️ 文件存在但下载失败: {key}")
+            else:
+                print(f"[Storage] ⚠️ 文件不存在于云存储: {key}")
         
         # 回退到本地文件系统
+        print(f"[Storage] 检查本地文件: {local_path}")
         if local_path.exists():
+            local_size = local_path.stat().st_size
+            print(f"[Storage] ✅ 找到本地文件: {local_path}, 大小: {local_size / 1024:.2f} KB")
             return local_path
+        else:
+            print(f"[Storage] ⚠️ 本地文件不存在: {local_path}")
         
         return None
 
