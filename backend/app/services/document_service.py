@@ -3236,21 +3236,30 @@ class DocumentService:
             
             print(f"[PDF预览] 开始生成PDF文件...")
             # 生成PDF（添加更多选项以避免内部错误）
+            # 先尝试不使用font_config，因为可能导致transform错误
             try:
+                print(f"[PDF预览] 尝试不使用font_config生成PDF...")
                 html_doc.write_pdf(
                     pdf_path,
-                    font_config=font_config,
                     optimize_images=False,  # 禁用图片优化，避免某些内部错误
                 )
-            except AttributeError as attr_error:
-                # 如果是 'super' object has no attribute 'transform' 错误，尝试不使用font_config
-                if "'super' object has no attribute 'transform'" in str(attr_error) or "transform" in str(attr_error):
-                    print(f"[PDF预览] 检测到transform相关错误，尝试不使用font_config重新生成...")
-                    html_doc.write_pdf(
-                        pdf_path,
-                        optimize_images=False,
-                    )
+            except (AttributeError, TypeError) as error:
+                error_str = str(error)
+                # 如果是transform相关错误，尝试使用font_config
+                if "transform" in error_str.lower():
+                    print(f"[PDF预览] 检测到transform相关错误: {error_str}")
+                    print(f"[PDF预览] 尝试使用font_config重新生成...")
+                    try:
+                        html_doc.write_pdf(
+                            pdf_path,
+                            font_config=font_config,
+                            optimize_images=False,
+                        )
+                    except Exception as e2:
+                        print(f"[PDF预览] 使用font_config也失败: {e2}")
+                        raise
                 else:
+                    # 其他错误直接抛出
                     raise
             
             pdf_size = pdf_path.stat().st_size
