@@ -295,12 +295,8 @@ class DocumentService:
         if not has_image:
             try:
                 from docx.oxml.ns import qn
-                drawings = paragraph._element.xpath('.//w:drawing', namespaces={
-                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-                    'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
-                    'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-                })
+                # 使用findall配合qn，而不是xpath with namespaces
+                drawings = paragraph._element.findall('.//' + qn('w:drawing'))
                 if drawings:
                     for drawing in drawings:
                         drawing_xml = str(drawing.xml)
