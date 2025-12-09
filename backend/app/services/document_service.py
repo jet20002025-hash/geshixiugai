@@ -3075,7 +3075,14 @@ class DocumentService:
         return images_html
     
     def _generate_pdf_preview(self, docx_path: Path, pdf_path: Path, stats: Dict) -> bool:
-        """将Word文档转换为PDF预览（使用weasyprint从HTML转PDF）"""
+        """将Word文档转换为PDF预览（使用weasyprint从HTML转PDF）
+        
+        优先使用PDF预览，因为：
+        1. PDF格式更稳定，图片显示更可靠
+        2. 避免HTML中base64图片可能的问题
+        3. 更好的跨浏览器兼容性
+        4. 更接近原始Word文档的显示效果
+        """
         try:
             from weasyprint import HTML, CSS
             from weasyprint.text.fonts import FontConfiguration
