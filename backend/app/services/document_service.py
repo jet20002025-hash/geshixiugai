@@ -3584,16 +3584,63 @@ read_file
         """尝试使用LibreOffice将Word文档直接转换为PDF（最接近Word效果）"""
         import subprocess
         import shutil
+        import os
         
         # 检查LibreOffice是否可用
         libreoffice_cmd = None
+        
+        # 方法1: 使用 which 查找
         for cmd in ['libreoffice', 'soffice']:
-            if shutil.which(cmd):
-                libreoffice_cmd = cmd
+            cmd_path = shutil.which(cmd)
+            if cmd_path:
+                libreoffice_cmd = cmd_path
+                print(f"[PDF预览] 找到LibreOffice命令: {cmd_path}")
                 break
         
+        # 方法2: 如果 which 找不到，尝试直接执行（可能在 PATH 中但 which 检测不到）
         if not libreoffice_cmd:
-            print("[PDF预览] LibreOffice未安装，无法使用LibreOffice转换PDF")
+            for cmd in ['libreoffice', 'soffice']:
+                try:
+                    # 尝试执行 --version 命令来验证
+                    result = subprocess.run(
+                        [cmd, '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        libreoffice_cmd = cmd
+                        print(f"[PDF预览] 通过执行验证找到LibreOffice命令: {cmd}")
+                        print(f"[PDF预览] LibreOffice版本: {result.stdout.strip()}")
+                        break
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    continue
+        
+        # 方法3: 尝试常见安装路径
+        if not libreoffice_cmd:
+            common_paths = [
+                '/usr/bin/libreoffice',
+                '/usr/local/bin/libreoffice',
+                '/opt/libreoffice*/program/soffice',
+            ]
+            for path_pattern in common_paths:
+                if '*' in path_pattern:
+                    # 处理通配符路径
+                    import glob
+                    matches = glob.glob(path_pattern)
+                    if matches:
+                        libreoffice_cmd = matches[0]
+                        print(f"[PDF预览] 在常见路径找到LibreOffice: {libreoffice_cmd}")
+                        break
+                else:
+                    if os.path.exists(path_pattern) and os.access(path_pattern, os.X_OK):
+                        libreoffice_cmd = path_pattern
+                        print(f"[PDF预览] 在常见路径找到LibreOffice: {libreoffice_cmd}")
+                        break
+        
+        if not libreoffice_cmd:
+            print("[PDF预览] LibreOffice未找到，无法使用LibreOffice转换PDF")
+            print("[PDF预览] 提示: 请确保LibreOffice已安装并在PATH中，或使用 'which libreoffice' 检查")
             return False
         
         try:
