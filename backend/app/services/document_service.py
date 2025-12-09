@@ -3093,32 +3093,24 @@ class DocumentService:
         try:
             # 先生成HTML（用于PDF转换）
             html_path = pdf_path.with_suffix('.html')
+            print(f"[PDF预览] 开始生成HTML预览: {html_path}")
             self._generate_html_preview(docx_path, html_path, stats)
+            
+            # 检查HTML文件是否生成成功
+            if not html_path.exists():
+                print(f"[PDF预览] 错误: HTML文件未生成: {html_path}")
+                return False
+            
+            # 读取Word文档的页面设置
+            from docx import Document
+            doc = Document(docx_path)
+            page_settings = self._extract_page_settings(doc)
             
             # 读取HTML内容
             html_content = html_path.read_text(encoding='utf-8')
             
-            # 添加PDF专用样式
-            pdf_css = """
-            @page {
-                size: A4;
-                margin: 2cm;
-            }
-            body {
-                font-family: "SimSun", "宋体", "Times New Roman", serif;
-            }
-            .watermark {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%) rotate(-45deg);
-                font-size: 72px;
-                color: rgba(209, 15, 15, 0.15);
-                font-weight: bold;
-                pointer-events: none;
-                z-index: 1;
-            }
-            """
+            # 生成PDF专用样式（使用Word文档的页面设置）
+            pdf_css = self._generate_pdf_css(page_settings)
             
             # 在HTML的head中添加CSS
             if '</head>' in html_content:
@@ -3166,6 +3158,122 @@ class DocumentService:
             import traceback
             traceback.print_exc()
             return False
+    
+    def _extract_page_settings(self, document: Document) -> Dict:
+        """从Word文档中提取页面设置"""
+        settings = {
+            "paper_size": "A4",  # 默认A4
+            "margins": {
+                "top": 2.54,      # 默认1英寸 = 2.54cm
+                "bottom": 2.54,
+                "left": 3.18,     # 默认1.25英寸 = 3.18cm
+                "right": 3.18,
+            },
+            "orientation": "portrait"  # 默认纵向
+        }
+        
+        try:
+            # 获取第一个section的页面设置（通常所有section使用相同设置）
+            if document.sections:
+                section = document.sections[0]
+                page_width = section.page_width
+                page_height = section.page_height
+                
+                # 判断页面方向
+                if page_width > page_height:
+                    settings["orientation"] = "landscape"
+                else:
+                    settings["orientation"] = "portrait"
+                
+                # 判断纸张大小（转换为厘米）
+                width_cm = page_width / 360000  # Word内部单位转换为厘米
+                height_cm = page_height / 360000
+                
+                # 常见纸张大小判断
+                if abs(width_cm - 21.0) < 0.5 and abs(height_cm - 29.7) < 0.5:
+                    settings["paper_size"] = "A4"
+                elif abs(width_cm - 21.59) < 0.5 and abs(height_cm - 27.94) < 0.5:
+                    settings["paper_size"] = "Letter"
+                elif abs(width_cm - 21.0) < 0.5 and abs(height_cm - 29.7) < 0.5:
+                    settings["paper_size"] = "A4"
+                else:
+                    # 自定义大小，使用实际尺寸
+                    settings["paper_size"] = f"{width_cm}cm {height_cm}cm"
+                
+                # 提取页边距（转换为厘米）
+                settings["margins"]["top"] = section.top_margin / 360000
+                settings["margins"]["bottom"] = section.bottom_margin / 360000
+                settings["margins"]["left"] = section.left_margin / 360000
+                settings["margins"]["right"] = section.right_margin / 360000
+                
+                print(f"[PDF预览] 提取页面设置: {settings['paper_size']}, 方向: {settings['orientation']}, 页边距: {settings['margins']}")
+        except Exception as e:
+            print(f"[PDF预览] 提取页面设置失败，使用默认值: {e}")
+        
+        return settings
+    
+    def _generate_pdf_css(self, page_settings: Dict) -> str:
+        """根据页面设置生成PDF CSS"""
+        paper_size = page_settings.get("paper_size", "A4")
+        orientation = page_settings.get("orientation", "portrait")
+        margins = page_settings.get("margins", {})
+        
+        # 构建@page规则
+        margin_top = f"{margins.get('top', 2.54):.2f}cm"
+        margin_bottom = f"{margins.get('bottom', 2.54):.2f}cm"
+        margin_left = f"{margins.get('left', 3.18):.2f}cm"
+        margin_right = f"{margins.get('right', 3.18):.2f}cm"
+        
+        # 如果纸张大小是自定义的，直接使用
+        if "cm" in str(paper_size) and " " in str(paper_size):
+            size_value = paper_size
+        else:
+            # 标准纸张大小
+            size_value = paper_size
+            if orientation == "landscape":
+                size_value = f"{paper_size} landscape"
+        
+        css = f"""
+            @page {{
+                size: {size_value};
+                margin-top: {margin_top};
+                margin-bottom: {margin_bottom};
+                margin-left: {margin_left};
+                margin-right: {margin_right};
+            }}
+            body {{
+                font-family: "SimSun", "宋体", "Times New Roman", serif;
+            }}
+            /* 分页控制 */
+            .page-break {{
+                page-break-before: always;
+            }}
+            /* 避免在标题前分页 */
+            h1, h2, h3, h4, h5, h6 {{
+                page-break-after: avoid;
+            }}
+            /* 避免在段落中间分页 */
+            p {{
+                orphans: 3;
+                widows: 3;
+            }}
+            /* 图片和表格分页控制 */
+            img, table {{
+                page-break-inside: avoid;
+            }}
+            .watermark {{
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                font-size: 72px;
+                color: rgba(209, 15, 15, 0.15);
+                font-weight: bold;
+                pointer-events: none;
+                z-index: 1;
+            }}
+            """
+        return css
     
     def _try_libreoffice_conversion(self, docx_path: Path, html_path: Path, stats: Dict) -> bool:
         """尝试使用LibreOffice将Word文档转换为HTML（保留格式最好）"""
