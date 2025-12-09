@@ -3683,24 +3683,42 @@ read_file
                 env['PATH'] = f"/bin:{env['PATH']}"
             
             # 执行转换（超时60秒）
+            # 注意：使用绝对路径，避免相对路径问题
+            abs_docx_path = docx_path.resolve()
+            abs_output_dir = output_dir.resolve()
+            
+            cmd_abs = [
+                libreoffice_cmd,
+                '--headless',
+                '--convert-to', 'pdf',
+                '--outdir', str(abs_output_dir),
+                str(abs_docx_path)
+            ]
+            
+            print(f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}")
+            
             result = subprocess.run(
-                cmd,
+                cmd_abs,
                 capture_output=True,
                 text=True,
                 timeout=60,
-                cwd=str(output_dir),
                 env=env  # 使用包含完整 PATH 的环境变量
             )
             
+            print(f"[PDF预览] LibreOffice执行完成，返回码: {result.returncode}")
+            if result.stdout:
+                print(f"[PDF预览] LibreOffice标准输出: {result.stdout}")
+            if result.stderr:
+                print(f"[PDF预览] LibreOffice错误输出: {result.stderr}")
+            
             if result.returncode != 0:
                 print(f"[PDF预览] LibreOffice PDF转换失败，返回码: {result.returncode}")
-                print(f"[PDF预览] 错误输出: {result.stderr}")
-                print(f"[PDF预览] 标准输出: {result.stdout}")
                 return False
             
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
-            generated_pdf = output_dir / f"{docx_path.stem}.pdf"
+            # 使用绝对路径查找
+            generated_pdf = abs_output_dir / f"{abs_docx_path.stem}.pdf"
             
             # 如果找不到，尝试列出输出目录中的所有文件
             if not generated_pdf.exists():
