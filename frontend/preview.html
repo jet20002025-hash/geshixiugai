@@ -402,12 +402,6 @@
                 
                 // 检查响应类型
                 const contentType = response.headers.get('content-type') || '';
-                if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
-                    console.warn('警告: 响应类型不是HTML:', contentType);
-                }
-                
-                // 检查响应类型
-                const contentType = response.headers.get('content-type') || '';
                 console.log('响应Content-Type:', contentType);
                 
                 // 如果是PDF，直接显示
