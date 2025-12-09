@@ -3687,6 +3687,8 @@ read_file
             abs_docx_path = docx_path.resolve()
             abs_output_dir = output_dir.resolve()
             
+            # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
+            # 但首先尝试直接执行
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
@@ -3696,6 +3698,15 @@ read_file
             ]
             
             print(f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}")
+            print(f"[PDF预览] 输入文件: {abs_docx_path}, 存在: {abs_docx_path.exists()}")
+            print(f"[PDF预览] 输出目录: {abs_output_dir}, 存在: {abs_output_dir.exists()}")
+            
+            # 检查文件权限
+            try:
+                file_stat = abs_docx_path.stat()
+                print(f"[PDF预览] 文件权限: {oct(file_stat.st_mode)}, 所有者UID: {file_stat.st_uid}, GID: {file_stat.st_gid}")
+            except Exception as e:
+                print(f"[PDF预览] 无法获取文件权限信息: {e}")
             
             result = subprocess.run(
                 cmd_abs,
