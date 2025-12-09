@@ -2647,7 +2647,9 @@ class DocumentService:
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) rotate(-45deg);
+            /* 移除transform，避免WeasyPrint内部错误 */
+            margin-top: -36px;
+            margin-left: -200px;
             font-size: 72px;
             color: rgba(209, 15, 15, 0.15);
             font-weight: bold;
@@ -3407,12 +3409,17 @@ read_file
                 position: fixed;
                 top: 50%;
                 left: 50%;
-                transform: translate(-50%, -50%) rotate(-45deg);
+                /* 移除transform，使用margin来居中，避免WeasyPrint内部错误 */
+                margin-top: -36px;  /* 字体大小的一半 */
+                margin-left: -200px;  /* 大约文本宽度的一半 */
                 font-size: 72px;
                 color: rgba(209, 15, 15, 0.15);
                 font-weight: bold;
                 pointer-events: none;
                 z-index: 1;
+                /* 使用writing-mode来实现旋转效果（如果支持） */
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
             }}
             """
         return css
@@ -3519,7 +3526,9 @@ read_file
                     position: fixed;
                     top: 50%;
                     left: 50%;
-                    transform: translate(-50%, -50%) rotate(-45deg);
+                    /* 移除transform，避免WeasyPrint内部错误 */
+                    margin-top: -36px;
+                    margin-left: -200px;
                     font-size: 72px;
                     color: rgba(209, 15, 15, 0.15);
                     font-weight: bold;
