@@ -197,6 +197,18 @@
       // 注意：这个错误处理必须在页面最前面，确保能捕获所有错误
       window.addEventListener('unhandledrejection', function(event) {
         const reason = event.reason;
+        const errorMessage = String(reason || '');
+        
+        // 过滤掉第三方脚本的错误（腾讯广告、浏览器扩展等）
+        if (errorMessage.includes('NATIVE') || 
+            errorMessage.includes('Cannot set properties of undefined') ||
+            errorMessage.includes('tencent') ||
+            errorMessage.includes('ad') ||
+            errorMessage.includes('extension')) {
+          // 静默处理第三方脚本错误
+          event.preventDefault();
+          return;
+        }
         
         // 检查是否是网络错误（多种格式）
         const isNetworkError = 
