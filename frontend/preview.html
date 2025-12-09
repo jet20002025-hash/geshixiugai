@@ -274,6 +274,7 @@
     </div>
     
     <script>
+        (function() {
         // 从URL参数获取document_id
         const urlParams = new URLSearchParams(window.location.search);
         let docId = urlParams.get('id') || urlParams.get('document_id');
@@ -294,7 +295,7 @@
             }
         }
         
-        // 如果还是没有，显示错误
+        // 如果还是没有，显示错误并退出
         if (!docId) {
             showError('缺少文档ID参数', '请在URL中包含文档ID，例如：/web/preview.html?id=文档ID');
             return;
@@ -543,6 +544,7 @@
         } else {
             loadPreview();
         }
+        })(); // 立即执行函数结束
     </script>
 </body>
 </html>
