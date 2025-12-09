@@ -1,4 +1,5 @@
-from __future__ import annotations
+Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+web/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)from __future__ import annotations
 
 import base64
 import io
@@ -2944,7 +2945,9 @@ class DocumentService:
                                     else:
                                         print(f"[HTML预览] ⚠️ 未知图片格式: {content_type}，跳过")
                                         continue
-                                else:
+                                    
+                                # 如果到这里还没有设置 img_format，使用默认值
+                                if 'img_format' not in locals():
                                     img_format = 'png'  # 默认
                             
                             # 转换为base64
