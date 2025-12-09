@@ -188,3 +188,5 @@ sudo journalctl -u geshixiugai -f
 
 **现在执行**：在服务器上执行 `git pull origin main` 然后重启服务！🚀
 
+
+

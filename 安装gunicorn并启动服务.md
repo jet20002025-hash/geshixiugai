@@ -114,3 +114,5 @@ ls -la /var/www/geshixiugai/venv/bin/gunicorn
 **现在执行安装命令！** 🚀
 
 
+
+

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档预览 - 论文格式自动修复</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+        }
+        
+        .btn-secondary:hover {
+            background: #f0f0f0;
+        }
+        
+        .status-bar {
+            background: #fff;
+            padding: 0.75rem 2rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        
+        .status-info {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .status-badge.watermark {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-badge.paid {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .preview-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            background: #fff;
+        }
+        
+        .preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #6b7280;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #dc2626;
+            padding: 2rem;
+            background: #fef2f2;
+            border-radius: 8px;
+            max-width: 500px;
+        }
+        
+        .error-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-detail {
+            font-size: 0.9rem;
+            color: #991b1b;
+            margin-top: 0.5rem;
+        }
+        
+        .back-link {
+            color: #667eea;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+            
+            .header-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+            
+            .status-bar {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            
+            .status-info {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 文档预览</h1>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="window.print()">🖨️ 打印</button>
+            <a href="/web" class="btn btn-secondary">← 返回主页</a>
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <div class="status-info">
+            <div class="status-item">
+                <span>文档ID：</span>
+                <strong id="documentId">-</strong>
+            </div>
+            <div class="status-item">
+                <span>状态：</span>
+                <span class="status-badge watermark" id="previewStatus">预览版（带水印）</span>
+            </div>
+        </div>
+        <div id="paidStatus" style="display: none;">
+            <span class="status-badge paid">✅ 已支付</span>
+        </div>
+    </div>
+    
+    <div class="preview-container">
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>正在加载预览...</p>
+        </div>
+        
+        <div class="error" id="error" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-message" id="errorMessage">加载预览失败</div>
+            <div class="error-detail" id="errorDetail"></div>
+            <a href="/web" class="back-link">← 返回主页</a>
+        </div>
+        
+        <iframe 
+            id="previewFrame" 
+            class="preview-iframe" 
+            style="display: none;"
+            sandbox="allow-same-origin allow-scripts"
+        ></iframe>
+    </div>
+    
+    <script>
+        // 从URL参数获取document_id
+        const urlParams = new URLSearchParams(window.location.search);
+        let docId = urlParams.get('id') || urlParams.get('document_id');
+        
+        // 如果没有document_id，尝试从路径中提取
+        if (!docId) {
+            const pathMatch = window.location.pathname.match(/\/preview\/([^\/]+)/);
+            if (pathMatch) {
+                docId = pathMatch[1];
+            }
+        }
+        
+        // 如果还是没有，尝试从hash中获取
+        if (!docId && window.location.hash) {
+            const hashMatch = window.location.hash.match(/[#&]id=([^&]+)/);
+            if (hashMatch) {
+                docId = decodeURIComponent(hashMatch[1]);
+            }
+        }
+        
+        // 如果还是没有，显示错误
+        if (!docId) {
+            showError('缺少文档ID参数', '请在URL中包含文档ID，例如：/web/preview.html?id=文档ID');
+            return;
+        }
+        
+        // 显示文档ID（只显示前8位，保护隐私）
+        const displayId = docId.length > 8 ? docId.substring(0, 8) + '...' : docId;
+        document.getElementById('documentId').textContent = displayId;
+        
+        // 检查支付状态
+        async function checkPaymentStatus() {
+            try {
+                const response = await fetch(`/documents/${docId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.paid) {
+                        document.getElementById('paidStatus').style.display = 'block';
+                        document.getElementById('previewStatus').textContent = '正式版（已支付）';
+                        document.getElementById('previewStatus').className = 'status-badge paid';
+                    }
+                }
+            } catch (error) {
+                console.warn('检查支付状态失败:', error);
+            }
+        }
+        
+        // 加载预览内容
+        async function loadPreview() {
+            try {
+                const response = await fetch(`/documents/${docId}/preview`);
+                
+                if (!response.ok) {
+                    let errorMessage = `加载失败 (${response.status})`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorMessage;
+                    } catch (e) {
+                        const errorText = await response.text();
+                        if (errorText) {
+                            errorMessage = errorText.substring(0, 200);
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                // 获取预览HTML内容
+                const htmlContent = await response.text();
+                
+                // 如果内容为空，显示错误
+                if (!htmlContent || htmlContent.trim().length === 0) {
+                    throw new Error('预览内容为空，请重新处理文档');
+                }
+                
+                // 创建blob URL
+                const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // 加载到iframe
+                const iframe = document.getElementById('previewFrame');
+                iframe.src = blobUrl;
+                
+                // 隐藏加载提示，显示iframe
+                iframe.onload = () => {
+                    document.getElementById('loading').style.display = 'none';
+                    iframe.style.display = 'block';
+                    // 清理blob URL（延迟清理，确保iframe已加载）
+                    setTimeout(() => {
+                        URL.revokeObjectURL(blobUrl);
+                    }, 1000);
+                };
+                
+                // 处理iframe加载错误
+                iframe.onerror = () => {
+                    showError('预览加载失败', '无法在iframe中加载预览内容，请稍后重试');
+                };
+                
+                // 设置超时（30秒）
+                setTimeout(() => {
+                    if (document.getElementById('loading').style.display !== 'none') {
+                        showError('加载超时', '预览内容加载时间过长，请检查网络连接或稍后重试');
+                    }
+                }, 30000);
+                
+                // 检查支付状态
+                await checkPaymentStatus();
+                
+            } catch (error) {
+                console.error('加载预览失败:', error);
+                let errorDetail = error.message || '请检查文档ID是否正确，或文档是否已处理完成';
+                
+                // 如果是404错误，提供更友好的提示
+                if (error.message && error.message.includes('404')) {
+                    errorDetail = '文档不存在或尚未处理完成，请返回主页重新上传文档';
+                }
+                
+                showError('加载预览失败', errorDetail);
+            }
+        }
+        
+        // 显示错误
+        function showError(message, detail) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorDetail').textContent = detail;
+        }
+        
+        // 页面加载时开始加载预览
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadPreview);
+        } else {
+            loadPreview();
+        }
+    </script>
+</body>
+</html>
+

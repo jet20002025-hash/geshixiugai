@@ -67,3 +67,5 @@ sudo chown nginx:nginx /var/www/geshixiugai/.env
 **先执行权限修复命令！** 🔧
 
 
+
+

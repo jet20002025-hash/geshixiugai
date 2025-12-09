@@ -96,3 +96,5 @@ sudo tail -n 50 /var/log/geshixiugai/error.log | grep -i alipay
 **先使用 sudo 检查配置是否存在！** 🔍
 
 
+
+

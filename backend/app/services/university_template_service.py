@@ -29,18 +29,26 @@ class UniversityTemplateService:
         if self._templates_cache is not None:
             return self._templates_cache
         
+        print(f"[UniversityTemplateService] 尝试加载模板文件: {self.templates_file}")
+        print(f"[UniversityTemplateService] 文件是否存在: {self.templates_file.exists()}")
+        
         if not self.templates_file.exists():
             # 如果文件不存在，返回空配置
+            print(f"[UniversityTemplateService] 警告: 模板文件不存在: {self.templates_file}")
             self._templates_cache = {"universities": []}
             return self._templates_cache
         
         try:
             with open(self.templates_file, 'r', encoding='utf-8') as f:
                 self._templates_cache = json.load(f)
+            universities_count = len(self._templates_cache.get("universities", []))
+            print(f"[UniversityTemplateService] 成功加载模板文件，包含 {universities_count} 所大学")
             return self._templates_cache
         except (json.JSONDecodeError, IOError) as e:
             # 如果读取失败，返回空配置
-            print(f"Warning: Failed to load university templates: {e}")
+            print(f"[UniversityTemplateService] 警告: 加载模板文件失败: {e}")
+            import traceback
+            print(f"[UniversityTemplateService] 错误堆栈: {traceback.format_exc()}")
             self._templates_cache = {"universities": []}
             return self._templates_cache
     

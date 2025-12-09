@@ -60,3 +60,5 @@ cat /etc/nginx/conf.d/geshixiugai.conf | grep -A 10 "listen 443"
 **现在输入 `1` 然后按回车！** ✅
 
 
+
+

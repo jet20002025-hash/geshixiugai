@@ -992,15 +992,13 @@
           paidNotice.style.setProperty("display", "block", "important");
         }
         
-        // 更新预览按钮
+        // 更新预览链接
         if (previewLinks) {
-          const previewBtn = previewLinks.querySelector('.preview-btn');
-          if (previewBtn) {
-            previewBtn.textContent = "查看正式版文档";
-            const downloadToken = data.download_token || documentId;
-            previewBtn.onclick = () => {
-              window.open(`/documents/${documentId}/download?token=${encodeURIComponent(downloadToken)}`, '_blank');
-            };
+          const previewLink = previewLinks.querySelector('.preview-btn');
+          if (previewLink) {
+            previewLink.textContent = "📄 查看正式版文档";
+            previewLink.href = `/web/preview.html?id=${encodeURIComponent(documentId)}`;
+            previewLink.target = "_blank";
           }
           
           // 检查并添加下载按钮
@@ -1169,27 +1167,40 @@
 
           previewLinks.innerHTML = "";
           
-          // 预览按钮（根据支付状态显示不同文本）
-          const previewBtn = document.createElement("button");
+          // 预览链接（根据支付状态显示不同文本和链接）
+          const previewLink = document.createElement("a");
           if (data.paid) {
-            // 已支付，显示正式版查看按钮
-            previewBtn.textContent = "查看正式版文档";
-            previewBtn.className = "preview-btn";
-            previewBtn.onclick = () => {
-              // 已支付后，预览页面应该显示正式版（不带水印）
-              // 或者直接打开下载链接
-              const downloadToken = data.download_token || data.document_id;
-              window.open(`/documents/${data.document_id}/download?token=${encodeURIComponent(downloadToken)}`, '_blank');
+            // 已支付，显示正式版查看链接
+            previewLink.textContent = "📄 查看正式版文档";
+            previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
+            previewLink.target = "_blank";
+            previewLink.className = "preview-btn";
+            previewLink.style.cssText = "display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; margin-right: 10px; transition: all 0.3s;";
+            previewLink.onmouseover = function() {
+              this.style.background = "#45a049";
+              this.style.transform = "translateY(-2px)";
+            };
+            previewLink.onmouseout = function() {
+              this.style.background = "#4CAF50";
+              this.style.transform = "translateY(0)";
             };
           } else {
-            // 未支付，显示预览按钮（仅查看，不可下载）
-            previewBtn.textContent = "预览文档（仅查看，不可下载）";
-            previewBtn.className = "preview-btn";
-            previewBtn.onclick = () => {
-              window.open(`/documents/${data.document_id}/preview`, '_blank', 'width=1200,height=800');
+            // 未支付，显示预览链接（仅查看，不可下载）
+            previewLink.textContent = "👁️ 预览文档（仅查看，不可下载）";
+            previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
+            previewLink.target = "_blank";
+            previewLink.className = "preview-btn";
+            previewLink.style.cssText = "display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; margin-right: 10px; transition: all 0.3s;";
+            previewLink.onmouseover = function() {
+              this.style.background = "#1d4ed8";
+              this.style.transform = "translateY(-2px)";
+            };
+            previewLink.onmouseout = function() {
+              this.style.background = "#2563eb";
+              this.style.transform = "translateY(0)";
             };
           }
-          previewLinks.appendChild(previewBtn);
+          previewLinks.appendChild(previewLink);
 
           // 处理已支付状态
           if (data.paid) {
