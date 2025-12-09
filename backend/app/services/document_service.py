@@ -2794,8 +2794,9 @@ class DocumentService:
                     if 'v:shape' in run_xml.lower() and 'textpath' in run_xml.lower():
                         continue
                     
-                    # 查找图片关系ID
+                    # 查找图片关系ID（支持多种格式）
                     image_id = None
+                    # 尝试多种方式查找图片ID
                     if 'r:embed' in run_xml:
                         # 内嵌图片
                         match = re.search(r'r:embed="([^"]+)"', run_xml)
@@ -2806,32 +2807,73 @@ class DocumentService:
                         match = re.search(r'r:link="([^"]+)"', run_xml)
                         if match:
                             image_id = match.group(1)
+                    # 也尝试查找a:blip中的embed属性
+                    if not image_id and 'a:blip' in run_xml:
+                        match = re.search(r'r:embed="([^"]+)"', run_xml)
+                        if match:
+                            image_id = match.group(1)
                     
                     if image_id:
                         # 从文档中提取图片数据
                         try:
-                            # 尝试从主文档部分获取
+                            # 尝试从多个位置获取图片
                             image_part = None
+                            
+                            # 方法1: 从主文档部分获取
                             if hasattr(document.part, 'related_parts') and image_id in document.part.related_parts:
                                 image_part = document.part.related_parts[image_id]
-                            elif hasattr(run, 'part') and hasattr(run.part, 'related_parts') and image_id in run.part.related_parts:
-                                image_part = run.part.related_parts[image_id]
+                                print(f"[HTML预览] 从主文档部分找到图片: {image_id}")
+                            
+                            # 方法2: 从run的part获取
+                            if not image_part and hasattr(run, 'part') and hasattr(run.part, 'related_parts'):
+                                if image_id in run.part.related_parts:
+                                    image_part = run.part.related_parts[image_id]
+                                    print(f"[HTML预览] 从run.part找到图片: {image_id}")
+                            
+                            # 方法3: 从文档的所有部分查找
+                            if not image_part:
+                                # 尝试从文档的所有相关部分查找
+                                for rel in document.part.rels.values():
+                                    if rel.rId == image_id:
+                                        image_part = rel.target_part
+                                        print(f"[HTML预览] 从文档关系中找到图片: {image_id}")
+                                        break
                             
                             if not image_part:
+                                print(f"[HTML预览] 警告: 未找到图片关系ID: {image_id}")
                                 continue
                                 
                             image_data = image_part.blob
+                            if not image_data:
+                                print(f"[HTML预览] 警告: 图片数据为空: {image_id}")
+                                continue
                             
                             # 确定图片格式
-                            content_type = image_part.content_type
+                            content_type = image_part.content_type if hasattr(image_part, 'content_type') else ''
                             if 'jpeg' in content_type or 'jpg' in content_type:
                                 img_format = 'jpeg'
                             elif 'png' in content_type:
                                 img_format = 'png'
                             elif 'gif' in content_type:
                                 img_format = 'gif'
+                            elif 'bmp' in content_type:
+                                img_format = 'bmp'
+                            elif 'webp' in content_type:
+                                img_format = 'webp'
                             else:
-                                img_format = 'png'  # 默认
+                                # 尝试从文件扩展名判断
+                                if hasattr(image_part, 'partname'):
+                                    partname = str(image_part.partname)
+                                    if '.jpg' in partname or '.jpeg' in partname:
+                                        img_format = 'jpeg'
+                                    elif '.png' in partname:
+                                        img_format = 'png'
+                                    elif '.gif' in partname:
+                                        img_format = 'gif'
+                                    else:
+                                        img_format = 'png'  # 默认
+                                else:
+                                    img_format = 'png'  # 默认
                             
                             # 转换为base64
                             base64_data = base64.b64encode(image_data).decode('utf-8')
@@ -2840,17 +2882,20 @@ class DocumentService:
                             # 创建img标签
                             images_html += f'<img src="{data_uri}" style="max-width: 100%; height: auto; margin: 10px 0;" alt="图片 {image_count + 1}" />'
                             image_count += 1
+                            print(f"[HTML预览] 成功提取图片 {image_count}，格式: {img_format}，大小: {len(image_data)} 字节")
                             
                         except Exception as e:
                             print(f"[HTML预览] 提取图片失败: {e}")
+                            import traceback
+                            print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
                             continue
                             
                 except Exception as e:
                     print(f"[HTML预览] 处理run时出错: {e}")
                     continue
             
-            # 方法2: 从段落的内联形状中提取图片
-            if not images_html and hasattr(paragraph, '_element'):
+            # 方法2: 从段落的内联形状中提取图片（即使方法1已经找到图片，也继续查找，因为一个段落可能有多个图片）
+            if hasattr(paragraph, '_element'):
                 try:
                     # 查找drawing元素
                     drawings = paragraph._element.xpath('.//w:drawing', namespaces={
@@ -2870,26 +2915,48 @@ class DocumentService:
                             image_id = embed_attr or link_attr
                             if image_id:
                                 try:
-                                    # 尝试从主文档部分获取
+                                    # 检查是否已经处理过这个图片（避免重复）
+                                    # 这里简化处理，允许重复（因为可能有不同的引用方式）
+                                    
+                                    # 尝试从多个位置获取图片
                                     image_part = None
+                                    
+                                    # 方法1: 从主文档部分获取
                                     if hasattr(document.part, 'related_parts') and image_id in document.part.related_parts:
                                         image_part = document.part.related_parts[image_id]
+                                        print(f"[HTML预览] 从drawing找到图片（主文档）: {image_id}")
+                                    
+                                    # 方法2: 从文档的所有关系查找
+                                    if not image_part:
+                                        for rel in document.part.rels.values():
+                                            if rel.rId == image_id:
+                                                image_part = rel.target_part
+                                                print(f"[HTML预览] 从drawing找到图片（关系）: {image_id}")
+                                                break
                                     
                                     if not image_part:
+                                        print(f"[HTML预览] 警告: 从drawing未找到图片关系ID: {image_id}")
                                         continue
                                         
                                     image_data = image_part.blob
+                                    if not image_data:
+                                        print(f"[HTML预览] 警告: 从drawing获取的图片数据为空: {image_id}")
+                                        continue
                                     
                                     # 确定图片格式
-                                    content_type = image_part.content_type
+                                    content_type = image_part.content_type if hasattr(image_part, 'content_type') else ''
                                     if 'jpeg' in content_type or 'jpg' in content_type:
                                         img_format = 'jpeg'
                                     elif 'png' in content_type:
                                         img_format = 'png'
                                     elif 'gif' in content_type:
                                         img_format = 'gif'
+                                    elif 'bmp' in content_type:
+                                        img_format = 'bmp'
+                                    elif 'webp' in content_type:
+                                        img_format = 'webp'
                                     else:
-                                        img_format = 'png'
+                                        img_format = 'png'  # 默认
                                     
                                     # 转换为base64
                                     base64_data = base64.b64encode(image_data).decode('utf-8')
@@ -2898,17 +2965,29 @@ class DocumentService:
                                     # 创建img标签
                                     images_html += f'<img src="{data_uri}" style="max-width: 100%; height: auto; margin: 10px 0;" alt="图片 {image_count + 1}" />'
                                     image_count += 1
+                                    print(f"[HTML预览] 从drawing成功提取图片 {image_count}，格式: {img_format}，大小: {len(image_data)} 字节")
                                     
                                 except Exception as e:
                                     print(f"[HTML预览] 从drawing提取图片失败: {e}")
+                                    import traceback
+                                    print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
                                     continue
                                     
                 except Exception as e:
                     print(f"[HTML预览] 处理drawing时出错: {e}")
+                    import traceback
+                    print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
                     pass
                     
         except Exception as e:
             print(f"[HTML预览] 提取图片时发生错误: {e}")
+            import traceback
+            print(f"[HTML预览] 错误堆栈: {traceback.format_exc()}")
+        
+        if images_html:
+            print(f"[HTML预览] 段落图片提取完成，共提取 {image_count} 张图片")
+        else:
+            print(f"[HTML预览] 段落中未找到图片")
         
         return images_html
     
