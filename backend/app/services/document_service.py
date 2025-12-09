@@ -3720,6 +3720,16 @@ read_file
             # 使用绝对路径查找
             generated_pdf = abs_output_dir / f"{abs_docx_path.stem}.pdf"
             
+            # 等待文件生成（LibreOffice 可能需要一点时间）
+            import time
+            max_wait = 5  # 最多等待5秒
+            wait_interval = 0.5  # 每0.5秒检查一次
+            waited = 0
+            while not generated_pdf.exists() and waited < max_wait:
+                time.sleep(wait_interval)
+                waited += wait_interval
+                print(f"[PDF预览] 等待PDF文件生成... ({waited:.1f}s)")
+            
             # 如果找不到，尝试列出输出目录中的所有文件
             if not generated_pdf.exists():
                 print(f"[PDF预览] 预期PDF文件不存在: {generated_pdf}")
