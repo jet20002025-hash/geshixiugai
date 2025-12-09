@@ -115,12 +115,21 @@ async def list_university_templates() -> list[dict]:
     ]
     """
     try:
+        print(f"[Templates API] 开始获取预设模板列表")
         service = UniversityTemplateService()
+        print(f"[Templates API] UniversityTemplateService 初始化成功")
+        print(f"[Templates API] 模板文件路径: {service.templates_file}")
+        print(f"[Templates API] 模板文件是否存在: {service.templates_file.exists()}")
+        
         universities = service.get_all_universities()
-        print(f"[Templates API] 获取预设模板列表，找到 {len(universities)} 所大学")
+        print(f"[Templates API] ✅ 获取预设模板列表成功，找到 {len(universities)} 所大学")
+        if len(universities) > 0:
+            print(f"[Templates API] 前3所大学: {[u.get('name') for u in universities[:3]]}")
+        else:
+            print(f"[Templates API] ⚠️ 警告: 大学列表为空，可能是模板文件不存在或格式错误")
         return universities
     except Exception as e:
-        print(f"[Templates API] 获取预设模板列表失败: {e}")
+        print(f"[Templates API] ❌ 获取预设模板列表失败: {e}")
         import traceback
         print(f"[Templates API] 错误堆栈: {traceback.format_exc()}")
         # 返回空列表而不是抛出异常，避免前端显示错误
