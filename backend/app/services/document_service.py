@@ -2717,17 +2717,9 @@ class DocumentService:
                         print(f"[HTML预览] 检测到run中的分页符（段落 {idx}）")
                         break
             
-            # 如果检测到分页符，添加分页标记（带明显的分隔线）
+            # 如果检测到分页符，添加分页标记（使用CSS分页，不添加可见分隔线）
             if page_break_before:
-                html_content += '<hr class="page-divider" style="border: none; border-top: 3px solid #999999; margin: 30px 0; page-break-after: always; background: #f0f0f0; height: 1px;" />\n'
-                paragraph_count = 0  # 重置计数器
-            
-            # 每隔一定数量的段落，添加一个分页标记（帮助识别分页）
-            # 每30个段落添加一个分页线（大约一页的内容）
-            paragraph_count += 1
-            if paragraph_count >= 30 and not page_break_before:
-                html_content += '<hr style="border: none; border-top: 2px dashed #cccccc; margin: 20px 0;" />\n'
-                paragraph_count = 0  # 重置计数器
+                html_content += '<div class="page-break"></div>\n'
             
             # 检查段落是否包含图片
             has_image = self._paragraph_has_image_or_equation(paragraph)
