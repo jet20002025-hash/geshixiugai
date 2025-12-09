@@ -506,33 +506,50 @@
                 if (contentType.includes('application/pdf') || contentType.includes('pdf')) {
                     logStep('PDF检测', '检测到PDF预览');
                     const blob = await response.blob();
+                    console.log('PDF Blob大小:', blob.size, 'bytes');
                     const blobUrl = URL.createObjectURL(blob);
+                    console.log('Blob URL创建:', blobUrl);
                     
                     // 等待PDF.js库加载完成
                     if (typeof pdfjsLib === 'undefined') {
                         logStep('等待PDF.js', '等待PDF.js库加载');
+                        console.log('PDF.js未加载，等待中...');
                         // 等待最多5秒
                         let waitCount = 0;
                         while (typeof pdfjsLib === 'undefined' && waitCount < 50) {
                             await new Promise(resolve => setTimeout(resolve, 100));
                             waitCount++;
+                            if (waitCount % 10 === 0) {
+                                console.log(`等待PDF.js加载... ${waitCount * 100}ms`);
+                            }
                         }
                         
                         if (typeof pdfjsLib === 'undefined') {
                             console.warn('PDF.js库未加载，使用iframe方式');
+                            logStep('回退iframe', 'PDF.js未加载，使用iframe方式');
                             // 回退到iframe方式
                             const iframe = document.getElementById('previewFrame');
+                            const mainPreview = document.getElementById('mainPreview');
                             iframe.src = blobUrl;
                             iframe.onload = () => {
+                                console.log('iframe加载成功');
                                 document.getElementById('loading').style.display = 'none';
                                 document.getElementById('thumbnailSidebar').style.display = 'none';
-                                document.getElementById('mainPreview').style.display = 'block';
+                                mainPreview.style.display = 'block';
                                 iframe.style.display = 'block';
                             };
+                            iframe.onerror = (e) => {
+                                console.error('iframe加载失败:', e);
+                                showError('PDF加载失败', '无法在iframe中加载PDF，请检查浏览器控制台');
+                            };
+                            // 显示主预览区域
+                            document.getElementById('loading').style.display = 'none';
+                            mainPreview.style.display = 'block';
                             return;
                         }
                     }
                     
+                    console.log('PDF.js已加载，开始使用PDF.js渲染');
                     // 使用PDF.js加载和渲染PDF
                     await loadPdfWithThumbnails(blobUrl);
                     
@@ -670,38 +687,60 @@
         async function loadPdfWithThumbnails(blobUrl) {
             try {
                 logStep('PDF.js初始化', '正在初始化PDF.js');
+                console.log('开始使用PDF.js加载PDF，Blob URL:', blobUrl);
                 
                 // 检查PDF.js是否已加载
                 if (typeof pdfjsLib === 'undefined') {
+                    console.error('PDF.js库未定义');
                     throw new Error('PDF.js库未加载，请检查网络连接');
                 }
                 
+                console.log('PDF.js库已加载，版本:', pdfjsLib.version || '未知');
+                
                 // 设置PDF.js worker
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                console.log('PDF.js Worker设置完成');
                 
                 // 加载PDF文档
                 logStep('PDF加载中', '正在加载PDF文档');
+                console.log('开始加载PDF文档...');
                 const loadingTask = pdfjsLib.getDocument({
                     url: blobUrl,
                     verbosity: 0 // 减少控制台输出
                 });
+                
                 const pdf = await loadingTask.promise;
+                console.log('PDF文档加载成功，总页数:', pdf.numPages);
                 
                 logStep('PDF加载完成', `PDF文档加载完成，共${pdf.numPages}页`);
                 
                 const totalTime = performance.now() - perf.start;
+                
+                // 显示UI元素
+                console.log('显示预览界面元素');
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('thumbnailSidebar').style.display = 'block';
                 document.getElementById('mainPreview').style.display = 'block';
                 
                 const thumbnailList = document.getElementById('thumbnailList');
                 const pdfViewer = document.getElementById('pdfViewer');
+                
+                console.log('缩略图列表元素:', thumbnailList);
+                console.log('PDF查看器元素:', pdfViewer);
+                
+                if (!thumbnailList || !pdfViewer) {
+                    throw new Error('无法找到预览界面元素');
+                }
+                
                 let currentPage = 1;
                 
                 // 生成所有页面的缩略图
                 logStep('生成缩略图', '正在生成页面缩略图');
+                console.log('开始生成缩略图，共', pdf.numPages, '页');
+                
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     try {
+                        console.log(`生成第${pageNum}页缩略图...`);
                         const page = await pdf.getPage(pageNum);
                         
                         // 创建缩略图
@@ -747,37 +786,61 @@
                         });
                         
                         thumbnailList.appendChild(thumbnailItem);
+                        console.log(`第${pageNum}页缩略图生成完成`);
                     } catch (pageError) {
                         console.error(`生成第${pageNum}页缩略图失败:`, pageError);
                         // 继续处理其他页面
                     }
                 }
                 
+                console.log('所有缩略图生成完成');
+                
                 // 渲染第一页
                 logStep('渲染第一页', '正在渲染第一页');
+                console.log('开始渲染第一页...');
                 await renderPage(pdf, 1, pdfViewer);
+                console.log('第一页渲染完成');
                 
                 logStep('PDF渲染完成', `PDF预览渲染完成 (总耗时: ${totalTime.toFixed(2)}ms)`);
+                console.log('PDF预览渲染全部完成');
                 
             } catch (error) {
                 console.error('PDF.js加载失败:', error);
                 console.error('错误详情:', error.stack);
+                console.error('错误名称:', error.name);
+                console.error('错误消息:', error.message);
                 
                 // 如果PDF.js失败，回退到iframe方式
                 logStep('PDF.js失败', 'PDF.js加载失败，回退到iframe方式');
+                console.log('尝试回退到iframe方式...');
+                
                 try {
                     const iframe = document.getElementById('previewFrame');
+                    const mainPreview = document.getElementById('mainPreview');
+                    
+                    if (!iframe || !mainPreview) {
+                        throw new Error('无法找到iframe或mainPreview元素');
+                    }
+                    
                     iframe.src = blobUrl;
                     iframe.onload = () => {
+                        console.log('iframe加载成功');
                         document.getElementById('loading').style.display = 'none';
                         document.getElementById('thumbnailSidebar').style.display = 'none';
-                        document.getElementById('mainPreview').style.display = 'block';
+                        mainPreview.style.display = 'block';
                         iframe.style.display = 'block';
                     };
-                    iframe.onerror = () => {
+                    iframe.onerror = (e) => {
+                        console.error('iframe加载失败:', e);
                         showError('PDF加载失败', `无法加载PDF预览: ${error.message}。请检查浏览器控制台了解详情。`);
                     };
+                    
+                    // 显示主预览区域
+                    document.getElementById('loading').style.display = 'none';
+                    mainPreview.style.display = 'block';
+                    console.log('已切换到iframe方式');
                 } catch (fallbackError) {
+                    console.error('回退方案也失败:', fallbackError);
                     showError('PDF加载失败', `无法加载PDF预览: ${error.message}。回退方案也失败: ${fallbackError.message}`);
                 }
             }
