@@ -238,8 +238,25 @@
         }
       });
       
-      // 全局错误处理：捕获其他错误
+      // 全局错误处理：捕获其他错误（过滤第三方脚本错误）
       window.addEventListener('error', function(event) {
+        // 过滤掉第三方脚本的错误（腾讯广告、浏览器扩展等）
+        const errorSource = event.filename || '';
+        const errorMessage = event.message || '';
+        
+        // 忽略第三方脚本的错误
+        if (errorSource.includes('tencent') || 
+            errorSource.includes('ad') || 
+            errorSource.includes('extension') ||
+            errorSource.includes('chrome-extension') ||
+            errorSource.includes('moz-extension') ||
+            errorMessage.includes('NATIVE') ||
+            errorMessage.includes('Cannot set properties of undefined')) {
+          // 静默处理第三方脚本错误，不影响用户体验
+          return;
+        }
+        
+        // 只记录应用本身的错误
         console.error('=== 页面错误 ===');
         console.error('错误消息:', event.message);
         console.error('错误文件:', event.filename);
