@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -2674,7 +2675,17 @@ class DocumentService:
         
         for paragraph in document.paragraphs:
             text = paragraph.text.strip()
-            if not text:
+            
+            # 检查段落是否包含图片
+            has_image = self._paragraph_has_image_or_equation(paragraph)
+            images_html = ""
+            
+            if has_image:
+                # 提取段落中的图片
+                images_html = self._extract_images_from_paragraph(paragraph, document)
+            
+            # 如果既没有文本也没有图片，跳过
+            if not text and not images_html:
                 html_content += "<p>&nbsp;</p>\n"
                 continue
             
@@ -2697,6 +2708,8 @@ class DocumentService:
                 else:
                     level = 2
                 html_content += f"<h{level}>{text}</h{level}>\n"
+                if images_html:
+                    html_content += f"<div style='text-align: center; margin: 10px 0;'>{images_html}</div>\n"
             else:
                 # 普通段落
                 if alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
@@ -2717,9 +2730,14 @@ class DocumentService:
                 style_attr = f' style="{" ".join(style_attrs)}"' if style_attrs else ""
                 
                 # 处理文本中的特殊字符
-                text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                escaped_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 
-                html_content += f'<p{class_attr}{style_attr}>{text}</p>\n'
+                # 如果有图片，先显示图片，再显示文本
+                if images_html:
+                    # 图片段落通常居中显示
+                    html_content += f'<div style="text-align: center; margin: 10px 0;">{images_html}</div>\n'
+                if text:
+                    html_content += f'<p{class_attr}{style_attr}>{escaped_text}</p>\n'
         
         html_content += """    </div>
     <div class="warning">
@@ -2729,4 +2747,144 @@ class DocumentService:
 </html>"""
         
         html_path.write_text(html_content, encoding="utf-8")
+    
+    def _extract_images_from_paragraph(self, paragraph, document: Document) -> str:
+        """从段落中提取图片并转换为HTML img标签"""
+        import zipfile
+        
+        images_html = ""
+        image_count = 0
+        
+        try:
+            # 获取文档的zip文件路径（docx是zip格式）
+            docx_path = document.part.package
+            
+            # 方法1: 从runs中提取图片
+            for run in paragraph.runs:
+                if not hasattr(run, 'element'):
+                    continue
+                
+                try:
+                    run_xml = str(run.element.xml)
+                    # 排除水印
+                    if 'v:shape' in run_xml.lower() and 'textpath' in run_xml.lower():
+                        continue
+                    
+                    # 查找图片关系ID
+                    image_id = None
+                    if 'r:embed' in run_xml:
+                        # 内嵌图片
+                        match = re.search(r'r:embed="([^"]+)"', run_xml)
+                        if match:
+                            image_id = match.group(1)
+                    elif 'r:link' in run_xml:
+                        # 链接图片
+                        match = re.search(r'r:link="([^"]+)"', run_xml)
+                        if match:
+                            image_id = match.group(1)
+                    
+                    if image_id:
+                        # 从文档中提取图片数据
+                        try:
+                            # 尝试从主文档部分获取
+                            image_part = None
+                            if hasattr(document.part, 'related_parts') and image_id in document.part.related_parts:
+                                image_part = document.part.related_parts[image_id]
+                            elif hasattr(run, 'part') and hasattr(run.part, 'related_parts') and image_id in run.part.related_parts:
+                                image_part = run.part.related_parts[image_id]
+                            
+                            if not image_part:
+                                continue
+                                
+                            image_data = image_part.blob
+                            
+                            # 确定图片格式
+                            content_type = image_part.content_type
+                            if 'jpeg' in content_type or 'jpg' in content_type:
+                                img_format = 'jpeg'
+                            elif 'png' in content_type:
+                                img_format = 'png'
+                            elif 'gif' in content_type:
+                                img_format = 'gif'
+                            else:
+                                img_format = 'png'  # 默认
+                            
+                            # 转换为base64
+                            base64_data = base64.b64encode(image_data).decode('utf-8')
+                            data_uri = f"data:image/{img_format};base64,{base64_data}"
+                            
+                            # 创建img标签
+                            images_html += f'<img src="{data_uri}" style="max-width: 100%; height: auto; margin: 10px 0;" alt="图片 {image_count + 1}" />'
+                            image_count += 1
+                            
+                        except Exception as e:
+                            print(f"[HTML预览] 提取图片失败: {e}")
+                            continue
+                            
+                except Exception as e:
+                    print(f"[HTML预览] 处理run时出错: {e}")
+                    continue
+            
+            # 方法2: 从段落的内联形状中提取图片
+            if not images_html and hasattr(paragraph, '_element'):
+                try:
+                    # 查找drawing元素
+                    drawings = paragraph._element.xpath('.//w:drawing', namespaces={
+                        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                    })
+                    
+                    for drawing in drawings:
+                        # 查找图片关系ID
+                        blip_elements = drawing.xpath('.//a:blip', namespaces={
+                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
+                        })
+                        
+                        for blip in blip_elements:
+                            embed_attr = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                            link_attr = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}link')
+                            
+                            image_id = embed_attr or link_attr
+                            if image_id:
+                                try:
+                                    # 尝试从主文档部分获取
+                                    image_part = None
+                                    if hasattr(document.part, 'related_parts') and image_id in document.part.related_parts:
+                                        image_part = document.part.related_parts[image_id]
+                                    
+                                    if not image_part:
+                                        continue
+                                        
+                                    image_data = image_part.blob
+                                    
+                                    # 确定图片格式
+                                    content_type = image_part.content_type
+                                    if 'jpeg' in content_type or 'jpg' in content_type:
+                                        img_format = 'jpeg'
+                                    elif 'png' in content_type:
+                                        img_format = 'png'
+                                    elif 'gif' in content_type:
+                                        img_format = 'gif'
+                                    else:
+                                        img_format = 'png'
+                                    
+                                    # 转换为base64
+                                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                                    data_uri = f"data:image/{img_format};base64,{base64_data}"
+                                    
+                                    # 创建img标签
+                                    images_html += f'<img src="{data_uri}" style="max-width: 100%; height: auto; margin: 10px 0;" alt="图片 {image_count + 1}" />'
+                                    image_count += 1
+                                    
+                                except Exception as e:
+                                    print(f"[HTML预览] 从drawing提取图片失败: {e}")
+                                    continue
+                                    
+                except Exception as e:
+                    print(f"[HTML预览] 处理drawing时出错: {e}")
+                    pass
+                    
+        except Exception as e:
+            print(f"[HTML预览] 提取图片时发生错误: {e}")
+        
+        return images_html
 
