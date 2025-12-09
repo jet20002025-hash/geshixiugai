@@ -2533,7 +2533,14 @@ class DocumentService:
         document.save(preview_path)
     
     def _generate_html_preview(self, docx_path: Path, html_path: Path, stats: Dict) -> None:
-        """将Word文档转换为HTML预览"""
+        """将Word文档转换为HTML预览，尽量保持与原文档一致"""
+        # 优先尝试使用LibreOffice转换（保留格式最好）
+        if self._try_libreoffice_conversion(docx_path, html_path, stats):
+            print("[HTML预览] 使用LibreOffice转换成功")
+            return
+        
+        # 回退到自定义HTML生成
+        print("[HTML预览] 使用自定义HTML生成")
         document = Document(docx_path)
         
         # 生成修改摘要HTML
@@ -2887,4 +2894,158 @@ class DocumentService:
             print(f"[HTML预览] 提取图片时发生错误: {e}")
         
         return images_html
+    
+    def _try_libreoffice_conversion(self, docx_path: Path, html_path: Path, stats: Dict) -> bool:
+        """尝试使用LibreOffice将Word文档转换为HTML（保留格式最好）"""
+        import subprocess
+        import shutil
+        
+        # 检查LibreOffice是否可用
+        libreoffice_cmd = None
+        for cmd in ['libreoffice', 'soffice']:
+            if shutil.which(cmd):
+                libreoffice_cmd = cmd
+                break
+        
+        if not libreoffice_cmd:
+            print("[HTML预览] LibreOffice未安装，使用自定义HTML生成")
+            return False
+        
+        try:
+            # 创建临时目录用于输出
+            temp_dir = html_path.parent / "temp_html"
+            temp_dir.mkdir(exist_ok=True)
+            
+            # 使用LibreOffice转换
+            # --headless: 无界面模式
+            # --convert-to html: 转换为HTML
+            # --outdir: 输出目录
+            cmd = [
+                libreoffice_cmd,
+                '--headless',
+                '--convert-to', 'html',
+                '--outdir', str(temp_dir),
+                str(docx_path)
+            ]
+            
+            print(f"[HTML预览] 执行LibreOffice转换命令: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60  # 60秒超时
+            )
+            
+            if result.returncode != 0:
+                print(f"[HTML预览] LibreOffice转换失败: {result.stderr}")
+                return False
+            
+            # 查找生成的HTML文件
+            html_file_name = docx_path.stem + '.html'
+            generated_html = temp_dir / html_file_name
+            
+            if not generated_html.exists():
+                print(f"[HTML预览] LibreOffice生成的HTML文件不存在: {generated_html}")
+                return False
+            
+            # 读取生成的HTML内容
+            html_content = generated_html.read_text(encoding='utf-8', errors='ignore')
+            
+            # 清理临时文件
+            try:
+                generated_html.unlink()
+                temp_dir.rmdir()
+            except:
+                pass
+            
+            # 在HTML开头添加修改摘要和图片检测结果
+            changes_summary_html = ""
+            if stats.get("changes_summary"):
+                field_names = {
+                    "font_name": "字体",
+                    "font_size": "字号",
+                    "bold": "加粗",
+                    "alignment": "对齐方式",
+                    "line_spacing": "行距",
+                    "space_before": "段前间距",
+                    "space_after": "段后间距",
+                    "first_line_indent": "首行缩进",
+                    "left_indent": "左缩进",
+                    "right_indent": "右缩进",
+                }
+                changes_summary_html = '<div class="changes-summary" style="background: #e7f3ff; border: 2px solid #2196F3; border-radius: 8px; padding: 20px; margin-bottom: 30px;"><h3 style="margin-top: 0; color: #1976D2;">📝 格式修改摘要</h3><ul style="list-style: none; padding-left: 0;">'
+                for field, count in sorted(stats["changes_summary"].items(), key=lambda x: x[1], reverse=True):
+                    field_name = field_names.get(field, field)
+                    changes_summary_html += f'<li style="padding: 8px 0; border-bottom: 1px solid #BBDEFB;"><strong>{field_name}</strong>: 修改了 <strong>{count}</strong> 处</li>'
+                changes_summary_html += f'</ul><p style="margin-top: 15px; font-size: 16px; color: #1976D2; font-weight: bold;">总计修改了 <strong>{stats.get("paragraphs_adjusted", 0)}</strong> 个段落</p></div>'
+            
+            figure_issues_html = ""
+            if stats.get("figure_issues"):
+                issues = stats["figure_issues"]
+                figure_issues_html = '<div class="figure-issues" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px;"><h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>'
+                figure_issues_html += f'<p style="color: #856404; font-weight: bold;">发现 <strong>{len(issues)}</strong> 处图片缺少图题：</p><ul style="list-style: none; padding-left: 0;">'
+                for issue in issues[:10]:
+                    figure_issues_html += f'<li style="padding: 10px 0; border-bottom: 1px solid #ffc107;"><strong>第 {issue["paragraph_index"] + 1} 段</strong>: {issue["message"]}<br><small style="color: #666;">{issue["suggestion"]}</small></li>'
+                if len(issues) > 10:
+                    figure_issues_html += f'<li style="padding: 10px 0; color: #666;">... 还有 {len(issues) - 10} 处问题未显示</li>'
+                figure_issues_html += '</ul></div>'
+            
+            # 添加水印和警告样式
+            watermark_style = """
+            <style>
+                .preview-watermark {
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%) rotate(-45deg);
+                    font-size: 72px;
+                    color: rgba(209, 15, 15, 0.15);
+                    font-weight: bold;
+                    pointer-events: none;
+                    z-index: 9999;
+                    white-space: nowrap;
+                }
+                .preview-warning {
+                    background: #fff3cd;
+                    border: 1px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 5px;
+                    text-align: center;
+                    font-weight: bold;
+                    color: #856404;
+                }
+            </style>
+            """
+            
+            # 在head标签中插入样式
+            if '</head>' in html_content:
+                html_content = html_content.replace('</head>', watermark_style + '</head>')
+            
+            # 在body标签后插入摘要和水印
+            if '<body' in html_content:
+                # 找到body标签结束位置
+                body_end = html_content.find('>', html_content.find('<body'))
+                if body_end != -1:
+                    insert_pos = body_end + 1
+                    insert_content = '<div class="preview-watermark">预览版 仅供查看</div>' + changes_summary_html + figure_issues_html
+                    html_content = html_content[:insert_pos] + insert_content + html_content[insert_pos:]
+            
+            # 在文档末尾添加警告
+            if '</body>' in html_content:
+                warning_html = '<div class="preview-warning">⚠️ 这是预览版本，仅供查看。如需下载正式版，请完成支付。</div>'
+                html_content = html_content.replace('</body>', warning_html + '</body>')
+            
+            # 保存HTML文件
+            html_path.write_text(html_content, encoding='utf-8')
+            
+            print(f"[HTML预览] LibreOffice转换成功，HTML大小: {len(html_content) / 1024:.2f} KB")
+            return True
+            
+        except subprocess.TimeoutExpired:
+            print("[HTML预览] LibreOffice转换超时")
+            return False
+        except Exception as e:
+            print(f"[HTML预览] LibreOffice转换出错: {e}")
+            return False
 
