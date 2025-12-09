@@ -3180,7 +3180,7 @@ class DocumentService:
         print(f"[PDF预览] 开始生成PDF预览，输入文件: {docx_path}, 输出文件: {pdf_path}")
         try:
             from weasyprint import HTML, CSS
-            from weasyprint.text.fonts import FontConfiguration
+            # 不再导入FontConfiguration，避免transform错误
             print("[PDF预览] WeasyPrint导入成功")
         except ImportError as e:
             print(f"[PDF预览] ❌ weasyprint未安装，跳过PDF生成: {e}")
