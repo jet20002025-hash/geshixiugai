@@ -264,8 +264,9 @@
             id="previewFrame" 
             class="preview-iframe" 
             style="display: none;"
-            sandbox="allow-same-origin allow-scripts"
         ></iframe>
+        
+        <div id="previewContent" class="preview-iframe" style="display: none; padding: 20px; overflow: auto;"></div>
     </div>
     
     <script>
@@ -318,16 +319,24 @@
         
         // 加载预览内容
         async function loadPreview() {
+            console.log('开始加载预览，文档ID:', docId);
+            
             try {
+                console.log('请求预览接口:', `/documents/${docId}/preview`);
                 const response = await fetch(`/documents/${docId}/preview`);
+                
+                console.log('响应状态:', response.status, response.statusText);
+                console.log('响应Content-Type:', response.headers.get('content-type'));
                 
                 if (!response.ok) {
                     let errorMessage = `加载失败 (${response.status})`;
                     try {
                         const errorData = await response.json();
                         errorMessage = errorData.detail || errorMessage;
+                        console.error('API返回错误:', errorData);
                     } catch (e) {
                         const errorText = await response.text();
+                        console.error('错误响应文本:', errorText);
                         if (errorText) {
                             errorMessage = errorText.substring(0, 200);
                         }
@@ -335,54 +344,101 @@
                     throw new Error(errorMessage);
                 }
                 
+                // 检查响应类型
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+                    console.warn('警告: 响应类型不是HTML:', contentType);
+                }
+                
                 // 获取预览HTML内容
                 const htmlContent = await response.text();
+                console.log('获取到HTML内容长度:', htmlContent.length);
                 
                 // 如果内容为空，显示错误
                 if (!htmlContent || htmlContent.trim().length === 0) {
                     throw new Error('预览内容为空，请重新处理文档');
                 }
                 
+                // 检查HTML内容是否有效
+                if (!htmlContent.includes('<html') && !htmlContent.includes('<!DOCTYPE')) {
+                    console.warn('警告: HTML内容可能不完整');
+                }
+                
                 // 创建blob URL
                 const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
                 const blobUrl = URL.createObjectURL(blob);
+                console.log('创建Blob URL:', blobUrl);
                 
                 // 加载到iframe
                 const iframe = document.getElementById('previewFrame');
-                iframe.src = blobUrl;
+                let loaded = false;
+                
+                // 设置加载超时（10秒）
+                const loadTimeout = setTimeout(() => {
+                    if (!loaded) {
+                        console.error('iframe加载超时');
+                        showError('加载超时', '预览内容加载时间过长，请检查网络连接或稍后重试');
+                    }
+                }, 10000);
                 
                 // 隐藏加载提示，显示iframe
                 iframe.onload = () => {
+                    loaded = true;
+                    clearTimeout(loadTimeout);
+                    console.log('iframe加载成功');
                     document.getElementById('loading').style.display = 'none';
                     iframe.style.display = 'block';
                     // 清理blob URL（延迟清理，确保iframe已加载）
                     setTimeout(() => {
                         URL.revokeObjectURL(blobUrl);
-                    }, 1000);
+                    }, 2000);
                 };
                 
                 // 处理iframe加载错误
-                iframe.onerror = () => {
+                iframe.onerror = (e) => {
+                    loaded = true;
+                    clearTimeout(loadTimeout);
+                    console.error('iframe加载错误:', e);
                     showError('预览加载失败', '无法在iframe中加载预览内容，请稍后重试');
                 };
                 
-                // 设置超时（30秒）
-                setTimeout(() => {
-                    if (document.getElementById('loading').style.display !== 'none') {
-                        showError('加载超时', '预览内容加载时间过长，请检查网络连接或稍后重试');
-                    }
-                }, 30000);
+                // 设置iframe源
+                console.log('设置iframe src');
+                iframe.src = blobUrl;
                 
-                // 检查支付状态
-                await checkPaymentStatus();
+                // 备选方案：如果iframe在3秒内没有加载，尝试直接显示内容
+                setTimeout(() => {
+                    if (!loaded && document.getElementById('loading').style.display !== 'none') {
+                        console.log('iframe加载较慢，尝试直接显示内容');
+                        try {
+                            const previewContent = document.getElementById('previewContent');
+                            previewContent.innerHTML = htmlContent;
+                            document.getElementById('loading').style.display = 'none';
+                            previewContent.style.display = 'block';
+                            loaded = true;
+                            clearTimeout(loadTimeout);
+                            console.log('直接显示内容成功');
+                        } catch (e) {
+                            console.error('直接显示内容失败:', e);
+                        }
+                    }
+                }, 3000);
+                
+                // 检查支付状态（不阻塞预览加载）
+                checkPaymentStatus().catch(err => {
+                    console.warn('检查支付状态失败:', err);
+                });
                 
             } catch (error) {
                 console.error('加载预览失败:', error);
+                console.error('错误堆栈:', error.stack);
                 let errorDetail = error.message || '请检查文档ID是否正确，或文档是否已处理完成';
                 
                 // 如果是404错误，提供更友好的提示
-                if (error.message && error.message.includes('404')) {
-                    errorDetail = '文档不存在或尚未处理完成，请返回主页重新上传文档';
+                if (error.message && (error.message.includes('404') || error.message.includes('未找到'))) {
+                    errorDetail = '文档不存在或尚未处理完成。请返回主页重新上传文档并等待处理完成。';
+                } else if (error.message && error.message.includes('网络')) {
+                    errorDetail = '网络连接失败，请检查网络连接后重试。';
                 }
                 
                 showError('加载预览失败', errorDetail);

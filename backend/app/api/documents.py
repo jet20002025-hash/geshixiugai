@@ -168,19 +168,65 @@ async def preview_document(document_id: str) -> HTMLResponse:
     service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
     metadata = service.get_document_metadata(document_id)
     if not metadata:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"未找到文档 {document_id}，请确认文档ID是否正确"
+        )
 
     # 尝试从存储或本地获取 HTML 文件
     preview_path = Path(metadata.get("preview_path", ""))
     html_path = preview_path.with_suffix('.html') if preview_path else DOCUMENT_DIR / document_id / "preview.html"
     
+    print(f"[Preview] 查找HTML文件: {html_path}")
+    print(f"[Preview] 文档元数据: {metadata.get('status', 'unknown')}")
+    
     # 从存储或本地加载文件
     html_file = service._get_file_from_storage_or_local(document_id, "html", "html", html_path)
-    if not html_file or not html_file.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="预览文件不存在，请重新处理文档")
     
-    html_content = html_file.read_text(encoding="utf-8")
-    return HTMLResponse(content=html_content)
+    if not html_file:
+        print(f"[Preview] HTML文件不存在: {html_path}")
+        # 检查文档状态
+        doc_status = metadata.get("status", "unknown")
+        if doc_status != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"文档尚未处理完成（状态: {doc_status}），请等待处理完成后再预览"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="预览文件不存在，请重新处理文档"
+        )
+    
+    if not html_file.exists():
+        print(f"[Preview] HTML文件路径存在但文件不存在: {html_file}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="预览文件不存在，请重新处理文档"
+        )
+    
+    try:
+        html_content = html_file.read_text(encoding="utf-8")
+        print(f"[Preview] 成功加载HTML文件，大小: {len(html_content)} 字符")
+        
+        if not html_content or len(html_content.strip()) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="预览文件内容为空，请重新处理文档"
+            )
+        
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        print(f"[Preview] 读取HTML文件失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"读取预览文件失败: {str(e)}"
+        )
 
 
 @router.get(
