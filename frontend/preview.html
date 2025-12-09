@@ -628,6 +628,14 @@
                     }, 2000);
                 };
                 
+                // 添加错误处理
+                iframe.onerror = (error) => {
+                    loaded = true;
+                    clearTimeout(loadTimeout);
+                    console.error('iframe加载错误:', error);
+                    showError('加载失败', '预览内容加载失败，请刷新页面重试');
+                };
+                
                 // 处理iframe加载错误
                 iframe.onerror = (e) => {
                     loaded = true;
@@ -636,9 +644,15 @@
                     showError('预览加载失败', '无法在iframe中加载预览内容，请稍后重试');
                 };
                 
-                // 设置iframe源
+                // 设置iframe源（使用 try-catch 包装，防止错误）
                 console.log('设置iframe src');
-                iframe.src = blobUrl;
+                try {
+                    iframe.src = blobUrl;
+                } catch (error) {
+                    console.error('设置iframe src失败:', error);
+                    showError('加载失败', `无法加载预览内容: ${error.message}`);
+                    return;
+                }
                 
                 // 备选方案：如果iframe在5秒内没有加载，尝试直接显示内容
                 setTimeout(() => {
@@ -666,6 +680,14 @@
                 // 检查支付状态（不阻塞预览加载）
                 checkPaymentStatus().catch(err => {
                     console.warn('检查支付状态失败:', err);
+                    // 静默处理，不影响预览显示
+                });
+                
+                // 添加全局未捕获的 Promise 错误处理
+                window.addEventListener('unhandledrejection', (event) => {
+                    console.error('未捕获的 Promise 错误:', event.reason);
+                    // 防止错误显示在控制台
+                    event.preventDefault();
                 });
                 
             } catch (error) {
