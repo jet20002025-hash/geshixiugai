@@ -368,14 +368,10 @@ class DocumentService:
                 return True
             
             # 方法4: 检测 drawing 元素中的多个形状
-            # 使用 xpath 查找 drawing 元素，检查是否包含多个形状
+            # 使用 findall 查找 drawing 元素，检查是否包含多个形状
             try:
                 from docx.oxml.ns import qn
-                drawings = paragraph._element.xpath('.//w:drawing', namespaces={
-                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                    'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
-                    'v': 'urn:schemas-microsoft-com:vml'
-                })
+                drawings = paragraph._element.findall('.//' + qn('w:drawing'))
                 if drawings:
                     # 检查每个 drawing 元素中是否包含多个形状
                     for drawing in drawings:
@@ -1178,17 +1174,12 @@ class DocumentService:
                 except:
                     pass
             
-            # 方法3: 使用xpath查找drawing元素，并验证包含真正的图片
+            # 方法3: 使用findall查找drawing元素，并验证包含真正的图片
             if not has_image:
                 try:
                     from docx.oxml.ns import qn
-                    # 查找drawing元素
-                    drawings = paragraph._element.xpath('.//w:drawing', namespaces={
-                        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                        'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-                        'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
-                        'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-                    })
+                    # 查找drawing元素（使用findall配合qn，而不是xpath with namespaces）
+                    drawings = paragraph._element.findall('.//' + qn('w:drawing'))
                     if drawings:
                         # 检查drawing中是否包含真正的图片（pic:pic或a:blip）
                         for drawing in drawings:
@@ -2918,16 +2909,12 @@ class DocumentService:
             # 方法2: 从段落的内联形状中提取图片（即使方法1已经找到图片，也继续查找，因为一个段落可能有多个图片）
             if hasattr(paragraph, '_element'):
                 try:
-                    # 查找drawing元素
-                    drawings = paragraph._element.xpath('.//w:drawing', namespaces={
-                        'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-                    })
+                    # 查找drawing元素（使用findall配合qn，而不是xpath with namespaces）
+                    drawings = paragraph._element.findall('.//' + qn('w:drawing'))
                     
                     for drawing in drawings:
                         # 查找图片关系ID
-                        blip_elements = drawing.xpath('.//a:blip', namespaces={
-                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
-                        })
+                        blip_elements = drawing.findall('.//' + qn('a:blip'))
                         
                         for blip in blip_elements:
                             embed_attr = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
