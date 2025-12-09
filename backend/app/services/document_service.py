@@ -3693,16 +3693,34 @@ read_file
             )
             
             if result.returncode != 0:
-                print(f"[PDF预览] LibreOffice PDF转换失败: {result.stderr}")
+                print(f"[PDF预览] LibreOffice PDF转换失败，返回码: {result.returncode}")
+                print(f"[PDF预览] 错误输出: {result.stderr}")
+                print(f"[PDF预览] 标准输出: {result.stdout}")
                 return False
             
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
-            # 例如：input.docx -> input.pdf
+            # 例如：preview.docx -> preview.pdf
             generated_pdf = output_dir / f"{docx_path.stem}.pdf"
             
+            # 如果找不到，尝试列出输出目录中的所有文件
             if not generated_pdf.exists():
-                print(f"[PDF预览] LibreOffice生成的PDF文件不存在: {generated_pdf}")
-                return False
+                print(f"[PDF预览] 预期PDF文件不存在: {generated_pdf}")
+                print(f"[PDF预览] 检查输出目录中的所有文件:")
+                try:
+                    all_files = list(output_dir.glob("*"))
+                    for f in all_files:
+                        print(f"[PDF预览]   - {f.name} ({f.stat().st_size} bytes)")
+                    # 尝试查找任何 PDF 文件
+                    pdf_files = list(output_dir.glob("*.pdf"))
+                    if pdf_files:
+                        print(f"[PDF预览] 找到 {len(pdf_files)} 个PDF文件，使用第一个: {pdf_files[0]}")
+                        generated_pdf = pdf_files[0]
+                    else:
+                        print(f"[PDF预览] 输出目录中没有找到任何PDF文件")
+                        return False
+                except Exception as e:
+                    print(f"[PDF预览] 列出文件时出错: {e}")
+                    return False
             
             # 移动到目标位置
             if generated_pdf != pdf_path:
