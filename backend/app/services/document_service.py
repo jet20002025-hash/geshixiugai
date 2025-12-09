@@ -3394,7 +3394,7 @@ read_file
                 position: fixed;
                 top: 50%;
                 left: 50%;
-                /* 移除transform，使用margin来居中，避免WeasyPrint内部错误 */
+                /* 完全移除transform和复杂的CSS属性，避免WeasyPrint内部错误 */
                 margin-top: -36px;  /* 字体大小的一半 */
                 margin-left: -200px;  /* 大约文本宽度的一半 */
                 font-size: 72px;
@@ -3402,9 +3402,7 @@ read_file
                 font-weight: bold;
                 pointer-events: none;
                 z-index: 1;
-                /* 使用writing-mode来实现旋转效果（如果支持） */
-                writing-mode: vertical-rl;
-                text-orientation: mixed;
+                /* 移除writing-mode，避免可能的兼容性问题 */
             }}
             """
         return css
