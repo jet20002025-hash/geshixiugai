@@ -182,11 +182,14 @@ async def preview_document(document_id: str) -> Response:
     
     print(f"[Preview] 查找预览文件 - PDF: {pdf_path}, HTML: {html_path}")
     print(f"[Preview] 文档元数据: {metadata.get('status', 'unknown')}")
+    print(f"[Preview] 使用云存储: {service.use_storage}")
     
     # 优先返回PDF
     pdf_file = service._get_file_from_storage_or_local(document_id, "pdf", "pdf", pdf_path)
+    print(f"[Preview] PDF文件查找结果: {pdf_file}, 存在: {pdf_file.exists() if pdf_file else False}")
     if pdf_file and pdf_file.exists():
-        print(f"[Preview] 返回PDF预览: {pdf_file}")
+        pdf_size = pdf_file.stat().st_size
+        print(f"[Preview] ✅ 返回PDF预览: {pdf_file}, 大小: {pdf_size / 1024:.2f} KB")
         return FileResponse(
             path=str(pdf_file),
             media_type="application/pdf",
@@ -195,9 +198,16 @@ async def preview_document(document_id: str) -> Response:
                 "Cache-Control": "no-cache"
             }
         )
+    else:
+        print(f"[Preview] ⚠️ PDF文件不存在，回退到HTML预览")
+        if pdf_file:
+            print(f"[Preview] PDF文件路径: {pdf_file}, 存在: {pdf_file.exists()}")
+        else:
+            print(f"[Preview] PDF文件查找返回None")
     
     # 回退到HTML预览
     html_file = service._get_file_from_storage_or_local(document_id, "html", "html", html_path)
+    print(f"[Preview] HTML文件查找结果: {html_file}, 存在: {html_file.exists() if html_file else False}")
     
     if not html_file:
         print(f"[Preview] 预览文件不存在")
