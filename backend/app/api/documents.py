@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from ..schemas.documents import (
     DocumentCreateResponse,
