@@ -507,7 +507,7 @@
                 if (contentType.includes('application/pdf') || contentType.includes('pdf')) {
                     logStep('PDF检测', '检测到PDF预览');
                     const blob = await response.blob();
-                    console.log('PDF Blob大小:', blob.size, 'bytes');
+                    console.log('PDF Blob大小:', blob.size, 'bytes', `(${(blob.size / 1024).toFixed(2)} KB)`);
                     const blobUrl = URL.createObjectURL(blob);
                     console.log('Blob URL创建:', blobUrl);
                     
