@@ -3169,15 +3169,26 @@ class DocumentService:
         return images_html
     
     def _generate_pdf_preview(self, docx_path: Path, pdf_path: Path, stats: Dict) -> bool:
-        """将Word文档转换为PDF预览（使用weasyprint从HTML转PDF）
+        """将Word文档转换为PDF预览
         
-        优先使用PDF预览，因为：
-        1. PDF格式更稳定，图片显示更可靠
-        2. 避免HTML中base64图片可能的问题
-        3. 更好的跨浏览器兼容性
-        4. 更接近原始Word文档的显示效果
+        优先级：
+        1. LibreOffice 直接转 PDF（最接近 Word，推荐）
+        2. WeasyPrint 从 HTML 转 PDF（备用方案）
+        
+        LibreOffice 转换的优势：
+        1. 完美保留 Word 格式和布局
+        2. 图片、表格、页眉页脚都能完美显示
+        3. 分页效果与 Word 完全一致
         """
         print(f"[PDF预览] 开始生成PDF预览，输入文件: {docx_path}, 输出文件: {pdf_path}")
+        
+        # 优先尝试使用 LibreOffice 直接转 PDF（最接近 Word）
+        if self._try_libreoffice_pdf_conversion(docx_path, pdf_path):
+            print("[PDF预览] ✅ 使用LibreOffice转换PDF成功（最接近Word效果）")
+            return True
+        
+        # 如果 LibreOffice 不可用，回退到 WeasyPrint
+        print("[PDF预览] LibreOffice不可用，尝试使用WeasyPrint...")
         try:
             from weasyprint import HTML, CSS
             # 不再导入FontConfiguration，避免transform错误
