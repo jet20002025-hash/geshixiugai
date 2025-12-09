@@ -116,13 +116,98 @@
             flex: 1;
             overflow: hidden;
             position: relative;
+            background: #e5e7eb;
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+        }
+        
+        .thumbnail-sidebar {
+            width: 200px;
             background: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .thumbnail-sidebar h3 {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+        
+        .thumbnail-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .thumbnail-item {
+            cursor: pointer;
+            border: 2px solid #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            transition: all 0.2s;
+            background: #fff;
+        }
+        
+        .thumbnail-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+        
+        .thumbnail-item.active {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+        
+        .thumbnail-item canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .thumbnail-number {
+            text-align: center;
+            padding: 0.25rem;
+            font-size: 0.75rem;
+            color: #6b7280;
+            background: #f9fafb;
+            font-weight: 500;
+        }
+        
+        .main-preview {
+            flex: 1;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
         }
         
         .preview-iframe {
             width: 100%;
             height: 100%;
             border: none;
+        }
+        
+        .pdf-viewer {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background: #525252;
+        }
+        
+        .pdf-page {
+            margin: 1rem auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            background: #fff;
+        }
+        
+        .pdf-page canvas {
+            display: block;
         }
         
         .loading {
@@ -264,14 +349,26 @@
             <a href="/web" class="back-link">← 返回主页</a>
         </div>
         
-        <iframe 
-            id="previewFrame" 
-            class="preview-iframe" 
-            style="display: none;"
-        ></iframe>
+        <!-- 缩略图侧边栏 -->
+        <div class="thumbnail-sidebar" id="thumbnailSidebar" style="display: none;">
+            <h3>📑 页面导航</h3>
+            <div class="thumbnail-list" id="thumbnailList"></div>
+        </div>
         
-        <div id="previewContent" class="preview-iframe" style="display: none; padding: 20px; overflow: auto;"></div>
+        <!-- 主预览区域 -->
+        <div class="main-preview" id="mainPreview" style="display: none;">
+            <div class="pdf-viewer" id="pdfViewer"></div>
+            <iframe 
+                id="previewFrame" 
+                class="preview-iframe" 
+                style="display: none;"
+            ></iframe>
+            <div id="previewContent" class="preview-iframe" style="display: none; padding: 20px; overflow: auto;"></div>
+        </div>
     </div>
+    
+    <!-- PDF.js库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <script>
         (function() {
@@ -404,25 +501,14 @@
                 const contentType = response.headers.get('content-type') || '';
                 console.log('响应Content-Type:', contentType);
                 
-                // 如果是PDF，直接显示
+                // 如果是PDF，使用PDF.js渲染
                 if (contentType.includes('application/pdf') || contentType.includes('pdf')) {
                     logStep('PDF检测', '检测到PDF预览');
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
                     
-                    const iframe = document.getElementById('previewFrame');
-                    iframe.src = blobUrl;
-                    
-                    iframe.onload = () => {
-                        const totalTime = performance.now() - perf.start;
-                        logStep('PDF加载完成', `PDF预览加载完成 (总耗时: ${totalTime.toFixed(2)}ms)`);
-                        document.getElementById('loading').style.display = 'none';
-                        iframe.style.display = 'block';
-                    };
-                    
-                    iframe.onerror = () => {
-                        showError('PDF加载失败', '无法加载PDF预览，请稍后重试');
-                    };
+                    // 使用PDF.js加载和渲染PDF
+                    await loadPdfWithThumbnails(blobUrl);
                     
                     return;
                 }
@@ -551,6 +637,122 @@
                 }
                 
                 showError('加载预览失败', errorDetail);
+            }
+        }
+        
+        // 使用PDF.js加载PDF并生成缩略图
+        async function loadPdfWithThumbnails(blobUrl) {
+            try {
+                logStep('PDF.js初始化', '正在初始化PDF.js');
+                
+                // 设置PDF.js worker
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                
+                // 加载PDF文档
+                const loadingTask = pdfjsLib.getDocument(blobUrl);
+                const pdf = await loadingTask.promise;
+                
+                logStep('PDF加载完成', `PDF文档加载完成，共${pdf.numPages}页`);
+                
+                const totalTime = performance.now() - perf.start;
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('thumbnailSidebar').style.display = 'block';
+                document.getElementById('mainPreview').style.display = 'block';
+                
+                const thumbnailList = document.getElementById('thumbnailList');
+                const pdfViewer = document.getElementById('pdfViewer');
+                let currentPage = 1;
+                
+                // 生成所有页面的缩略图
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    
+                    // 创建缩略图
+                    const thumbnailScale = 0.2; // 缩略图缩放比例
+                    const thumbnailViewport = page.getViewport({ scale: thumbnailScale });
+                    
+                    const thumbnailCanvas = document.createElement('canvas');
+                    const thumbnailContext = thumbnailCanvas.getContext('2d');
+                    thumbnailCanvas.width = thumbnailViewport.width;
+                    thumbnailCanvas.height = thumbnailViewport.height;
+                    
+                    await page.render({
+                        canvasContext: thumbnailContext,
+                        viewport: thumbnailViewport
+                    }).promise;
+                    
+                    // 创建缩略图项
+                    const thumbnailItem = document.createElement('div');
+                    thumbnailItem.className = 'thumbnail-item';
+                    if (pageNum === 1) thumbnailItem.classList.add('active');
+                    
+                    thumbnailItem.innerHTML = `
+                        <canvas></canvas>
+                        <div class="thumbnail-number">${pageNum}</div>
+                    `;
+                    
+                    const canvas = thumbnailItem.querySelector('canvas');
+                    canvas.width = thumbnailViewport.width;
+                    canvas.height = thumbnailViewport.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(thumbnailCanvas, 0, 0);
+                    
+                    // 点击缩略图切换页面
+                    thumbnailItem.addEventListener('click', () => {
+                        currentPage = pageNum;
+                        // 更新活动状态
+                        document.querySelectorAll('.thumbnail-item').forEach(item => {
+                            item.classList.remove('active');
+                        });
+                        thumbnailItem.classList.add('active');
+                        // 显示对应页面
+                        renderPage(pdf, pageNum, pdfViewer);
+                    });
+                    
+                    thumbnailList.appendChild(thumbnailItem);
+                }
+                
+                // 渲染第一页
+                await renderPage(pdf, 1, pdfViewer);
+                
+                logStep('PDF渲染完成', `PDF预览渲染完成 (总耗时: ${totalTime.toFixed(2)}ms)`);
+                
+            } catch (error) {
+                console.error('PDF.js加载失败:', error);
+                showError('PDF加载失败', `无法加载PDF预览: ${error.message}`);
+            }
+        }
+        
+        // 渲染PDF页面
+        async function renderPage(pdf, pageNum, container) {
+            try {
+                const page = await pdf.getPage(pageNum);
+                const scale = 1.5; // 主视图缩放比例
+                const viewport = page.getViewport({ scale });
+                
+                // 清除容器
+                container.innerHTML = '';
+                
+                // 创建页面容器
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'pdf-page';
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                pageDiv.appendChild(canvas);
+                container.appendChild(pageDiv);
+                
+                // 渲染页面
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+            } catch (error) {
+                console.error('渲染页面失败:', error);
             }
         }
         
