@@ -3228,39 +3228,19 @@ class DocumentService:
             
             # 使用weasyprint转换
             # 设置base_url为HTML文件所在目录，帮助weasyprint解析相对路径和data URI
-            font_config = FontConfiguration()
+            # 注意：不使用FontConfiguration()，因为它可能导致transform错误
             html_doc = HTML(
                 string=html_content,
                 base_url=str(html_path.parent)  # 设置base_url，帮助解析图片
             )
             
             print(f"[PDF预览] 开始生成PDF文件...")
-            # 生成PDF（添加更多选项以避免内部错误）
-            # 先尝试不使用font_config，因为可能导致transform错误
-            try:
-                print(f"[PDF预览] 尝试不使用font_config生成PDF...")
-                html_doc.write_pdf(
-                    pdf_path,
-                    optimize_images=False,  # 禁用图片优化，避免某些内部错误
-                )
-            except (AttributeError, TypeError) as error:
-                error_str = str(error)
-                # 如果是transform相关错误，尝试使用font_config
-                if "transform" in error_str.lower():
-                    print(f"[PDF预览] 检测到transform相关错误: {error_str}")
-                    print(f"[PDF预览] 尝试使用font_config重新生成...")
-                    try:
-                        html_doc.write_pdf(
-                            pdf_path,
-                            font_config=font_config,
-                            optimize_images=False,
-                        )
-                    except Exception as e2:
-                        print(f"[PDF预览] 使用font_config也失败: {e2}")
-                        raise
-                else:
-                    # 其他错误直接抛出
-                    raise
+            # 生成PDF（不使用font_config，避免transform错误）
+            # 根据WeasyPrint文档，font_config是可选的，不使用也能正常工作
+            html_doc.write_pdf(
+                pdf_path,
+                optimize_images=False,  # 禁用图片优化，避免某些内部错误
+            )
             
             pdf_size = pdf_path.stat().st_size
             print(f"[PDF预览] PDF生成成功，大小: {pdf_size / 1024:.2f} KB")
