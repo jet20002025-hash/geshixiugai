@@ -141,8 +141,8 @@ class DocumentService:
         if not pdf_success:
             # 回退到HTML预览
             print(f"[预览] PDF生成失败，回退到HTML预览")
-            html_path = preview_path.with_suffix('.html')
-            self._generate_html_preview(preview_path, html_path, stats)
+        html_path = preview_path.with_suffix('.html')
+        self._generate_html_preview(preview_path, html_path, stats)
             if html_path.exists():
                 html_size = html_path.stat().st_size
                 print(f"[预览] HTML预览生成成功: {html_path}, 大小: {html_size / 1024:.2f} KB")
@@ -2454,7 +2454,7 @@ class DocumentService:
                 if file_type == "pdf":
                     key = f"{prefix}/pdf.pdf"
                 else:
-                    key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
                 
                 file_size = file_path.stat().st_size
                 print(f"[Storage] 准备上传文件: {file_type} -> {key}, 大小: {file_size / 1024:.2f} KB")
@@ -3169,26 +3169,11 @@ class DocumentService:
         return images_html
     
     def _generate_pdf_preview(self, docx_path: Path, pdf_path: Path, stats: Dict) -> bool:
-        """将Word文档转换为PDF预览
+        """将Word文档转换为PDF预览（使用WeasyPrint从HTML转PDF）
         
-        优先级：
-        1. LibreOffice 直接转 PDF（最接近 Word，推荐）
-        2. WeasyPrint 从 HTML 转 PDF（备用方案）
-        
-        LibreOffice 转换的优势：
-        1. 完美保留 Word 格式和布局
-        2. 图片、表格、页眉页脚都能完美显示
-        3. 分页效果与 Word 完全一致
+        注意：LibreOffice 在某些环境下无法正常工作，因此直接使用 WeasyPrint
         """
         print(f"[PDF预览] 开始生成PDF预览，输入文件: {docx_path}, 输出文件: {pdf_path}")
-        
-        # 优先尝试使用 LibreOffice 直接转 PDF（最接近 Word）
-        if self._try_libreoffice_pdf_conversion(docx_path, pdf_path):
-            print("[PDF预览] ✅ 使用LibreOffice转换PDF成功（最接近Word效果）")
-            return True
-        
-        # 如果 LibreOffice 不可用，回退到 WeasyPrint
-        print("[PDF预览] LibreOffice不可用，尝试使用WeasyPrint...")
         try:
             from weasyprint import HTML, CSS
             # 不再导入FontConfiguration，避免transform错误
