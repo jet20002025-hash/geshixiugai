@@ -127,13 +127,27 @@ class DocumentService:
         
         # 生成PDF预览（优先，格式完美）
         pdf_path = preview_path.with_suffix('.pdf')
-        if self._generate_pdf_preview(preview_path, pdf_path, stats):
-            print(f"[预览] PDF预览生成成功: {pdf_path}")
-        else:
+        print(f"[预览] 开始生成PDF预览: {pdf_path}")
+        pdf_success = self._generate_pdf_preview(preview_path, pdf_path, stats)
+        if pdf_success:
+            # 验证PDF文件是否真的存在
+            if pdf_path.exists():
+                pdf_size = pdf_path.stat().st_size
+                print(f"[预览] ✅ PDF预览生成成功: {pdf_path}, 大小: {pdf_size / 1024:.2f} KB")
+            else:
+                print(f"[预览] ⚠️ PDF生成返回成功但文件不存在: {pdf_path}")
+                pdf_success = False
+        
+        if not pdf_success:
             # 回退到HTML预览
+            print(f"[预览] PDF生成失败，回退到HTML预览")
             html_path = preview_path.with_suffix('.html')
             self._generate_html_preview(preview_path, html_path, stats)
-            print(f"[预览] HTML预览生成成功: {html_path}")
+            if html_path.exists():
+                html_size = html_path.stat().st_size
+                print(f"[预览] HTML预览生成成功: {html_path}, 大小: {html_size / 1024:.2f} KB")
+            else:
+                print(f"[预览] ⚠️ HTML预览生成失败，文件不存在: {html_path}")
 
         report_data = {
             "document_id": document_id,
@@ -155,11 +169,18 @@ class DocumentService:
             # 添加PDF或HTML预览文件
             pdf_path = preview_path.with_suffix('.pdf')
             if pdf_path.exists():
+                pdf_size = pdf_path.stat().st_size
+                print(f"[存储] 准备上传PDF预览文件: {pdf_path}, 大小: {pdf_size / 1024:.2f} KB")
                 files_to_save["pdf"] = pdf_path
             else:
+                print(f"[存储] PDF文件不存在，检查HTML文件")
                 html_path = preview_path.with_suffix('.html')
                 if html_path.exists():
+                    html_size = html_path.stat().st_size
+                    print(f"[存储] 准备上传HTML预览文件: {html_path}, 大小: {html_size / 1024:.2f} KB")
                     files_to_save["html"] = html_path
+                else:
+                    print(f"[存储] ⚠️ 警告: PDF和HTML预览文件都不存在！")
             
             self._save_to_storage(document_id, files_to_save)
 
