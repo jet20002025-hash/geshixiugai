@@ -2716,9 +2716,9 @@ class DocumentService:
                         print(f"[HTML预览] 检测到run中的分页符（段落 {idx}）")
                         break
             
-            # 如果检测到分页符，添加分页标记
+            # 如果检测到分页符，添加分页标记（带明显的分隔线）
             if page_break_before:
-                html_content += '<div class="page-break"></div>\n'
+                html_content += '<div class="page-break" style="border-top: 3px solid #999999; margin-top: 30px; padding-top: 20px; background: linear-gradient(to bottom, #f0f0f0 0%, #ffffff 30px);"><div style="text-align: center; color: #666; font-size: 12px; margin-bottom: 10px;">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div></div>\n'
             
             # 检查段落是否包含图片
             has_image = self._paragraph_has_image_or_equation(paragraph)
@@ -3260,42 +3260,66 @@ class DocumentService:
                 margin-bottom: {margin_bottom};
                 margin-left: {margin_left};
                 margin-right: {margin_right};
-                /* 添加页面边框，让分页更明显 */
-                border: 1px solid #cccccc;
-                /* 或者使用更明显的边框 */
-                /* border: 2px solid #999999; */
+                /* 使用背景色和边框让分页更明显 */
+                background: #ffffff;
+            }}
+            @page:first {{
+                /* 第一页特殊处理 */
+            }}
+            /* 在每页底部添加分页线 */
+            @page {{
+                @bottom-center {{
+                    content: "";
+                    border-top: 2px solid #cccccc;
+                    width: 100%;
+                    margin-top: 10px;
+                }}
             }}
             body {{
                 font-family: "SimSun", "宋体", "Times New Roman", serif;
-                /* 确保内容区域有足够的空间 */
                 padding: 0;
                 margin: 0;
+                background: #ffffff;
             }}
-            /* 分页控制 */
+            /* 分页控制 - 添加明显的分隔线 */
             .page-break {{
                 page-break-before: always;
-                /* 在分页处添加明显的分隔线 */
-                border-top: 2px dashed #999999;
-                margin-top: 20px;
-                padding-top: 20px;
+                /* 在分页处添加明显的分隔线和背景 */
+                border-top: 3px solid #999999;
+                margin-top: 30px;
+                padding-top: 30px;
+                background: linear-gradient(to bottom, #f0f0f0 0%, #ffffff 20px);
             }}
-            /* 避免在标题前分页 */
-            h1, h2, h3, h4, h5, h6 {{
-                page-break-after: avoid;
-            }}
-            /* 避免在段落中间分页 */
+            /* 在每个段落后添加轻微的分隔（帮助识别分页） */
             p {{
                 orphans: 3;
                 widows: 3;
+                margin-bottom: 0.5em;
+            }}
+            /* 在标题后添加更多间距，帮助识别分页 */
+            h1, h2, h3, h4, h5, h6 {{
+                page-break-after: avoid;
+                margin-top: 1em;
+                margin-bottom: 0.5em;
             }}
             /* 图片和表格分页控制 */
             img, table {{
                 page-break-inside: avoid;
             }}
-            /* 文档容器样式 */
+            /* 文档容器样式 - 添加边框让分页更明显 */
             .document-container {{
-                /* 确保每页内容清晰分离 */
-                min-height: 100vh;
+                border: 1px solid #e0e0e0;
+                padding: 20px;
+                margin: 0;
+                background: #ffffff;
+                /* 每页都有独立的容器边框 */
+                box-shadow: 0 0 0 1px #d0d0d0;
+            }}
+            /* 在每页底部添加分页标记 */
+            .page-end {{
+                border-bottom: 2px solid #cccccc;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
             }}
             .watermark {{
                 position: fixed;
