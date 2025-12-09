@@ -3123,10 +3123,21 @@ class DocumentService:
             
             print(f"[PDF预览] 开始转换HTML到PDF，HTML大小: {len(html_content) / 1024:.2f} KB")
             
-            # 使用weasyprint转换
-            font_config = FontConfiguration()
-            html_doc = HTML(string=html_content)
+            # 统计HTML中的图片数量（用于调试）
+            import re
+            img_count = len(re.findall(r'<img[^>]+>', html_content, re.IGNORECASE))
+            data_uri_count = len(re.findall(r'data:image/[^;]+;base64,', html_content, re.IGNORECASE))
+            print(f"[PDF预览] HTML中包含 {img_count} 个img标签，其中 {data_uri_count} 个使用data URI")
             
+            # 使用weasyprint转换
+            # 设置base_url为HTML文件所在目录，帮助weasyprint解析相对路径和data URI
+            font_config = FontConfiguration()
+            html_doc = HTML(
+                string=html_content,
+                base_url=str(html_path.parent)  # 设置base_url，帮助解析图片
+            )
+            
+            print(f"[PDF预览] 开始生成PDF文件...")
             # 生成PDF
             html_doc.write_pdf(
                 pdf_path,
@@ -3135,6 +3146,11 @@ class DocumentService:
             
             pdf_size = pdf_path.stat().st_size
             print(f"[PDF预览] PDF生成成功，大小: {pdf_size / 1024:.2f} KB")
+            
+            # 验证PDF文件是否有效（至少应该有一定大小）
+            if pdf_size < 1024:  # 小于1KB可能有问题
+                print(f"[PDF预览] 警告: PDF文件大小异常小 ({pdf_size} 字节)，可能生成失败")
+                return False
             
             return True
             
