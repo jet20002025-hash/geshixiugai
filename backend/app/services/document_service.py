@@ -2454,7 +2454,7 @@ class DocumentService:
                 if file_type == "pdf":
                     key = f"{prefix}/pdf.pdf"
                 else:
-                key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                    key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
                 
                 file_size = file_path.stat().st_size
                 print(f"[Storage] 准备上传文件: {file_type} -> {key}, 大小: {file_size / 1024:.2f} KB")
