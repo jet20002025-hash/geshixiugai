@@ -337,7 +337,7 @@
     </div>
     
     <h1 style="display: flex; align-items: baseline; gap: 0.75rem;">论文格式自动修复 <span class="version-badge">v1.0.0</span></h1>
-    <p class="small">流程：先看第二步列表框有没有适合你的模版，没有则上传自己学校的模版，再上传自己的毕业论文，预览水印版，支付后下载正式版。</p>
+    <p class="small">流程：先看第二步列表框有没有适合你的模版，没有则上传自己学校的模版，再上传自己的毕业论文，预览水印版，支付后下载带水印PDF。</p>
 
     <section>
       <div class="card-title">
@@ -415,7 +415,7 @@
         
         <!-- 已支付提示 -->
         <div id="paidNotice" style="background: #e8f5e9; border: 2px solid #4CAF50; padding: 15px; border-radius: 5px; margin: 20px 0; display: none;">
-          <p style="margin: 0; color: #2e7d32; font-weight: bold;">✅ 已支付，可以下载正式版文档</p>
+          <p style="margin: 0; color: #2e7d32; font-weight: bold;">✅ 已支付，可以下载带水印PDF</p>
         </div>
       </div>
       <div id="resultStatus" class="status" style="display: none"></div>
@@ -808,7 +808,7 @@
               
               // 显示成功提示
               if (resultStatus) {
-                showMessage(resultStatus, "支付成功！可以下载正式版文档了。", false);
+                showMessage(resultStatus, "支付成功！可以下载带水印PDF了。", false);
               }
               
               // 清理URL参数，避免刷新时重复检测
@@ -1014,7 +1014,7 @@
         if (previewLinks) {
           const previewLink = previewLinks.querySelector('.preview-btn');
           if (previewLink) {
-            previewLink.textContent = "📄 查看正式版文档";
+            previewLink.textContent = "📄 查看带水印PDF";
             previewLink.href = `/web/preview.html?id=${encodeURIComponent(documentId)}`;
             previewLink.target = "_blank";
           }
@@ -1025,7 +1025,7 @@
             const finalLink = document.createElement("a");
             const downloadToken = data.download_token || documentId;
             finalLink.href = `/documents/${documentId}/download?token=${encodeURIComponent(downloadToken)}`;
-            finalLink.textContent = "⬇️ 下载正式版文档（已付费）";
+            finalLink.textContent = "⬇️ 下载带水印PDF（已付费）";
             finalLink.target = "_blank";
             finalLink.className = "download-btn";
             finalLink.style.cssText = "margin-left: 10px; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);";
@@ -1189,7 +1189,7 @@
           const previewLink = document.createElement("a");
           if (data.paid) {
             // 已支付，显示正式版查看链接
-            previewLink.textContent = "📄 查看正式版文档";
+            previewLink.textContent = "📄 查看带水印PDF";
             previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
             previewLink.target = "_blank";
             previewLink.className = "preview-btn";
@@ -1272,7 +1272,7 @@
               console.warn("下载 token 未找到，使用文档ID作为临时token");
             }
             
-            finalLink.textContent = "⬇️ 下载正式版文档（已付费）";
+            finalLink.textContent = "⬇️ 下载带水印PDF（已付费）";
             finalLink.target = "_blank";
             finalLink.className = "download-btn";
             finalLink.style.cssText = "margin-left: 10px; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3); transition: all 0.3s;";
