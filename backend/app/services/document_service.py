@@ -2582,14 +2582,20 @@ class DocumentService:
     
     def _generate_html_preview(self, docx_path: Path, html_path: Path, stats: Dict) -> None:
         """将Word文档转换为HTML预览，尽量保持与原文档一致"""
+        print(f"[HTML预览] 开始生成HTML预览，输入文件: {docx_path}")
+        print(f"[HTML预览] 输出文件: {html_path}")
+        
         # 优先尝试使用LibreOffice转换（保留格式最好）
+        print("[HTML预览] 尝试使用LibreOffice转换...")
         if self._try_libreoffice_conversion(docx_path, html_path, stats):
             print("[HTML预览] 使用LibreOffice转换成功")
             return
         
         # 回退到自定义HTML生成
-        print("[HTML预览] 使用自定义HTML生成")
+        print("[HTML预览] LibreOffice不可用，使用自定义HTML生成")
+        print(f"[HTML预览] 正在读取Word文档: {docx_path}")
         document = Document(docx_path)
+        print(f"[HTML预览] Word文档读取成功，总段落数: {len(document.paragraphs)}")
         
         # 生成修改摘要HTML
         changes_summary_html = ""
@@ -2776,7 +2782,11 @@ class DocumentService:
             
             if has_image:
                 # 提取段落中的图片
+                if idx < 5 or idx % 50 == 0:  # 只记录前5个或每50个
+                    print(f"[HTML预览] 段落 {idx} 包含图片，正在提取...")
                 images_html = self._extract_images_from_paragraph(paragraph, document)
+                if idx < 5 or idx % 50 == 0:
+                    print(f"[HTML预览] 段落 {idx} 图片提取完成，HTML长度: {len(images_html)} 字符")
             
             # 判断段落样式（提前定义，避免作用域错误）
             style_name = paragraph.style.name if paragraph.style else "Normal"
