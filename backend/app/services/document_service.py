@@ -3627,7 +3627,7 @@ class DocumentService:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 read_file
             body {{
-                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", serif;
                 padding: 0;
                 margin: 0;
                 background: #ffffff;
@@ -3635,12 +3635,13 @@ read_file
                 -webkit-font-smoothing: antialiased;
             }}
             /* 默认段落字体：宋体（内联样式会覆盖此设置） */
+            /* 注意：WeasyPrint需要系统安装对应的字体文件才能正确渲染 */
             p {{
-                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", serif;
             }}
             /* 默认标题字体：黑体（内联样式会覆盖此设置） */
             h1, h2, h3, h4, h5, h6 {{
-                font-family: "SimHei", "黑体", "STHeiti", sans-serif;
+                font-family: "SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif;
             }}
             /* 确保图片正确显示 */
             img {{
