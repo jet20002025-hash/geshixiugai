@@ -3515,6 +3515,7 @@ read_file
             if '/bin' not in env['PATH']:
                 env['PATH'] = f"/bin:{env['PATH']}"
             
+            print(f"[HTML预览] 开始执行LibreOffice转换，超时时间: 60秒...")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -3522,6 +3523,7 @@ read_file
                 timeout=60,  # 60秒超时
                 env=env  # 使用包含完整 PATH 的环境变量
             )
+            print(f"[HTML预览] LibreOffice转换完成，返回码: {result.returncode}")
             
             if result.returncode != 0:
                 print(f"[HTML预览] LibreOffice转换失败: {result.stderr}")
