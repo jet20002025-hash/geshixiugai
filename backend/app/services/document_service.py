@@ -4155,10 +4155,6 @@ read_file
             if result.stderr:
                 print(f"[PDF预览] LibreOffice错误输出: {result.stderr}")
             
-            if result.returncode != 0:
-                print(f"[PDF预览] LibreOffice PDF转换失败，返回码: {result.returncode}")
-                return False
-            
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
             # 使用绝对路径查找
@@ -4166,7 +4162,7 @@ read_file
             
             # 等待文件生成（LibreOffice 可能需要一点时间）
             import time
-            max_wait = 5  # 最多等待5秒
+            max_wait = 10  # 增加到10秒，给LibreOffice更多时间
             wait_interval = 0.5  # 每0.5秒检查一次
             waited = 0
             while not generated_pdf.exists() and waited < max_wait:
@@ -4174,7 +4170,21 @@ read_file
                 waited += wait_interval
                 print(f"[PDF预览] 等待PDF文件生成... ({waited:.1f}s)")
             
-            # 如果找不到，尝试列出输出目录中的所有文件
+            # 检查是否成功生成PDF文件（即使返回码非零，也可能成功转换）
+            if generated_pdf.exists():
+                # 验证文件大小（应该大于0）
+                pdf_size = generated_pdf.stat().st_size
+                if pdf_size > 0:
+                    print(f"[PDF预览] ✅ PDF文件已生成: {generated_pdf}, 大小: {pdf_size / 1024:.2f} KB")
+                    # 即使返回码非零，只要文件生成了就认为成功
+                    # 将生成的PDF移动到目标路径
+                    shutil.move(str(generated_pdf), str(pdf_path))
+                    print(f"[PDF预览] LibreOffice PDF转换成功，文件已移动到: {pdf_path}")
+                    return True
+                else:
+                    print(f"[PDF预览] ⚠️ PDF文件存在但大小为0: {generated_pdf}")
+            
+            # 如果找不到预期的PDF文件，尝试列出输出目录中的所有文件
             if not generated_pdf.exists():
                 print(f"[PDF预览] 预期PDF文件不存在: {generated_pdf}")
                 print(f"[PDF预览] 检查输出目录中的所有文件:")
@@ -4189,24 +4199,40 @@ read_file
                         generated_pdf = pdf_files[0]
                     else:
                         print(f"[PDF预览] 输出目录中没有找到任何PDF文件")
+                        if result.returncode != 0:
+                            print(f"[PDF预览] LibreOffice返回错误码: {result.returncode}")
                         return False
                 except Exception as e:
                     print(f"[PDF预览] 列出文件时出错: {e}")
                     return False
             
-            # 移动到目标位置
-            if generated_pdf != pdf_path:
-                shutil.move(str(generated_pdf), str(pdf_path))
-            
-            pdf_size = pdf_path.stat().st_size
-            print(f"[PDF预览] LibreOffice PDF转换成功，大小: {pdf_size / 1024:.2f} KB")
-            
-            # 验证PDF文件是否有效（至少应该有一定大小）
-            if pdf_size < 1024:  # 小于1KB可能有问题
-                print(f"[PDF预览] 警告: PDF文件大小异常小 ({pdf_size} 字节)，可能生成失败")
+            # 如果找到了PDF文件，移动到目标位置
+            if generated_pdf.exists():
+                pdf_size = generated_pdf.stat().st_size
+                if pdf_size > 0:
+                    # 移动到目标位置
+                    if generated_pdf != pdf_path:
+                        shutil.move(str(generated_pdf), str(pdf_path))
+                    else:
+                        # 如果已经是目标路径，验证文件大小
+                        pdf_size = pdf_path.stat().st_size
+                    
+                    print(f"[PDF预览] ✅ LibreOffice PDF转换成功，大小: {pdf_size / 1024:.2f} KB")
+                    
+                    # 验证PDF文件是否有效（至少应该有一定大小）
+                    if pdf_size < 1024:  # 小于1KB可能有问题
+                        print(f"[PDF预览] ⚠️ 警告: PDF文件大小异常小 ({pdf_size} 字节)，可能生成失败")
+                        return False
+                    
+                    return True
+                else:
+                    print(f"[PDF预览] ⚠️ PDF文件存在但大小为0: {generated_pdf}")
+                    return False
+            else:
+                print(f"[PDF预览] ❌ 未找到生成的PDF文件")
+                if result.returncode != 0:
+                    print(f"[PDF预览] LibreOffice返回错误码: {result.returncode}")
                 return False
-            
-            return True
             
         except subprocess.TimeoutExpired:
             print("[PDF预览] LibreOffice PDF转换超时（超过60秒）")
