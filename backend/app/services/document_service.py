@@ -914,38 +914,51 @@ class DocumentService:
             # 强制统一正文段落格式：毕业论文正文固定为小四（12pt）宋体，固定行距20磅
             if rule:
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
-                # 判断是否是标题
-                # 优先使用检测到的样式来判断
+                # 判断是否是标题（使用更严格的判断，避免把正文误判为标题）
                 is_heading = False
                 if applied_rule_name:
                     # 如果应用的规则是标题样式，则认为是标题
-                    if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3", "abstract_title", "toc_title", "reference_title", "acknowledgment_title"]:
+                    if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3", "abstract_title", "toc_title", "reference_title", "acknowledgment_title", "abstract_title_en"]:
                         is_heading = True
-                    # 或者检查样式名称
+                        if idx < 10:  # 只记录前10个段落的详细信息
+                            print(f"[格式应用] 段落 {idx} 被识别为标题（规则: {applied_rule_name}）")
+                    # 或者检查样式名称（但更严格）
                     elif style_name and ("标题" in style_name.lower() or "heading" in style_name.lower()):
-                        is_heading = True
+                        # 只有当段落很短（<=30字符）且居中对齐时，才认为是标题
+                        if len(paragraph_text) <= 30 and paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
+                            is_heading = True
+                            if idx < 10:
+                                print(f"[格式应用] 段落 {idx} 被识别为标题（样式: {style_name}，内容: {paragraph_text[:20]}）")
                     # 或者检查段落内容特征（居中对齐的短文本，或"绪论"、"概述"等）
-                    elif paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 50:
-                        is_heading = True
+                    elif paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 30:
+                        # 更严格：只有非常短的文本（<=20字符）且居中对齐才认为是标题
+                        if len(paragraph_text) <= 20:
+                            is_heading = True
+                            if idx < 10:
+                                print(f"[格式应用] 段落 {idx} 被识别为标题（居中短文本: {paragraph_text[:20]}）")
                     # 或者检查是否是"绪论"、"概述"等标题
                     elif paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"):
-                        is_heading = True
+                        if len(paragraph_text) <= 20:  # 更严格：只有很短的文本才认为是标题
+                            is_heading = True
+                            if idx < 10:
+                                print(f"[格式应用] 段落 {idx} 被识别为标题（绪论/概述: {paragraph_text}）")
                     # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过30个）
-                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 30:
+                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 20:  # 更严格：<=20字符
                         # 更严格的判断：只有纯数字编号格式（如"3.2.4"、"3.2"等）才认为是标题
                         # 如果包含其他文字内容（如"3.2.4 12864 液晶显示屏"），则不是标题，是正文
-                        # 换行以后就是新的内容了，标题一般不会超过一行
                         if re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text):
                             is_heading = True
-                # 如果没有应用规则名称，使用备用判断逻辑
+                            if idx < 10:
+                                print(f"[格式应用] 段落 {idx} 被识别为标题（数字编号: {paragraph_text}）")
+                # 如果没有应用规则名称，使用备用判断逻辑（更严格）
                 if not is_heading:
                     is_heading = (
-                        (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower())) or
-                        (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) <= 30) or
-                        # 更严格的判断：只有纯数字编号格式才认为是标题（标题一般不会超过一行，字数不会超过30个）
-                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 30 and 
+                        (style_name and ("标题" in style_name.lower() or "heading" in style_name.lower()) and len(paragraph_text) <= 20 and paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER) or
+                        (paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) <= 15) or  # 更严格：<=15字符
+                        # 更严格的判断：只有纯数字编号格式才认为是标题（标题一般不会超过一行，字数不会超过15个）
+                        (paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 15 and 
                          re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text)) or
-                        (paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"))
+                        ((paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述")) and len(paragraph_text) <= 20)
                     )
                 
                 # 判断是否包含图片、公式或流程图
