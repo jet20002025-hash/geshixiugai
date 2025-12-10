@@ -2856,8 +2856,14 @@ class DocumentService:
 </html>"""
         
         # 记录统计信息
-        print(f"[HTML预览] HTML生成完成，总段落数: {len(document.paragraphs)}, 总文字长度: {total_text_length} 字符")
+        print(f"[HTML预览] HTML生成完成，总段落数: {paragraph_count}, 总文字长度: {total_text_length} 字符")
+        print(f"[HTML预览] 中文字符数: {chinese_char_count} 字符")
         print(f"[HTML预览] HTML内容大小: {len(html_content) / 1024:.2f} KB")
+        # 检查HTML中是否包含中文字符
+        html_chinese_count = len([c for c in html_content if '\u4e00' <= c <= '\u9fff'])
+        print(f"[HTML预览] HTML中的中文字符数: {html_chinese_count} 字符")
+        if chinese_char_count > 0 and html_chinese_count == 0:
+            print(f"[HTML预览] ⚠️ 警告：提取到 {chinese_char_count} 个中文字符，但HTML中只有 {html_chinese_count} 个！")
         
         html_path.write_text(html_content, encoding="utf-8")
     
