@@ -69,3 +69,4 @@ sudo journalctl -u geshixiugai -f | grep -E "\[PDF预览\]"
 2. 或者使用其他 PDF 生成库（如 reportlab）
 3. 或者等待 WeasyPrint 官方修复
 
+

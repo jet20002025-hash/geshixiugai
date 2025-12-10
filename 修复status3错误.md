@@ -119,3 +119,4 @@ python -c "from backend.app.main import app; print('✅ 应用导入成功')" 2>
 sudo journalctl -u geshixiugai -n 100 --no-pager
 ```
 
+

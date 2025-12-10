@@ -79,3 +79,4 @@ ls -lh /var/www/geshixiugai/storage/documents/01a4656f3b5046bb9c45a53d322034bc/p
 - 需要确保 LibreOffice 命令可以以该用户身份执行
 - 可能需要配置 sudo 规则，允许 nginx 用户执行 libreoffice
 
+

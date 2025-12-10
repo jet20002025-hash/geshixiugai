@@ -180,7 +180,7 @@ async def create_payjs_payment(payload: PaymentRequest) -> dict:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     
     # 获取回调地址
-    base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
+    base_url = os.getenv("BASE_URL", "https://www.geshixiugai.cn")
     notify_url = f"{base_url}/payments/payjs/notify"  # 注意：没有 /api 前缀
     
     # 创建支付订单
@@ -291,7 +291,7 @@ async def create_wechat_payment(payload: PaymentRequest, request: Request) -> di
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     
     # 获取回调地址
-    base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
+    base_url = os.getenv("BASE_URL", "https://www.geshixiugai.cn")
     notify_url = f"{base_url}/payments/wechat/notify"  # 注意：没有 /api 前缀
     print(f"[WeChat API] 回调地址: {notify_url}")
     
@@ -418,7 +418,7 @@ async def create_alipay_payment(payload: PaymentRequest) -> dict:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     
     # 获取回调地址
-    base_url = os.getenv("BASE_URL", "https://geshixiugai.org")
+    base_url = os.getenv("BASE_URL", "https://www.geshixiugai.cn")
     return_url = f"{base_url}/web/"  # 支付成功跳转回网站
     notify_url = f"{base_url}/payments/alipay/notify"  # 支付回调地址
     print(f"[Alipay API] 回调地址: {notify_url}")

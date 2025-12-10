@@ -135,7 +135,8 @@ class WeChatPayService:
         
         # H5支付需要scene_info
         if use_h5:
-            data["scene_info"] = '{"h5_info": {"type":"Wap","wap_url":"https://geshixiugai.org","wap_name":"论文格式修复"}}'
+            base_url = os.getenv("BASE_URL", "https://www.geshixiugai.cn")
+            data["scene_info"] = f'{{"h5_info": {{"type":"Wap","wap_url":"{base_url}","wap_name":"论文格式修复"}}}}'
         
         # 生成签名
         data["sign"] = self._sign(data)

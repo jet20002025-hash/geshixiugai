@@ -252,3 +252,4 @@ sudo journalctl -u geshixiugai -f
 **记住：所有命令都在阿里云控制台的网页对话框里执行！** 🎯
 
 
+

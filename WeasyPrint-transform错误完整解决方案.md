@@ -112,3 +112,4 @@ python -c "from weasyprint import HTML; print('✅ WeasyPrint导入成功')" && 
 sudo systemctl restart geshixiugai
 ```
 
+

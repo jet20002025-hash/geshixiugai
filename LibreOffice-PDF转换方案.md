@@ -111,3 +111,4 @@ sudo journalctl -u geshixiugai -f | grep -E "\[PDF预览\]"
 - 检查文档大小（过大可能需要更长时间）
 - 检查服务器内存是否充足
 
+

@@ -56,3 +56,4 @@ DOCUMENT_ID="45ad9acdf55e4314a13bdb20a3ff2bb3"
 sudo journalctl -u geshixiugai --since "30 minutes ago" --no-pager | grep -E "$DOCUMENT_ID|\[预览\]|\[PDF预览\]" | tail -50
 ```
 
+

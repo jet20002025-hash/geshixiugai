@@ -113,3 +113,4 @@ sudo chown admin:admin .env
 chmod 755 /var/www/geshixiugai
 ```
 
+

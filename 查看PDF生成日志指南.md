@@ -66,3 +66,4 @@ git log --oneline -5
 sudo journalctl -u geshixiugai -f --since "1 minute ago"
 ```
 
+
