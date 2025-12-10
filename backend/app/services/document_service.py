@@ -4042,8 +4042,10 @@ read_file
                     )
                     if result.returncode == 0:
                         libreoffice_cmd = path
-                        print(f"[PDF预览] 在路径找到LibreOffice: {path}")
-                        print(f"[PDF预览] LibreOffice版本: {result.stdout.strip()}")
+                        log_msg = f"[PDF预览] 在路径找到LibreOffice: {path}"
+                        print(log_msg, flush=True)
+                        log_msg = f"[PDF预览] LibreOffice版本: {result.stdout.strip()}"
+                        print(log_msg, flush=True)
                         break
                 except Exception as e:
                     print(f"[PDF预览] 路径 {path} 存在但无法执行: {e}")
@@ -4152,7 +4154,8 @@ read_file
                 str(docx_path)
             ]
             
-            print(f"[PDF预览] 执行LibreOffice PDF转换命令: {' '.join(cmd)}")
+            log_msg = f"[PDF预览] 执行LibreOffice PDF转换命令: {' '.join(cmd)}"
+            print(log_msg, flush=True)
             
             # 准备环境变量，确保包含必要的 PATH
             env = os.environ.copy()
@@ -4178,9 +4181,12 @@ read_file
                 str(abs_docx_path)
             ]
             
-            print(f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}")
-            print(f"[PDF预览] 输入文件: {abs_docx_path}, 存在: {abs_docx_path.exists()}")
-            print(f"[PDF预览] 输出目录: {abs_output_dir}, 存在: {abs_output_dir.exists()}")
+            log_msg = f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}"
+            print(log_msg, flush=True)
+            log_msg = f"[PDF预览] 输入文件: {abs_docx_path}, 存在: {abs_docx_path.exists()}"
+            print(log_msg, flush=True)
+            log_msg = f"[PDF预览] 输出目录: {abs_output_dir}, 存在: {abs_output_dir.exists()}"
+            print(log_msg, flush=True)
             
             # 检查文件权限
             try:
@@ -4197,11 +4203,14 @@ read_file
                 env=env  # 使用包含完整 PATH 的环境变量
             )
             
-            print(f"[PDF预览] LibreOffice执行完成，返回码: {result.returncode}")
+            log_msg = f"[PDF预览] LibreOffice执行完成，返回码: {result.returncode}"
+            print(log_msg, flush=True)
             if result.stdout:
-                print(f"[PDF预览] LibreOffice标准输出: {result.stdout}")
+                log_msg = f"[PDF预览] LibreOffice标准输出: {result.stdout}"
+                print(log_msg, flush=True)
             if result.stderr:
-                print(f"[PDF预览] LibreOffice错误输出: {result.stderr}")
+                log_msg = f"[PDF预览] LibreOffice错误输出: {result.stderr}"
+                print(log_msg, flush=True)
             
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
