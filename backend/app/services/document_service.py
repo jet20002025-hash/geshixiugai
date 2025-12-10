@@ -963,23 +963,30 @@ class DocumentService:
                     # 也移除首行缩进，图片/流程图段落通常不需要缩进
                     rule.pop("first_line_indent", None)
                 
-                # 对于正文段落（非标题、非图片、非公式、非流程图），如果使用的是标准默认样式，确保格式正确
+                # 对于正文段落（非标题、非图片、非公式、非流程图），强制使用宋体
                 if not is_heading and not has_image_or_equation and not has_flowchart:
-                    # 如果使用的是标准默认样式，确保格式符合标准
-                    if applied_rule_name == DEFAULT_STYLE or applied_rule_name == "body_text":
-                        if DEFAULT_STYLE in FONT_STANDARDS:
-                            standard_body = FONT_STANDARDS[DEFAULT_STYLE]
-                            rule["font_size"] = standard_body.get("font_size", 12)
-                            rule["font_name"] = standard_body.get("font_name", "宋体")
-                            rule["bold"] = standard_body.get("bold", False)
-                            rule["line_spacing"] = standard_body.get("line_spacing", 20)
-                            rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
-                # 对于标题，如果当前规则没有字体大小，也使用默认规则的字体大小
-                elif default_rule:
-                    if rule.get("font_size") is None and default_rule.get("font_size") is not None:
-                        rule["font_size"] = default_rule["font_size"]
-                    if rule.get("font_name") is None and default_rule.get("font_name") is not None:
-                        rule["font_name"] = default_rule["font_name"]
+                    # 无论应用什么规则，正文段落都必须使用宋体
+                    if DEFAULT_STYLE in FONT_STANDARDS:
+                        standard_body = FONT_STANDARDS[DEFAULT_STYLE]
+                        # 强制设置正文格式：宋体、12pt、非加粗、20磅行距
+                        rule["font_name"] = standard_body.get("font_name", "宋体")
+                        rule["font_size"] = standard_body.get("font_size", 12)
+                        rule["bold"] = standard_body.get("bold", False)
+                        rule["line_spacing"] = standard_body.get("line_spacing", 20)
+                        rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
+                        print(f"[格式应用] 段落 {idx} 强制设置为正文格式：宋体、12pt、行距20磅")
+                # 对于标题，确保使用黑体
+                elif is_heading:
+                    # 标题必须使用黑体，如果规则中没有指定，使用标准标题格式
+                    if rule.get("font_name") is None or "黑" not in str(rule.get("font_name", "")):
+                        # 根据标题级别设置字体
+                        if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3"]:
+                            if applied_rule_name in FONT_STANDARDS:
+                                title_style = FONT_STANDARDS[applied_rule_name]
+                                rule["font_name"] = title_style.get("font_name", "黑体")
+                        else:
+                            rule["font_name"] = "黑体"
+                        print(f"[格式应用] 段落 {idx} 强制设置为标题格式：黑体")
 
             if rule:
                 # 记录修改前的格式
