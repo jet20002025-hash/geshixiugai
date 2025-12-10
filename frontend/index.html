@@ -656,16 +656,16 @@
       async function initializeTemplateSelection() {
         console.log("[大学列表] 开始初始化模板选择");
         try {
-          // 加载所有大学模板（预设模板 + 用户上传的模板）
-          await loadUniversityTemplates();
+        // 加载所有大学模板（预设模板 + 用户上传的模板）
+        await loadUniversityTemplates();
           console.log("[大学列表] 模板选择初始化完成，下拉框选项数:", universitySelect ? universitySelect.options.length : 0);
-          
-          // 始终显示大学模板选择
-          if (presetTemplateSection) {
-            presetTemplateSection.style.display = "block";
-          }
-          if (universitySelect) {
-            universitySelect.required = true;
+        
+        // 始终显示大学模板选择
+        if (presetTemplateSection) {
+          presetTemplateSection.style.display = "block";
+        }
+        if (universitySelect) {
+          universitySelect.required = true;
           }
         } catch (error) {
           console.error("[大学列表] 初始化模板选择失败:", error);
@@ -677,7 +677,7 @@
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeTemplateSelection);
       } else {
-        initializeTemplateSelection();
+      initializeTemplateSelection();
       }
       
       // 检测支付宝支付成功回调

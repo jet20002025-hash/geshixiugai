@@ -211,6 +211,99 @@
             display: block;
         }
         
+        /* Word文档预览样式 */
+        #docxViewer {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        #docxViewer .docx-wrapper {
+            max-width: 816px; /* A4宽度（96 DPI = 21cm * 37.8px/cm ≈ 816px） */
+            margin: 0 auto;
+            background: #fff;
+            /* 页边距：上3cm、下2cm、左3cm、右2cm（根据Word文档实际页边距设置） */
+            padding: 113px 76px 76px 113px; /* 上=3cm*37.8≈113px, 下=2cm*37.8≈76px, 左=3cm*37.8≈113px, 右=2cm*37.8≈76px */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            /* 确保内容区域宽度正确 */
+            box-sizing: border-box;
+        }
+        
+        /* 强制所有正文段落使用宋体 */
+        #docxViewer .docx,
+        #docxViewer .docx * {
+            font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif !important;
+            line-height: 1.67; /* 20磅行距 / 12pt = 1.67 */
+            color: #000;
+        }
+        
+        /* 强制标题使用黑体 */
+        #docxViewer .docx h1,
+        #docxViewer .docx h2,
+        #docxViewer .docx h3,
+        #docxViewer .docx h4,
+        #docxViewer .docx h5,
+        #docxViewer .docx h6,
+        #docxViewer .docx [style*="font-weight: bold"],
+        #docxViewer .docx [style*="font-weight:bold"],
+        #docxViewer .docx strong,
+        #docxViewer .docx b {
+            font-family: "SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "Arial", sans-serif !important;
+            font-weight: bold !important;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+        
+        /* 段落样式 */
+        #docxViewer .docx p {
+            margin: 0.5em 0;
+            text-align: justify;
+            font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif !important;
+        }
+        
+        /* 确保非标题的文本使用宋体 */
+        #docxViewer .docx p:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+            font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif !important;
+        }
+        
+        /* 图片样式 */
+        #docxViewer .docx img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 1em auto;
+        }
+        
+        /* 表格样式 */
+        #docxViewer .docx table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        
+        #docxViewer .docx table td,
+        #docxViewer .docx table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif !important;
+        }
+        
+        /* 覆盖docx-preview可能添加的内联样式 */
+        #docxViewer .docx [style*="font-family"] {
+            font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif !important;
+        }
+        
+        /* 标题的特殊处理：通过字体大小和加粗来识别 */
+        #docxViewer .docx [style*="font-size: 16pt"],
+        #docxViewer .docx [style*="font-size: 14pt"],
+        #docxViewer .docx [style*="font-size:16pt"],
+        #docxViewer .docx [style*="font-size:14pt"] {
+            font-family: "SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "Arial", sans-serif !important;
+            font-weight: bold !important;
+        }
+        
         .loading {
             position: absolute;
             top: 50%;
@@ -358,22 +451,165 @@
         
         <!-- 主预览区域 -->
         <div class="main-preview" id="mainPreview" style="display: none;">
+            <!-- Word文档预览容器 -->
+            <div id="docxViewer" style="display: none; width: 100%; height: 100%; overflow: auto; padding: 20px; background: #fff;"></div>
+            <!-- PDF预览容器 -->
             <div class="pdf-viewer" id="pdfViewer"></div>
+            <!-- iframe容器（用于PDF或HTML回退） -->
             <iframe 
                 id="previewFrame" 
                 class="preview-iframe" 
                 style="display: none;"
             ></iframe>
+            <!-- HTML内容容器 -->
             <div id="previewContent" class="preview-iframe" style="display: none; padding: 20px; overflow: auto;"></div>
         </div>
     </div>
     
-    <!-- PDF.js库 -->
+    <!-- docx-preview库：用于在浏览器中直接预览Word文档 -->
+    <!-- 使用多个CDN备选，确保库能正确加载 -->
+    <script>
+        // 动态加载docx-preview库，支持多个CDN备选
+        (function() {
+            const cdnSources = [
+                'https://unpkg.com/docx-preview@0.1.4/dist/docx-preview.min.js',
+                'https://cdn.jsdelivr.net/npm/docx-preview@0.1.4/dist/docx-preview.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/docx-preview/0.1.4/docx-preview.min.js'
+            ];
+            
+            let currentIndex = 0;
+            
+            function loadScript(src) {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.async = true;
+                    script.onload = () => {
+                        console.log('✅ docx-preview库加载成功:', src);
+                        // 检查库是否正确加载
+                        if (typeof docx !== 'undefined' || typeof docxPreview !== 'undefined' || 
+                            typeof window.docx !== 'undefined' || typeof window.docxPreview !== 'undefined') {
+                            resolve();
+                        } else {
+                            // 库加载了但全局变量不存在，尝试下一个CDN
+                            console.warn('⚠️ docx-preview库加载但全局变量不存在，尝试下一个CDN');
+                            reject(new Error('Global variable not found'));
+                        }
+                    };
+                    script.onerror = () => {
+                        console.warn('❌ docx-preview库加载失败:', src);
+                        reject(new Error('Load failed'));
+                    };
+                    document.head.appendChild(script);
+                });
+            }
+            
+            async function tryLoadDocxPreview() {
+                for (let i = 0; i < cdnSources.length; i++) {
+                    try {
+                        await loadScript(cdnSources[i]);
+                        window.docxPreviewLoaded = true;
+                        return;
+                    } catch (error) {
+                        if (i < cdnSources.length - 1) {
+                            console.log(`尝试下一个CDN源... (${i + 1}/${cdnSources.length})`);
+                        } else {
+                            console.error('❌ 所有CDN源都加载失败，docx-preview不可用');
+                            window.docxPreviewLoadError = true;
+                        }
+                    }
+                }
+            }
+            
+            // 立即开始加载
+            tryLoadDocxPreview();
+        })();
+    </script>
+    
+    <!-- PDF.js库：作为备选方案 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" 
             onerror="console.error('PDF.js库加载失败'); window.pdfjsLoadError = true;"></script>
     
     <script>
         (function() {
+        // 过滤第三方脚本和浏览器扩展的错误
+        const originalError = window.onerror;
+        const originalUnhandledRejection = window.onunhandledrejection;
+        
+        // 需要忽略的错误关键词
+        const ignoredErrors = [
+            'installHook.js',
+            'NATIVE',
+            'chrome-extension://',
+            'moz-extension://',
+            'safari-extension://',
+            'Script error',
+            'Non-Error promise rejection',
+            'ResizeObserver loop',
+            'Network request failed',
+            'Failed to fetch',
+            'net::ERR_',
+            'Extension context invalidated'
+        ];
+        
+        window.onerror = function(message, source, lineno, colno, error) {
+            // 检查是否是需要忽略的错误
+            const errorStr = String(message || '') + ' ' + String(source || '');
+            const shouldIgnore = ignoredErrors.some(keyword => errorStr.includes(keyword));
+            
+            if (shouldIgnore) {
+                // 静默忽略第三方脚本错误
+                return true;
+            }
+            
+            // 记录真正的错误
+            console.error('[页面错误]', {
+                message: message,
+                source: source,
+                lineno: lineno,
+                colno: colno,
+                error: error
+            });
+            
+            // 调用原始错误处理
+            if (originalError) {
+                return originalError.apply(this, arguments);
+            }
+            return false;
+        };
+        
+        // 处理未捕获的Promise拒绝
+        window.addEventListener('unhandledrejection', function(event) {
+            const reason = event.reason;
+            const reasonStr = String(reason || '');
+            
+            // 检查是否是需要忽略的错误
+            const shouldIgnore = ignoredErrors.some(keyword => 
+                reasonStr.includes(keyword) || 
+                (reason && reason.message && reason.message.includes(keyword))
+            );
+            
+            if (shouldIgnore) {
+                event.preventDefault(); // 阻止默认错误处理
+                return;
+            }
+            
+            // 记录真正的错误
+            console.error('[未捕获的Promise拒绝]', reason);
+        });
+        
+        // 过滤控制台错误（用于调试）
+        if (console.error) {
+            const originalConsoleError = console.error;
+            console.error = function(...args) {
+                const errorStr = args.join(' ');
+                const shouldIgnore = ignoredErrors.some(keyword => errorStr.includes(keyword));
+                
+                if (!shouldIgnore) {
+                    originalConsoleError.apply(console, args);
+                }
+            };
+        }
         // 从URL参数获取document_id
         const urlParams = new URLSearchParams(window.location.search);
         let docId = urlParams.get('id') || urlParams.get('document_id');
@@ -443,11 +679,233 @@
             }
         }
         
+        // 使用docx-preview加载Word文档
+        async function loadDocxPreview() {
+            try {
+                logStep('Word预览', '正在加载Word文档...');
+                console.log('尝试加载Word文档预览:', `/documents/${docId}/preview-docx`);
+                
+                const response = await fetch(`/documents/${docId}/preview-docx`);
+                if (!response.ok) {
+                    console.warn('Word文档预览不可用，状态:', response.status);
+                    return false;
+                }
+                
+                const blob = await response.blob();
+                console.log('Word文档Blob大小:', blob.size, 'bytes', `(${(blob.size / 1024).toFixed(2)} KB)`);
+                
+                // 检查docx-preview库是否加载
+                // docx-preview库可能导出为 docx、docxPreview 或 renderAsync
+                let docxLib = null;
+                let renderAsyncFunc = null;
+                
+                // 方法1: 检查全局变量
+                const checkLibrary = () => {
+                    // 检查各种可能的导出方式
+                    if (typeof docx !== 'undefined') {
+                        if (typeof docx.renderAsync === 'function') {
+                            return docx;
+                        } else if (typeof docx.default !== 'undefined' && typeof docx.default.renderAsync === 'function') {
+                            return docx.default;
+                        }
+                    }
+                    if (typeof docxPreview !== 'undefined') {
+                        if (typeof docxPreview.renderAsync === 'function') {
+                            return docxPreview;
+                        } else if (typeof docxPreview.default !== 'undefined' && typeof docxPreview.default.renderAsync === 'function') {
+                            return docxPreview.default;
+                        }
+                    }
+                    if (typeof window.docx !== 'undefined') {
+                        if (typeof window.docx.renderAsync === 'function') {
+                            return window.docx;
+                        }
+                    }
+                    if (typeof window.docxPreview !== 'undefined') {
+                        if (typeof window.docxPreview.renderAsync === 'function') {
+                            return window.docxPreview;
+                        }
+                    }
+                    // 检查是否有直接的 renderAsync 函数
+                    if (typeof renderAsync !== 'undefined') {
+                        return { renderAsync: renderAsync };
+                    }
+                    if (typeof window.renderAsync !== 'undefined') {
+                        return { renderAsync: window.renderAsync };
+                    }
+                    return null;
+                };
+                
+                docxLib = checkLibrary();
+                
+                if (!docxLib) {
+                    console.warn('docx-preview库未加载，等待中...');
+                    // 等待库加载（最多等待10秒）
+                    let waitCount = 0;
+                    const maxWait = 100; // 100 * 100ms = 10秒
+                    while (!docxLib && waitCount < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        docxLib = checkLibrary();
+                        waitCount++;
+                        if (waitCount % 10 === 0) {
+                            console.log(`等待docx-preview库加载... (${waitCount * 100}ms)`);
+                        }
+                    }
+                }
+                
+                if (!docxLib) {
+                    console.error('❌ docx-preview库加载失败，检查CDN状态...');
+                    console.log('可用的全局对象:', Object.keys(window).filter(k => k.toLowerCase().includes('docx')));
+                    return false;
+                }
+                
+                console.log('✅ docx-preview库已找到:', docxLib);
+                
+                // 尝试使用docx-preview渲染
+                const docxViewer = document.getElementById('docxViewer');
+                const mainPreview = document.getElementById('mainPreview');
+                
+                if (docxLib && typeof docxLib.renderAsync === 'function') {
+                    // 使用docx-preview的renderAsync方法
+                    logStep('Word渲染', '正在渲染Word文档...');
+                    console.log('开始使用docx-preview渲染Word文档，配置:', {
+                        className: 'docx',
+                        inWrapper: true,
+                        ignoreFonts: false
+                    });
+                    
+                    try {
+                        await docxLib.renderAsync(blob, docxViewer, null, {
+                        className: 'docx',
+                        inWrapper: true,
+                        ignoreWidth: false,
+                        ignoreHeight: false,
+                        ignoreFonts: false,  // 不忽略字体，读取原始字体
+                        breakPages: true,
+                        ignoreLastRenderedPageBreak: true,
+                        experimental: false,
+                        trimXmlDeclaration: true,
+                        useBase64URL: false,
+                        showChanges: false,
+                        showInsertions: false,
+                        showDeletions: false
+                    });
+                    
+                    console.log('Word文档渲染成功，开始应用字体样式...');
+                    
+                    // 渲染完成后，强制应用正确的字体
+                    // 通过检查字体大小、加粗、对齐方式等来区分标题和正文
+                    setTimeout(() => {
+                        try {
+                            const allParagraphs = docxViewer.querySelectorAll('.docx p, .docx div, .docx span, .docx *');
+                            let headingCount = 0;
+                            let bodyCount = 0;
+                            let skippedCount = 0;
+                            
+                            console.log(`找到 ${allParagraphs.length} 个元素，开始应用字体...`);
+                            
+                            allParagraphs.forEach((el, idx) => {
+                                if (!el.textContent || !el.textContent.trim()) {
+                                    skippedCount++;
+                                    return;
+                                }
+                                
+                                const computedStyle = window.getComputedStyle(el);
+                                const fontSize = computedStyle.fontSize;
+                                const fontWeight = computedStyle.fontWeight;
+                                const textAlign = computedStyle.textAlign;
+                                const fontSizePt = parseFloat(fontSize) * 0.75; // px转pt
+                                
+                                // 获取当前字体（用于诊断）
+                                const currentFont = computedStyle.fontFamily;
+                                
+                                // 判断是否为标题的多个条件：
+                                // 1. 字体大小 >= 14pt（标题通常是14pt或16pt）
+                                // 2. 加粗（fontWeight >= 600）
+                                // 3. 居中对齐（可能是标题）
+                                // 4. 文本较短（< 50字符）且字体较大（>= 12pt）
+                                const isHeading = fontSizePt >= 14 || 
+                                                 parseInt(fontWeight) >= 600 ||
+                                                 (textAlign === 'center' && fontSizePt >= 12) ||
+                                                 (el.textContent.trim().length < 50 && fontSizePt >= 12 && parseInt(fontWeight) >= 500);
+                                
+                                if (isHeading) {
+                                    // 标题：使用黑体
+                                    el.style.setProperty('font-family', '"SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "Arial", sans-serif', 'important');
+                                    el.style.setProperty('font-weight', 'bold', 'important');
+                                    headingCount++;
+                                    
+                                    if (idx < 5) {
+                                        console.log(`标题 ${idx}: "${el.textContent.substring(0, 20)}..." - 字体: ${currentFont} -> 黑体, 大小: ${fontSizePt.toFixed(1)}pt`);
+                                    }
+                                } else {
+                                    // 正文：使用宋体
+                                    el.style.setProperty('font-family', '"SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "Times New Roman", serif', 'important');
+                                    el.style.setProperty('font-weight', 'normal', 'important');
+                                    bodyCount++;
+                                    
+                                    if (idx < 5) {
+                                        console.log(`正文 ${idx}: "${el.textContent.substring(0, 20)}..." - 字体: ${currentFont} -> 宋体, 大小: ${fontSizePt.toFixed(1)}pt`);
+                                    }
+                                }
+                            });
+                            
+                            console.log(`✅ 字体样式强制应用完成：标题 ${headingCount} 个，正文 ${bodyCount} 个，跳过 ${skippedCount} 个空元素`);
+                            console.log('提示：如果字体仍然不正确，请检查浏览器是否安装了相应的中文字体');
+                            
+                            // 检查浏览器可用字体
+                            if (document.fonts && document.fonts.check) {
+                                const fontsToCheck = ['SimSun', '宋体', 'SimHei', '黑体'];
+                                fontsToCheck.forEach(font => {
+                                    const available = document.fonts.check(`12px "${font}"`);
+                                    console.log(`字体 "${font}" 可用: ${available}`);
+                                });
+                            }
+                        } catch (error) {
+                            console.error('应用字体样式时出错:', error);
+                        }
+                    }, 800);
+                    
+                    console.log('Word文档渲染成功');
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('thumbnailSidebar').style.display = 'none';
+                    mainPreview.style.display = 'block';
+                    docxViewer.style.display = 'block';
+                    
+                    logStep('完成', 'Word文档预览加载完成');
+                    return true;
+                } else {
+                    console.error('❌ docx-preview库未找到或API不正确，无法渲染Word文档');
+                    console.log('诊断信息:');
+                    console.log('  - window.docx:', typeof window.docx);
+                    console.log('  - window.docxPreview:', typeof window.docxPreview);
+                    console.log('  - docx:', typeof docx);
+                    console.log('  - docxPreview:', typeof docxPreview);
+                    console.log('  - renderAsync:', typeof renderAsync);
+                    console.log('  - 可用的全局对象:', Object.keys(window).filter(k => k.toLowerCase().includes('docx')));
+                    console.log('  - 所有window属性（前20个）:', Object.keys(window).slice(0, 20));
+                    return false;
+                }
+            } catch (error) {
+                console.error('Word文档预览失败:', error);
+                return false;
+            }
+        }
+        
         // 加载预览内容
         async function loadPreview() {
             perf.start = performance.now();
             logStep('开始', '初始化预览加载');
             console.log('开始加载预览，文档ID:', docId);
+            
+            // 优先尝试Word文档预览（避免PDF转换误差）
+            const docxSuccess = await loadDocxPreview();
+            if (docxSuccess) {
+                console.log('✅ 使用Word文档预览（无转换误差）');
+                return;
+            }
+            
+            console.log('⚠️ Word文档预览失败，回退到PDF/HTML预览');
             
             try {
                 logStep('请求前', '准备发送预览请求');

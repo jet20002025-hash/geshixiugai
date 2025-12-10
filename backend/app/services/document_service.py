@@ -3600,12 +3600,21 @@ class DocumentService:
                     settings["paper_size"] = f"{width_cm}cm {height_cm}cm"
                 
                 # 提取页边距（转换为厘米）
-                settings["margins"]["top"] = section.top_margin / 360000
-                settings["margins"]["bottom"] = section.bottom_margin / 360000
-                settings["margins"]["left"] = section.left_margin / 360000
-                settings["margins"]["right"] = section.right_margin / 360000
+                # Word内部单位：1英寸 = 914400 EMU，1厘米 = 360000 EMU
+                # 所以除以360000得到厘米
+                top_margin_cm = section.top_margin / 360000
+                bottom_margin_cm = section.bottom_margin / 360000
+                left_margin_cm = section.left_margin / 360000
+                right_margin_cm = section.right_margin / 360000
                 
-                print(f"[PDF预览] 提取页面设置: {settings['paper_size']}, 方向: {settings['orientation']}, 页边距: {settings['margins']}")
+                settings["margins"]["top"] = round(top_margin_cm, 2)
+                settings["margins"]["bottom"] = round(bottom_margin_cm, 2)
+                settings["margins"]["left"] = round(left_margin_cm, 2)
+                settings["margins"]["right"] = round(right_margin_cm, 2)
+                
+                print(f"[PDF预览] 提取页面设置: {settings['paper_size']}, 方向: {settings['orientation']}")
+                print(f"[PDF预览] 提取页边距: 上={settings['margins']['top']}cm, 下={settings['margins']['bottom']}cm, 左={settings['margins']['left']}cm, 右={settings['margins']['right']}cm")
+                print(f"[PDF预览] Word原始页边距(EMU): 上={section.top_margin}, 下={section.bottom_margin}, 左={section.left_margin}, 右={section.right_margin}")
         except Exception as e:
             print(f"[PDF预览] 提取页面设置失败，使用默认值: {e}")
         
@@ -3618,10 +3627,14 @@ class DocumentService:
         margins = page_settings.get("margins", {})
         
         # 构建@page规则
-        margin_top = f"{margins.get('top', 2.54):.2f}cm"
-        margin_bottom = f"{margins.get('bottom', 2.54):.2f}cm"
-        margin_left = f"{margins.get('left', 3.18):.2f}cm"
-        margin_right = f"{margins.get('right', 3.18):.2f}cm"
+        # 使用提取到的实际页边距，如果没有则使用Word文档的默认值（2.54cm = 1英寸）
+        # 注意：不要使用硬编码的默认值，应该从Word文档中提取
+        margin_top = f"{margins.get('top', 2.54):.2f}cm" if margins.get('top') else "2.54cm"
+        margin_bottom = f"{margins.get('bottom', 2.54):.2f}cm" if margins.get('bottom') else "2.54cm"
+        margin_left = f"{margins.get('left', 3.18):.2f}cm" if margins.get('left') else "3.18cm"
+        margin_right = f"{margins.get('right', 2.54):.2f}cm" if margins.get('right') else "2.54cm"
+        
+        print(f"[PDF预览] 应用页边距: 上={margin_top}, 下={margin_bottom}, 左={margin_left}, 右={margin_right}")
         
         # 如果纸张大小是自定义的，直接使用
         if "cm" in str(paper_size) and " " in str(paper_size):

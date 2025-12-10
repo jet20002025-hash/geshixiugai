@@ -266,6 +266,51 @@ async def preview_document(document_id: str) -> Response:
 
 
 @router.get(
+    "/{document_id}/preview-docx",
+    summary="预览Word文档（直接返回DOCX文件，用于浏览器预览）",
+)
+async def preview_docx_document(document_id: str) -> FileResponse:
+    """
+    直接返回Word文档（final.docx），用于在浏览器中使用docx-preview等库预览
+    这样可以避免PDF转换的格式误差
+    """
+    service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+    metadata = service.get_document_metadata(document_id)
+    if not metadata:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"未找到文档 {document_id}"
+        )
+    
+    # 查找final.docx文件
+    final_docx_path = DOCUMENT_DIR / document_id / "final.docx"
+    docx_file = service._get_file_from_storage_or_local(document_id, "docx", "final", final_docx_path)
+    
+    if not docx_file or not docx_file.exists():
+        # 如果final.docx不存在，尝试preview.docx
+        preview_docx_path = DOCUMENT_DIR / document_id / "preview.docx"
+        docx_file = service._get_file_from_storage_or_local(document_id, "docx", "preview", preview_docx_path)
+    
+    if not docx_file or not docx_file.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Word文档不存在，请重新处理文档"
+        )
+    
+    print(f"[Preview DOCX] 返回Word文档: {docx_file}, 大小: {docx_file.stat().st_size / 1024:.2f} KB")
+    
+    return FileResponse(
+        path=str(docx_file),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": "inline; filename=preview.docx",
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": "*",  # 允许跨域，用于前端加载
+        }
+    )
+
+
+@router.get(
     "/{document_id}/download",
     summary="下载带水印的PDF文档",
 )
@@ -315,7 +360,7 @@ async def download_document(document_id: str, token: str) -> FileResponse:
     
     if pdf_file and pdf_file.exists():
         print(f"[Download] 返回带水印的PDF文件: {pdf_file}")
-        return FileResponse(
+    return FileResponse(
             path=str(pdf_file),
             media_type="application/pdf",
             headers={
