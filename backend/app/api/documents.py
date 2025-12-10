@@ -513,13 +513,25 @@ async def convert_word_to_pdf(file: UploadFile):
     
     这是一个测试接口，用于验证LibreOffice转换功能
     """
+    # 立即输出日志，确认函数被调用
+    log_msg = f"[Word转PDF] ========== 开始处理转换请求 =========="
+    print(log_msg, flush=True)
+    logger.info(log_msg)
+    
     import tempfile
     import shutil
     import uuid
     from pathlib import Path
     
     # 验证文件类型
+    log_msg = f"[Word转PDF] 收到文件: {file.filename if file.filename else '未提供文件名'}"
+    print(log_msg, flush=True)
+    logger.info(log_msg)
+    
     if not file.filename:
+        log_msg = "[Word转PDF] 错误: 未提供文件名"
+        print(log_msg, flush=True)
+        logger.error(log_msg)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="未提供文件名"
@@ -527,7 +539,14 @@ async def convert_word_to_pdf(file: UploadFile):
     
     # 检查文件扩展名
     file_ext = Path(file.filename).suffix.lower()
+    log_msg = f"[Word转PDF] 文件扩展名: {file_ext}"
+    print(log_msg, flush=True)
+    logger.info(log_msg)
+    
     if file_ext not in ['.doc', '.docx', '.odt']:
+        log_msg = f"[Word转PDF] 错误: 不支持的文件类型: {file_ext}"
+        print(log_msg, flush=True)
+        logger.error(log_msg)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不支持的文件类型: {file_ext}，仅支持 .doc, .docx, .odt"
