@@ -122,6 +122,24 @@ class DocumentService:
         final_path = task_dir / "final.docx"
         final_doc.save(final_path)
 
+        # 验证格式修改是否正确：对比原始文档和修改后的文档
+        print(f"[格式验证] 开始验证格式修改是否正确...")
+        format_verification = self._verify_format_changes(original_path, final_path, merged_rules)
+        stats["format_verification"] = format_verification
+        
+        # 输出格式验证结果
+        if format_verification.get("errors"):
+            print(f"[格式验证] ⚠️ 发现 {len(format_verification['errors'])} 个格式问题：")
+            for error in format_verification["errors"][:10]:  # 只显示前10个
+                print(f"[格式验证]   - {error}")
+        else:
+            print(f"[格式验证] ✅ 格式验证通过，所有格式修改正确")
+        
+        if format_verification.get("summary"):
+            print(f"[格式验证] 格式修改摘要：")
+            for key, value in format_verification["summary"].items():
+                print(f"[格式验证]   - {key}: {value}")
+
         preview_path = task_dir / "preview.docx"
         self._generate_watermarked_preview(final_path, preview_path)
         
