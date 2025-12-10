@@ -1,12 +1,22 @@
 import os
 import logging
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 
-# 配置日志
+# 配置日志 - 确保输出到标准错误（Gunicorn 会捕获）
 logger = logging.getLogger(__name__)
+# 如果 logger 还没有处理器，添加一个
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        '[%(asctime)s] [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 from ..schemas.documents import (
     DocumentCreateResponse,
@@ -533,8 +543,14 @@ async def convert_word_to_pdf(file: UploadFile):
         with open(temp_input, "wb") as f:
             shutil.copyfileobj(file.file, f)
         
-        logger.info(f"[Word转PDF] 文件已保存到: {temp_input}")
-        logger.info(f"[Word转PDF] 文件大小: {temp_input.stat().st_size} bytes")
+        # 使用 print 和 logger 双重记录
+        log_msg = f"[Word转PDF] 文件已保存到: {temp_input}"
+        print(log_msg, flush=True)
+        logger.info(log_msg)
+        
+        log_msg = f"[Word转PDF] 文件大小: {temp_input.stat().st_size} bytes"
+        print(log_msg, flush=True)
+        logger.info(log_msg)
         
         # 使用LibreOffice转换
         document_service = DocumentService(
@@ -542,8 +558,14 @@ async def convert_word_to_pdf(file: UploadFile):
             template_dir=TEMPLATE_DIR
         )
         
-        logger.info(f"[Word转PDF] 开始转换: {temp_input} -> {temp_pdf}")
-        logger.info(f"[Word转PDF] 输入文件存在: {temp_input.exists()}, 大小: {temp_input.stat().st_size} bytes")
+        # 使用 print 和 logger 双重记录，确保日志能被看到
+        log_msg = f"[Word转PDF] 开始转换: {temp_input} -> {temp_pdf}"
+        print(log_msg, flush=True)
+        logger.info(log_msg)
+        
+        log_msg = f"[Word转PDF] 输入文件存在: {temp_input.exists()}, 大小: {temp_input.stat().st_size} bytes"
+        print(log_msg, flush=True)
+        logger.info(log_msg)
         
         try:
             success = document_service._try_libreoffice_pdf_conversion(
@@ -551,10 +573,13 @@ async def convert_word_to_pdf(file: UploadFile):
                 pdf_path=temp_pdf
             )
             
-            logger.info(f"[Word转PDF] 转换结果: success={success}, PDF存在: {temp_pdf.exists()}")
+            log_msg = f"[Word转PDF] 转换结果: success={success}, PDF存在: {temp_pdf.exists()}"
+            print(log_msg, flush=True)
+            logger.info(log_msg)
             
             if not success:
                 error_msg = "PDF转换失败，请检查LibreOffice是否已正确安装"
+                print(f"[Word转PDF] 错误: {error_msg}", flush=True)
                 logger.error(f"[Word转PDF] 错误: {error_msg}")
                 # 检查LibreOffice是否可用（更详细的检查）
                 import shutil
@@ -564,14 +589,18 @@ async def convert_word_to_pdf(file: UploadFile):
                 for path in check_paths:
                     if os.path.exists(path):
                         libreoffice_found = True
-                        logger.info(f"[Word转PDF] 找到LibreOffice路径: {path}")
+                        log_msg = f"[Word转PDF] 找到LibreOffice路径: {path}"
+                        print(log_msg, flush=True)
+                        logger.info(log_msg)
                         break
                 
                 if not libreoffice_found and not shutil.which("libreoffice") and not shutil.which("soffice"):
                     error_msg = "LibreOffice未安装，请先安装LibreOffice: sudo yum install -y libreoffice-headless"
+                    print(f"[Word转PDF] {error_msg}", flush=True)
                     logger.error(f"[Word转PDF] {error_msg}")
                 else:
                     error_msg = "PDF转换失败，可能是LibreOffice权限问题或配置问题，请查看服务器日志"
+                    print(f"[Word转PDF] {error_msg}", flush=True)
                     logger.error(f"[Word转PDF] {error_msg}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -580,7 +609,11 @@ async def convert_word_to_pdf(file: UploadFile):
         except HTTPException:
             raise
         except Exception as e:
-            logger.exception(f"[Word转PDF] 转换过程出现异常: {e}")
+            error_msg = f"[Word转PDF] 转换过程出现异常: {e}"
+            print(error_msg, flush=True)
+            import traceback
+            traceback.print_exc()
+            logger.exception(error_msg)
             raise
         
         if not temp_pdf.exists():
