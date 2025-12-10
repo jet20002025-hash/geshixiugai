@@ -685,7 +685,27 @@
                 logStep('Word预览', '正在加载Word文档...');
                 console.log('尝试加载Word文档预览:', `/documents/${docId}/preview-docx`);
                 
-                const response = await fetch(`/documents/${docId}/preview-docx`);
+                // 添加超时控制
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                }, 10000); // 10秒超时
+                
+                let response;
+                try {
+                    response = await fetch(`/documents/${docId}/preview-docx`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    if (error.name === 'AbortError') {
+                        console.warn('Word文档预览请求超时');
+                        return false;
+                    }
+                    throw error;
+                }
+                
                 if (!response.ok) {
                     console.warn('Word文档预览不可用，状态:', response.status);
                     return false;
@@ -740,9 +760,9 @@
                 
                 if (!docxLib) {
                     console.warn('docx-preview库未加载，等待中...');
-                    // 等待库加载（最多等待10秒）
+                    // 等待库加载（最多等待5秒，避免卡住）
                     let waitCount = 0;
-                    const maxWait = 100; // 100 * 100ms = 10秒
+                    const maxWait = 50; // 50 * 100ms = 5秒
                     while (!docxLib && waitCount < maxWait) {
                         await new Promise(resolve => setTimeout(resolve, 100));
                         docxLib = checkLibrary();
@@ -754,9 +774,12 @@
                 }
                 
                 if (!docxLib) {
-                    console.error('❌ docx-preview库加载失败，检查CDN状态...');
-                    console.log('可用的全局对象:', Object.keys(window).filter(k => k.toLowerCase().includes('docx')));
-                    return false;
+                    console.warn('⚠️ docx-preview库加载失败或超时，回退到PDF预览');
+                    console.log('诊断信息:');
+                    console.log('  - window.docxPreviewLoaded:', window.docxPreviewLoaded);
+                    console.log('  - window.docxPreviewLoadError:', window.docxPreviewLoadError);
+                    console.log('  - 可用的全局对象:', Object.keys(window).filter(k => k.toLowerCase().includes('docx')).slice(0, 5));
+                    return false; // 快速失败，回退到PDF预览
                 }
                 
                 console.log('✅ docx-preview库已找到:', docxLib);
@@ -875,19 +898,18 @@
                     logStep('完成', 'Word文档预览加载完成');
                     return true;
                 } else {
-                    console.error('❌ docx-preview库未找到或API不正确，无法渲染Word文档');
+                    console.warn('⚠️ docx-preview库未找到或API不正确，回退到PDF预览');
                     console.log('诊断信息:');
                     console.log('  - window.docx:', typeof window.docx);
                     console.log('  - window.docxPreview:', typeof window.docxPreview);
                     console.log('  - docx:', typeof docx);
                     console.log('  - docxPreview:', typeof docxPreview);
                     console.log('  - renderAsync:', typeof renderAsync);
-                    console.log('  - 可用的全局对象:', Object.keys(window).filter(k => k.toLowerCase().includes('docx')));
-                    console.log('  - 所有window属性（前20个）:', Object.keys(window).slice(0, 20));
                     return false;
                 }
             } catch (error) {
-                console.error('Word文档预览失败:', error);
+                console.error('❌ Word文档预览失败:', error);
+                console.error('错误详情:', error.message, error.stack);
                 return false;
             }
         }
@@ -898,14 +920,26 @@
             logStep('开始', '初始化预览加载');
             console.log('开始加载预览，文档ID:', docId);
             
-            // 优先尝试Word文档预览（避免PDF转换误差）
-            const docxSuccess = await loadDocxPreview();
-            if (docxSuccess) {
-                console.log('✅ 使用Word文档预览（无转换误差）');
-                return;
+            try {
+                // 优先尝试Word文档预览（避免PDF转换误差）
+                // 添加超时控制，避免一直等待
+                const docxPreviewPromise = loadDocxPreview();
+                const timeoutPromise = new Promise((resolve) => {
+                    setTimeout(() => resolve(false), 15000); // 15秒超时
+                });
+                
+                const docxSuccess = await Promise.race([docxPreviewPromise, timeoutPromise]);
+                
+                if (docxSuccess) {
+                    console.log('✅ 使用Word文档预览（无转换误差）');
+                    return;
+                }
+                
+                console.log('⚠️ Word文档预览失败或超时，回退到PDF/HTML预览');
+            } catch (error) {
+                console.error('Word预览尝试出错:', error);
+                console.log('回退到PDF/HTML预览');
             }
-            
-            console.log('⚠️ Word文档预览失败，回退到PDF/HTML预览');
             
             try {
                 logStep('请求前', '准备发送预览请求');
