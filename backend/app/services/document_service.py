@@ -4020,15 +4020,45 @@ read_file
         # 检查LibreOffice是否可用
         libreoffice_cmd = None
         
-        # 方法1: 使用 which 查找
-        for cmd in ['libreoffice', 'soffice']:
-            cmd_path = shutil.which(cmd)
-            if cmd_path:
-                libreoffice_cmd = cmd_path
-                print(f"[PDF预览] 找到LibreOffice命令: {cmd_path}")
-                break
+        # 方法1: 直接检查常见路径（最快最可靠）
+        direct_paths = [
+            '/bin/libreoffice',      # 阿里云 Linux
+            '/bin/soffice',          # 阿里云 Linux
+            '/usr/bin/libreoffice',  # 标准路径
+            '/usr/bin/soffice',      # 标准路径
+            '/usr/local/bin/libreoffice',
+            '/usr/local/bin/soffice',
+        ]
         
-        # 方法2: 如果 which 找不到，尝试直接执行（可能在 PATH 中但 which 检测不到）
+        for path in direct_paths:
+            if os.path.exists(path) and os.access(path, os.X_OK):
+                # 验证可以执行
+                try:
+                    result = subprocess.run(
+                        [path, '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=3
+                    )
+                    if result.returncode == 0:
+                        libreoffice_cmd = path
+                        print(f"[PDF预览] 在路径找到LibreOffice: {path}")
+                        print(f"[PDF预览] LibreOffice版本: {result.stdout.strip()}")
+                        break
+                except Exception as e:
+                    print(f"[PDF预览] 路径 {path} 存在但无法执行: {e}")
+                    continue
+        
+        # 方法2: 使用 which 查找（如果直接路径找不到）
+        if not libreoffice_cmd:
+            for cmd in ['libreoffice', 'soffice']:
+                cmd_path = shutil.which(cmd)
+                if cmd_path:
+                    libreoffice_cmd = cmd_path
+                    print(f"[PDF预览] 通过 which 找到LibreOffice命令: {cmd_path}")
+                    break
+        
+        # 方法3: 尝试直接执行命令（可能在 PATH 中但 which 检测不到）
         if not libreoffice_cmd:
             for cmd in ['libreoffice', 'soffice']:
                 try:
@@ -4037,14 +4067,16 @@ read_file
                         [cmd, '--version'],
                         capture_output=True,
                         text=True,
-                        timeout=5
+                        timeout=5,
+                        env=os.environ.copy()  # 使用当前环境变量
                     )
                     if result.returncode == 0:
                         libreoffice_cmd = cmd
                         print(f"[PDF预览] 通过执行验证找到LibreOffice命令: {cmd}")
                         print(f"[PDF预览] LibreOffice版本: {result.stdout.strip()}")
                         break
-                except (FileNotFoundError, subprocess.TimeoutExpired):
+                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    print(f"[PDF预览] 命令 {cmd} 执行失败: {e}")
                     continue
         
         # 方法3: 尝试常见安装路径（包括 macOS）
@@ -4089,6 +4121,18 @@ read_file
         
         if not libreoffice_cmd:
             print("[PDF预览] LibreOffice未找到，无法使用LibreOffice转换PDF")
+            print("[PDF预览] 诊断信息:")
+            print(f"[PDF预览]   - PATH环境变量: {os.environ.get('PATH', '未设置')}")
+            print(f"[PDF预览]   - 检查的路径: {direct_paths}")
+            # 检查哪些路径存在
+            existing_paths = [p for p in direct_paths if os.path.exists(p)]
+            if existing_paths:
+                print(f"[PDF预览]   - 存在的路径: {existing_paths}")
+                for p in existing_paths:
+                    stat_info = os.stat(p)
+                    print(f"[PDF预览]     {p}: 权限={oct(stat_info.st_mode)}, 所有者UID={stat_info.st_uid}")
+            else:
+                print(f"[PDF预览]   - 没有找到任何LibreOffice路径")
             print("[PDF预览] 提示: 请确保LibreOffice已安装并在PATH中，或使用 'which libreoffice' 检查")
             return False
         

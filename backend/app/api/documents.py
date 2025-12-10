@@ -551,10 +551,21 @@ async def convert_word_to_pdf(file: UploadFile):
         if not success:
             error_msg = "PDF转换失败，请检查LibreOffice是否已正确安装"
             print(f"[Word转PDF] 错误: {error_msg}")
-            # 检查LibreOffice是否可用
+            # 检查LibreOffice是否可用（更详细的检查）
             import shutil
-            if not shutil.which("libreoffice") and not shutil.which("soffice"):
+            import os
+            libreoffice_found = False
+            check_paths = ['/bin/libreoffice', '/bin/soffice', '/usr/bin/libreoffice', '/usr/bin/soffice']
+            for path in check_paths:
+                if os.path.exists(path):
+                    libreoffice_found = True
+                    print(f"[Word转PDF] 找到LibreOffice路径: {path}")
+                    break
+            
+            if not libreoffice_found and not shutil.which("libreoffice") and not shutil.which("soffice"):
                 error_msg = "LibreOffice未安装，请先安装LibreOffice: sudo yum install -y libreoffice-headless"
+            else:
+                error_msg = "PDF转换失败，可能是LibreOffice权限问题或配置问题，请查看服务器日志"
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_msg
