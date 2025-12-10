@@ -169,14 +169,14 @@ class DocumentService:
                 "report": report_path,
             }
             # 添加PDF或HTML预览文件
-            pdf_path = preview_path.with_suffix('.pdf')
+            # 注意：pdf_path 和 html_path 已经在上面定义过了
             if pdf_path.exists():
                 pdf_size = pdf_path.stat().st_size
                 print(f"[存储] 准备上传PDF预览文件: {pdf_path}, 大小: {pdf_size / 1024:.2f} KB")
                 files_to_save["pdf"] = pdf_path
             else:
                 print(f"[存储] PDF文件不存在，检查HTML文件")
-                html_path = preview_path.with_suffix('.html')
+                # html_path 已经在上面定义过了，直接使用
                 if html_path.exists():
                     html_size = html_path.stat().st_size
                     print(f"[存储] 准备上传HTML预览文件: {html_path}, 大小: {html_size / 1024:.2f} KB")
