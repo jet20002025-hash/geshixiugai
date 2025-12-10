@@ -4053,8 +4053,12 @@ read_file
             is_macos = platform.system() == 'Darwin'
             
             common_paths = [
+                '/bin/libreoffice',  # 阿里云 Linux 常见路径
+                '/bin/soffice',       # 阿里云 Linux 常见路径（soffice）
                 '/usr/bin/libreoffice',
+                '/usr/bin/soffice',
                 '/usr/local/bin/libreoffice',
+                '/usr/local/bin/soffice',
                 '/opt/libreoffice*/program/soffice',
             ]
             
