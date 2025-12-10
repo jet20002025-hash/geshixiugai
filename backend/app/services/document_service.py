@@ -3473,11 +3473,13 @@ read_file
         import subprocess
         import shutil
         
+        print("[HTML预览] 检查LibreOffice是否可用...")
         # 检查LibreOffice是否可用
         libreoffice_cmd = None
         for cmd in ['libreoffice', 'soffice']:
             if shutil.which(cmd):
                 libreoffice_cmd = cmd
+                print(f"[HTML预览] 找到LibreOffice命令: {cmd}")
                 break
         
         if not libreoffice_cmd:
