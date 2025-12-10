@@ -538,18 +538,46 @@ async def convert_word_to_pdf(file: UploadFile):
             template_dir=TEMPLATE_DIR
         )
         
+        print(f"[Word转PDF] 开始转换: {temp_input} -> {temp_pdf}")
+        print(f"[Word转PDF] 输入文件存在: {temp_input.exists()}, 大小: {temp_input.stat().st_size} bytes")
+        
         success = document_service._try_libreoffice_pdf_conversion(
             docx_path=temp_input,
             pdf_path=temp_pdf
         )
         
-        if not success or not temp_pdf.exists():
+        print(f"[Word转PDF] 转换结果: success={success}, PDF存在: {temp_pdf.exists()}")
+        
+        if not success:
+            error_msg = "PDF转换失败，请检查LibreOffice是否已正确安装"
+            print(f"[Word转PDF] 错误: {error_msg}")
+            # 检查LibreOffice是否可用
+            import shutil
+            if not shutil.which("libreoffice") and not shutil.which("soffice"):
+                error_msg = "LibreOffice未安装，请先安装LibreOffice: sudo yum install -y libreoffice-headless"
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PDF转换失败，请检查LibreOffice是否已正确安装"
+                detail=error_msg
             )
         
-        print(f"[Word转PDF] PDF生成成功: {temp_pdf}, 大小: {temp_pdf.stat().st_size} bytes")
+        if not temp_pdf.exists():
+            error_msg = f"PDF转换返回成功，但文件不存在: {temp_pdf}"
+            print(f"[Word转PDF] 错误: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg
+            )
+        
+        pdf_size = temp_pdf.stat().st_size
+        print(f"[Word转PDF] PDF生成成功: {temp_pdf}, 大小: {pdf_size} bytes")
+        
+        if pdf_size == 0:
+            error_msg = "PDF文件大小为0，转换可能失败"
+            print(f"[Word转PDF] 错误: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg
+            )
         
         # 读取PDF文件并返回
         def generate():
@@ -585,18 +613,22 @@ async def convert_word_to_pdf(file: UploadFile):
         except:
             pass
         raise
+    except HTTPException:
+        # HTTPException 已经包含错误信息，直接重新抛出
+        raise
     except Exception as e:
-        print(f"[Word转PDF] 转换出错: {e}")
+        error_detail = str(e)
+        print(f"[Word转PDF] 转换出错: {error_detail}")
         import traceback
         traceback.print_exc()
         # 清理临时文件
         try:
-            if temp_dir.exists():
+            if 'temp_dir' in locals() and temp_dir.exists():
                 shutil.rmtree(temp_dir)
         except:
             pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"转换失败: {str(e)}"
+            detail=f"转换失败: {error_detail}"
         )
 
