@@ -2890,16 +2890,48 @@ class DocumentService:
                 # 应用字体和字号（从runs中提取）
                 font_name = para_format.get("font_name")
                 font_size = para_format.get("font_size")
-                if font_name:
-                    # 确保中文字体正确映射
-                    if "宋" in font_name or "SimSun" in font_name:
-                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", serif;')
-                    elif "黑" in font_name or "SimHei" in font_name:
+                
+                # 判断是否是标题（用于确定默认字体）
+                is_heading_para = is_heading if 'is_heading' in locals() else False
+                
+                # 如果没有提取到字体名称，根据段落类型设置默认字体
+                if not font_name:
+                    # 如果是标题，默认使用黑体；否则使用宋体
+                    if is_heading_para:
                         style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 未提取到字体，使用默认黑体（标题）")
                     else:
-                        style_attrs.append(f'font-family: "{font_name}", serif;')
+                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 未提取到字体，使用默认宋体（正文）")
+                else:
+                    # 确保中文字体正确映射
+                    if "宋" in font_name or "SimSun" in font_name or "Song" in font_name:
+                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 宋体")
+                    elif "黑" in font_name or "SimHei" in font_name or "Hei" in font_name:
+                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 黑体")
+                    else:
+                        # 未知字体，根据段落类型决定
+                        if is_heading_para:
+                            style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                        else:
+                            style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 未知字体: {font_name}，使用默认字体")
+                
                 if font_size:
                     style_attrs.append(f"font-size: {font_size}pt;")
+                else:
+                    # 如果没有字号，使用默认字号
+                    if is_heading_para:
+                        style_attrs.append("font-size: 16pt;")
+                    else:
+                        style_attrs.append("font-size: 12pt;")
                 
                 # 应用加粗
                 is_bold = para_format.get("bold") or any(run.bold for run in paragraph.runs if run.bold)
@@ -3546,15 +3578,20 @@ class DocumentService:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 read_file
             body {{
-                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "Times New Roman", serif;
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;
                 padding: 0;
                 margin: 0;
                 background: #ffffff;
                 /* 确保中文字符正确显示 */
                 -webkit-font-smoothing: antialiased;
             }}
-            p, h1, h2, h3, h4, h5, h6 {{
-                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "Times New Roman", serif;
+            /* 默认段落字体：宋体（内联样式会覆盖此设置） */
+            p {{
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;
+            }}
+            /* 默认标题字体：黑体（内联样式会覆盖此设置） */
+            h1, h2, h3, h4, h5, h6 {{
+                font-family: "SimHei", "黑体", "STHeiti", sans-serif;
             }}
             /* 确保图片正确显示 */
             img {{
