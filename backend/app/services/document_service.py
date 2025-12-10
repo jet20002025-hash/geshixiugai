@@ -3540,6 +3540,102 @@ read_file
             """
         return css
     
+    def _verify_format_changes(self, original_path: Path, final_path: Path, rules: Dict) -> Dict:
+        """验证格式修改是否正确：对比原始文档和修改后的文档"""
+        from docx import Document
+        from ..utils import docx_format_utils
+        
+        verification = {
+            "summary": {},
+            "errors": [],
+            "warnings": []
+        }
+        
+        try:
+            original_doc = Document(original_path)
+            final_doc = Document(final_path)
+            
+            # 确保两个文档的段落数量一致
+            if len(original_doc.paragraphs) != len(final_doc.paragraphs):
+                verification["warnings"].append(
+                    f"段落数量不一致：原始文档 {len(original_doc.paragraphs)} 段，修改后 {len(final_doc.paragraphs)} 段"
+                )
+            
+            # 对比每个段落的格式
+            total_paragraphs = min(len(original_doc.paragraphs), len(final_doc.paragraphs))
+            format_changes_count = 0
+            font_correct_count = 0
+            line_spacing_correct_count = 0
+            format_errors = []
+            
+            for idx in range(total_paragraphs):
+                orig_para = original_doc.paragraphs[idx]
+                final_para = final_doc.paragraphs[idx]
+                
+                orig_format = docx_format_utils.extract_paragraph_format(orig_para)
+                final_format = docx_format_utils.extract_paragraph_format(final_para)
+                
+                # 检查格式是否有变化
+                has_changes = False
+                for key in orig_format:
+                    if orig_format.get(key) != final_format.get(key):
+                        has_changes = True
+                        break
+                
+                if has_changes:
+                    format_changes_count += 1
+                    
+                    # 验证字体是否正确（正文应该是宋体，标题应该是黑体）
+                    text = final_para.text.strip()
+                    if text:
+                        # 判断段落类型
+                        is_title = any(keyword in final_para.style.name.lower() for keyword in ["heading", "标题", "title"])
+                        
+                        if is_title:
+                            # 标题应该是黑体
+                            if final_format.get("font_name") and "黑" in final_format.get("font_name", ""):
+                                font_correct_count += 1
+                            elif final_format.get("font_name"):
+                                format_errors.append(
+                                    f"段落 {idx}（标题）字体应为黑体，实际为：{final_format.get('font_name')}"
+                                )
+                        else:
+                            # 正文应该是宋体
+                            if final_format.get("font_name") and "宋" in final_format.get("font_name", ""):
+                                font_correct_count += 1
+                        
+                        # 验证行距（正文应该是20磅）
+                        if not is_title and final_format.get("line_spacing"):
+                            line_spacing = final_format.get("line_spacing")
+                            if isinstance(line_spacing, (int, float)) and abs(line_spacing - 20) < 1:
+                                line_spacing_correct_count += 1
+                            elif isinstance(line_spacing, (int, float)) and line_spacing != 20:
+                                format_errors.append(
+                                    f"段落 {idx}（正文）行距应为20磅，实际为：{line_spacing}"
+                                )
+            
+            verification["summary"] = {
+                "总段落数": total_paragraphs,
+                "格式修改段落数": format_changes_count,
+                "字体正确段落数": font_correct_count,
+                "行距正确段落数": line_spacing_correct_count
+            }
+            
+            # 如果格式错误太多，记录为错误
+            if format_errors:
+                verification["errors"].extend(format_errors[:20])  # 最多记录20个错误
+            
+            # 如果格式修改的段落太少，可能是格式没有正确应用
+            if format_changes_count == 0 and total_paragraphs > 0:
+                verification["warnings"].append("未检测到任何格式修改，可能格式规则未正确应用")
+            
+        except Exception as e:
+            verification["errors"].append(f"格式验证过程出错: {e}")
+            import traceback
+            print(f"[格式验证] 错误堆栈: {traceback.format_exc()}")
+        
+        return verification
+    
     def _try_libreoffice_conversion(self, docx_path: Path, html_path: Path, stats: Dict) -> bool:
         """尝试使用LibreOffice将Word文档转换为HTML（保留格式最好）"""
         import subprocess
