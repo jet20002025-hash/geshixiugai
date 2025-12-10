@@ -2771,6 +2771,9 @@ class DocumentService:
                 # 提取段落中的图片
                 images_html = self._extract_images_from_paragraph(paragraph, document)
             
+            # 判断段落样式（提前定义，避免作用域错误）
+            style_name = paragraph.style.name if paragraph.style else "Normal"
+            
             # 如果既没有文本也没有图片，跳过（但保留空段落以维持格式）
             if not text and not images_html:
                 html_content += "<p>&nbsp;</p>\n"
@@ -2779,9 +2782,6 @@ class DocumentService:
             # 调试：记录段落信息
             if idx < 10 or (text and len(text) > 0):  # 只记录前10个段落或有文字的段落
                 print(f"[HTML预览] 段落 {idx}: 文字长度={len(text)}, 有图片={bool(images_html)}, 样式={style_name}")
-            
-            # 判断段落样式
-            style_name = paragraph.style.name if paragraph.style else "Normal"
             alignment = paragraph.alignment
             
             # 构建样式
