@@ -533,8 +533,10 @@ async def convert_word_to_pdf(file: UploadFile):
             detail=f"不支持的文件类型: {file_ext}，仅支持 .doc, .docx, .odt"
         )
     
-    # 创建临时目录
+    # 创建临时目录（确保权限正确）
     temp_dir = Path(tempfile.mkdtemp(prefix="word_to_pdf_"))
+    # 确保临时目录权限正确（可读写执行）
+    os.chmod(temp_dir, 0o755)
     temp_input = temp_dir / file.filename
     temp_pdf = temp_dir / f"{Path(file.filename).stem}.pdf"
     
@@ -542,6 +544,9 @@ async def convert_word_to_pdf(file: UploadFile):
         # 保存上传的文件
         with open(temp_input, "wb") as f:
             shutil.copyfileobj(file.file, f)
+        
+        # 确保文件权限正确（可读）
+        os.chmod(temp_input, 0o644)
         
         # 使用 print 和 logger 双重记录
         log_msg = f"[Word转PDF] 文件已保存到: {temp_input}"

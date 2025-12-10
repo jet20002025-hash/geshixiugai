@@ -4157,7 +4157,7 @@ read_file
             log_msg = f"[PDF预览] 执行LibreOffice PDF转换命令: {' '.join(cmd)}"
             print(log_msg, flush=True)
             
-            # 准备环境变量，确保包含必要的 PATH
+            # 准备环境变量，确保包含必要的 PATH 和 HOME
             env = os.environ.copy()
             # 确保 PATH 包含 /usr/bin 和 /bin（uname 等命令需要）
             current_path = env.get('PATH', '')
@@ -4165,17 +4165,40 @@ read_file
                 env['PATH'] = f"/usr/bin:/bin:{current_path}"
             if '/bin' not in env['PATH']:
                 env['PATH'] = f"/bin:{env['PATH']}"
+            # 设置 HOME 环境变量（LibreOffice 可能需要）
+            if 'HOME' not in env:
+                env['HOME'] = str(abs_output_dir.parent)
+            # 设置用户目录（LibreOffice 可能需要）
+            if 'USER' not in env:
+                import pwd
+                try:
+                    current_uid = os.getuid()
+                    user_info = pwd.getpwuid(current_uid)
+                    env['USER'] = user_info.pw_name
+                    env['HOME'] = user_info.pw_dir
+                except Exception:
+                    pass
             
             # 执行转换（超时60秒）
             # 注意：使用绝对路径，避免相对路径问题
             abs_docx_path = docx_path.resolve()
             abs_output_dir = output_dir.resolve()
             
+            # 确保输出目录存在且权限正确
+            abs_output_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(abs_output_dir, 0o755)
+            
+            # 确保输入文件可读
+            os.chmod(abs_docx_path, 0o644)
+            
             # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
             # 但首先尝试直接执行
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
+                '--invisible',  # 添加 invisible 参数，更彻底的无界面模式
+                '--nodefault',  # 不加载默认文档
+                '--nolockcheck',  # 不检查文件锁定
                 '--convert-to', 'pdf',
                 '--outdir', str(abs_output_dir),
                 str(abs_docx_path)
@@ -4191,9 +4214,15 @@ read_file
             # 检查文件权限
             try:
                 file_stat = abs_docx_path.stat()
-                print(f"[PDF预览] 文件权限: {oct(file_stat.st_mode)}, 所有者UID: {file_stat.st_uid}, GID: {file_stat.st_gid}")
+                log_msg = f"[PDF预览] 文件权限: {oct(file_stat.st_mode)}, 所有者UID: {file_stat.st_uid}, GID: {file_stat.st_gid}"
+                print(log_msg, flush=True)
+                # 检查当前用户
+                current_uid = os.getuid()
+                log_msg = f"[PDF预览] 当前用户UID: {current_uid}"
+                print(log_msg, flush=True)
             except Exception as e:
-                print(f"[PDF预览] 无法获取文件权限信息: {e}")
+                log_msg = f"[PDF预览] 无法获取文件权限信息: {e}"
+                print(log_msg, flush=True)
             
             result = subprocess.run(
                 cmd_abs,
@@ -4255,9 +4284,22 @@ read_file
                         print(f"[PDF预览] 找到 {len(pdf_files)} 个PDF文件，使用第一个: {pdf_files[0]}")
                         generated_pdf = pdf_files[0]
                     else:
-                        print(f"[PDF预览] 输出目录中没有找到任何PDF文件")
+                        log_msg = f"[PDF预览] 输出目录中没有找到任何PDF文件"
+                        print(log_msg, flush=True)
                         if result.returncode != 0:
-                            print(f"[PDF预览] LibreOffice返回错误码: {result.returncode}")
+                            log_msg = f"[PDF预览] LibreOffice返回错误码: {result.returncode}"
+                            print(log_msg, flush=True)
+                            if result.stderr:
+                                log_msg = f"[PDF预览] 详细错误信息: {result.stderr}"
+                                print(log_msg, flush=True)
+                        # 检查输出目录权限
+                        try:
+                            dir_stat = abs_output_dir.stat()
+                            log_msg = f"[PDF预览] 输出目录权限: {oct(dir_stat.st_mode)}, 所有者UID: {dir_stat.st_uid}"
+                            print(log_msg, flush=True)
+                        except Exception as e:
+                            log_msg = f"[PDF预览] 无法获取目录权限: {e}"
+                            print(log_msg, flush=True)
                         return False
                 except Exception as e:
                     print(f"[PDF预览] 列出文件时出错: {e}")
