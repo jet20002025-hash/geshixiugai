@@ -3543,7 +3543,7 @@ read_file
     def _verify_format_changes(self, original_path: Path, final_path: Path, rules: Dict) -> Dict:
         """验证格式修改是否正确：对比原始文档和修改后的文档"""
         from docx import Document
-        from ..utils import docx_format_utils
+        # docx_format_utils 已经在文件顶部导入，直接使用即可
         
         verification = {
             "summary": {},
