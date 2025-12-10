@@ -4016,6 +4016,16 @@ read_file
         import subprocess
         import shutil
         import os
+        import sys
+        
+        # 立即输出日志
+        log_msg = f"[PDF预览] ========== 开始 LibreOffice PDF 转换 =========="
+        print(log_msg, file=sys.stderr, flush=True)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         # 检查LibreOffice是否可用
         libreoffice_cmd = None
@@ -4043,9 +4053,19 @@ read_file
                     if result.returncode == 0:
                         libreoffice_cmd = path
                         log_msg = f"[PDF预览] 在路径找到LibreOffice: {path}"
-                        print(log_msg, flush=True)
+                        print(log_msg, file=sys.stderr, flush=True)
+                        try:
+                            with open("/var/log/geshixiugai/error.log", "a") as f:
+                                f.write(f"{log_msg}\n")
+                        except Exception:
+                            pass
                         log_msg = f"[PDF预览] LibreOffice版本: {result.stdout.strip()}"
-                        print(log_msg, flush=True)
+                        print(log_msg, file=sys.stderr, flush=True)
+                        try:
+                            with open("/var/log/geshixiugai/error.log", "a") as f:
+                                f.write(f"{log_msg}\n")
+                        except Exception:
+                            pass
                         break
                 except Exception as e:
                     print(f"[PDF预览] 路径 {path} 存在但无法执行: {e}")
@@ -4122,10 +4142,34 @@ read_file
                         break
         
         if not libreoffice_cmd:
-            print("[PDF预览] LibreOffice未找到，无法使用LibreOffice转换PDF")
-            print("[PDF预览] 诊断信息:")
-            print(f"[PDF预览]   - PATH环境变量: {os.environ.get('PATH', '未设置')}")
-            print(f"[PDF预览]   - 检查的路径: {direct_paths}")
+            log_msg = "[PDF预览] LibreOffice未找到，无法使用LibreOffice转换PDF"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
+            log_msg = "[PDF预览] 诊断信息:"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
+            log_msg = f"[PDF预览]   - PATH环境变量: {os.environ.get('PATH', '未设置')}"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
+            log_msg = f"[PDF预览]   - 检查的路径: {direct_paths}"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             # 检查哪些路径存在
             existing_paths = [p for p in direct_paths if os.path.exists(p)]
             if existing_paths:
@@ -4205,11 +4249,26 @@ read_file
             ]
             
             log_msg = f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}"
-            print(log_msg, flush=True)
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             log_msg = f"[PDF预览] 输入文件: {abs_docx_path}, 存在: {abs_docx_path.exists()}"
-            print(log_msg, flush=True)
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             log_msg = f"[PDF预览] 输出目录: {abs_output_dir}, 存在: {abs_output_dir.exists()}"
-            print(log_msg, flush=True)
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             
             # 检查文件权限
             try:
@@ -4233,13 +4292,28 @@ read_file
             )
             
             log_msg = f"[PDF预览] LibreOffice执行完成，返回码: {result.returncode}"
-            print(log_msg, flush=True)
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             if result.stdout:
                 log_msg = f"[PDF预览] LibreOffice标准输出: {result.stdout}"
-                print(log_msg, flush=True)
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
             if result.stderr:
                 log_msg = f"[PDF预览] LibreOffice错误输出: {result.stderr}"
-                print(log_msg, flush=True)
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
             
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
