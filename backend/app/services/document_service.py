@@ -2815,14 +2815,15 @@ class DocumentService:
                 class_attr = f' class="{" ".join(classes)}"' if classes else ""
                 style_attr = f' style="{" ".join(style_attrs)}"' if style_attrs else ""
                 
-                # 处理文本中的特殊字符
-                escaped_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                # 处理文本中的特殊字符（使用xml.sax.saxutils.escape进行更安全的转义）
+                escaped_text = xml.sax.saxutils.escape(text) if text else ""
                 
                 # 如果有图片，先显示图片，再显示文本
                 if images_html:
                     # 图片段落通常居中显示
                     html_content += f'<div style="text-align: center; margin: 10px 0;">{images_html}</div>\n'
                 if text:
+                    # 确保文字被添加到HTML中
                     html_content += f'<p{class_attr}{style_attr}>{escaped_text}</p>\n'
         
         html_content += """    </div>
