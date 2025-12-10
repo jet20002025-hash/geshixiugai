@@ -588,7 +588,7 @@ async def convert_word_to_pdf(file: UploadFile):
                 logger.error(f"[Word转PDF] 错误: {error_msg}")
                 # 检查LibreOffice是否可用（更详细的检查）
                 import shutil
-                import os
+                # os 已在文件开头导入，不需要再次导入
                 libreoffice_found = False
                 check_paths = ['/bin/libreoffice', '/bin/soffice', '/usr/bin/libreoffice', '/usr/bin/soffice']
                 for path in check_paths:
