@@ -3314,6 +3314,27 @@ class DocumentService:
             pdf_size = pdf_path.stat().st_size
             print(f"[PDF预览] PDF生成成功，大小: {pdf_size / 1024:.2f} KB")
             
+            # 检查PDF中是否包含中文字符（通过读取PDF文本内容）
+            if html_chinese_count > 0:
+                try:
+                    # 尝试读取PDF的文本内容（使用pypdf）
+                    from pypdf import PdfReader
+                    reader = PdfReader(str(pdf_path))
+                    pdf_text = ""
+                    for page in reader.pages[:3]:  # 只检查前3页
+                        pdf_text += page.extract_text() or ""
+                    pdf_chinese_count = len([c for c in pdf_text if '\u4e00' <= c <= '\u9fff'])
+                    print(f"[PDF预览] PDF中的中文字符数: {pdf_chinese_count} 字符")
+                    if pdf_chinese_count == 0:
+                        print(f"[PDF预览] ❌ 错误：HTML中有 {html_chinese_count} 个中文字符，但PDF中只有 {pdf_chinese_count} 个！")
+                        print(f"[PDF预览] 💡 解决方案：服务器需要安装中文字体包")
+                        print(f"[PDF预览] 💡 安装命令（CentOS/RHEL）: sudo yum install -y wqy-microhei-fonts wqy-zenhei-fonts")
+                        print(f"[PDF预览] 💡 安装命令（Ubuntu/Debian）: sudo apt-get install -y fonts-wqy-microhei fonts-wqy-zenhei")
+                    else:
+                        print(f"[PDF预览] ✅ PDF中包含中文字符，字体支持正常")
+                except Exception as e:
+                    print(f"[PDF预览] 无法检查PDF中的中文字符: {e}")
+            
             # 验证PDF文件是否有效（至少应该有一定大小）
             if pdf_size < 1024:  # 小于1KB可能有问题
                 print(f"[PDF预览] 警告: PDF文件大小异常小 ({pdf_size} 字节)，可能生成失败")
