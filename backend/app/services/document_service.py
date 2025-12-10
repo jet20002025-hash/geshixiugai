@@ -2732,7 +2732,11 @@ class DocumentService:
         
         paragraph_count = 0
         for idx, paragraph in enumerate(document.paragraphs):
+            # 改进文字提取：优先使用 paragraph.text，如果为空则从 runs 中提取
             text = paragraph.text.strip()
+            if not text:
+                # 如果 paragraph.text 为空，尝试从 runs 中提取所有文字
+                text = "".join([run.text for run in paragraph.runs if run.text]).strip()
             
             # 检查段落格式中是否有分页符
             # python-docx中，分页符通常通过paragraph_format.page_break_before或runs中的break元素表示
