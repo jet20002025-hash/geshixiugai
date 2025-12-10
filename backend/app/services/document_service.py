@@ -2903,35 +2903,37 @@ class DocumentService:
                 font_name = para_format.get("font_name")
                 font_size = para_format.get("font_size")
                 
-                # 如果没有提取到字体名称，根据段落类型设置默认字体
-                if not font_name:
-                    # 如果是标题，默认使用黑体；否则使用宋体
-                    if is_heading_para:
+                # 如果从runs中提取不到字体，尝试从段落样式中获取
+                if not font_name and paragraph.style:
+                    try:
+                        # 尝试从段落样式的字体设置中获取
+                        style_font = paragraph.style.font
+                        if style_font and style_font.name:
+                            font_name = style_font.name
+                            if idx < 10:
+                                print(f"[HTML预览] 段落 {idx} 从样式获取字体: {font_name}")
+                    except:
+                        pass
+                
+                # 根据段落类型和提取到的字体信息，确定最终使用的字体
+                # 正文段落必须使用宋体，标题使用黑体
+                if is_heading_para:
+                    # 标题：优先使用提取到的黑体，否则强制使用黑体
+                    if font_name and ("黑" in font_name or "SimHei" in font_name or "Hei" in font_name):
                         style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
                         if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 未提取到字体，使用默认黑体（标题）")
+                            print(f"[HTML预览] 段落 {idx} 标题字体: {font_name} -> 黑体")
                     else:
-                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
+                        # 标题强制使用黑体
+                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
                         if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 未提取到字体，使用默认宋体（正文）")
+                            print(f"[HTML预览] 段落 {idx} 标题强制使用黑体（原字体: {font_name or '未提取'}）")
                 else:
-                    # 确保中文字体正确映射
-                    if "宋" in font_name or "SimSun" in font_name or "Song" in font_name:
-                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
-                        if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 宋体")
-                    elif "黑" in font_name or "SimHei" in font_name or "Hei" in font_name:
-                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
-                        if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 黑体")
-                    else:
-                        # 未知字体，根据段落类型决定
-                        if is_heading_para:
-                            style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
-                        else:
-                            style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
-                        if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 未知字体: {font_name}，使用默认字体")
+                    # 正文：无论提取到什么字体，都强制使用宋体
+                    # 因为格式应用阶段已经将正文设置为宋体了
+                    style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
+                    if idx < 10:
+                        print(f"[HTML预览] 段落 {idx} 正文强制使用宋体（原字体: {font_name or '未提取'}）")
                 
                 if font_size:
                     style_attrs.append(f"font-size: {font_size}pt;")
