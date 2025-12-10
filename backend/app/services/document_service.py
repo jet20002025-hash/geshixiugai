@@ -128,6 +128,9 @@ class DocumentService:
         # 生成PDF预览（优先，格式完美）
         pdf_path = preview_path.with_suffix('.pdf')
         print(f"[预览] 开始生成PDF预览: {pdf_path}")
+        # 初始化 html_path，确保在所有情况下都有定义
+        html_path = preview_path.with_suffix('.html')
+        
         pdf_success = self._generate_pdf_preview(preview_path, pdf_path, stats)
         if pdf_success:
             # 验证PDF文件是否真的存在
@@ -141,7 +144,6 @@ class DocumentService:
         if not pdf_success:
             # 回退到HTML预览
             print(f"[预览] PDF生成失败，回退到HTML预览")
-            html_path = preview_path.with_suffix('.html')
             self._generate_html_preview(preview_path, html_path, stats)
             if html_path.exists():
                 html_size = html_path.stat().st_size
