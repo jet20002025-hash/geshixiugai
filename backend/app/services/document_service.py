@@ -2739,7 +2739,11 @@ class DocumentService:
         paragraph_count = 0
         total_text_length = 0
         chinese_char_count = 0
+        print(f"[HTML预览] 开始处理 {len(document.paragraphs)} 个段落...")
         for idx, paragraph in enumerate(document.paragraphs):
+            # 每处理100个段落输出一次进度
+            if idx > 0 and idx % 100 == 0:
+                print(f"[HTML预览] 已处理 {idx}/{len(document.paragraphs)} 个段落...")
             # 改进文字提取：优先使用 paragraph.text，如果为空则从 runs 中提取
             text = paragraph.text.strip()
             if not text:
@@ -2865,6 +2869,7 @@ class DocumentService:
 </body>
 </html>"""
         
+        print(f"[HTML预览] 段落处理完成，开始写入HTML文件...")
         # 记录统计信息
         print(f"[HTML预览] HTML生成完成，总段落数: {paragraph_count}, 总文字长度: {total_text_length} 字符")
         print(f"[HTML预览] 中文字符数: {chinese_char_count} 字符")
