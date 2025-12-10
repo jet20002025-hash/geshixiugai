@@ -2732,6 +2732,7 @@ class DocumentService:
         
         paragraph_count = 0
         total_text_length = 0
+        chinese_char_count = 0
         for idx, paragraph in enumerate(document.paragraphs):
             # 改进文字提取：优先使用 paragraph.text，如果为空则从 runs 中提取
             text = paragraph.text.strip()
@@ -2739,9 +2740,15 @@ class DocumentService:
                 # 如果 paragraph.text 为空，尝试从 runs 中提取所有文字
                 text = "".join([run.text for run in paragraph.runs if run.text]).strip()
             
-            # 统计文字长度
+            # 统计文字长度和中文字符数量
             if text:
                 total_text_length += len(text)
+                # 统计中文字符（Unicode范围：\u4e00-\u9fff）
+                chinese_chars = [c for c in text if '\u4e00' <= c <= '\u9fff']
+                chinese_char_count += len(chinese_chars)
+                # 调试：记录前几个包含中文的段落
+                if chinese_chars and idx < 5:
+                    print(f"[HTML预览] 段落 {idx} 包含中文: {text[:50]}... (中文字符数: {len(chinese_chars)})")
             
             # 检查段落格式中是否有分页符
             # python-docx中，分页符通常通过paragraph_format.page_break_before或runs中的break元素表示
