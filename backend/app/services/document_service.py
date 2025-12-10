@@ -2791,6 +2791,9 @@ class DocumentService:
                 images_html = self._extract_images_from_paragraph(paragraph, document)
                 if idx < 5 or idx % 50 == 0:
                     print(f"[HTML预览] 段落 {idx} 图片提取完成，HTML长度: {len(images_html)} 字符")
+                # 如果提取到图片但HTML为空，记录警告
+                if not images_html:
+                    print(f"[HTML预览] ⚠️ 警告：段落 {idx} 检测到图片但提取失败！")
             
             # 判断段落样式（提前定义，避免作用域错误）
             style_name = paragraph.style.name if paragraph.style else "Normal"
@@ -3444,7 +3447,7 @@ class DocumentService:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 read_file
             body {{
-                font-family: "SimSun", "宋体", "STSong", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "Arial", "Times New Roman", serif;
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "Times New Roman", serif;
                 padding: 0;
                 margin: 0;
                 background: #ffffff;
@@ -3452,7 +3455,15 @@ read_file
                 -webkit-font-smoothing: antialiased;
             }}
             p, h1, h2, h3, h4, h5, h6 {{
-                font-family: "SimSun", "宋体", "STSong", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "Arial", "Times New Roman", serif;
+                font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "Times New Roman", serif;
+            }}
+            /* 确保图片正确显示 */
+            img {{
+                max-width: 100%;
+                height: auto;
+                display: block;
+                margin: 10px auto;
+                page-break-inside: avoid;
             }}
             /* 分页控制 - 使用CSS分页，不添加可见分隔线 */
             .page-break {{
