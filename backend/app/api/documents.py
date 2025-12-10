@@ -602,33 +602,70 @@ async def convert_word_to_pdf(file: UploadFile):
             logger.info(log_msg)
             
             if not success:
-                error_msg = "PDF转换失败，请检查LibreOffice是否已正确安装"
-                print(f"[Word转PDF] 错误: {error_msg}", flush=True)
-                logger.error(f"[Word转PDF] 错误: {error_msg}")
+                # 收集详细的错误信息
+                error_details = []
+                error_details.append("PDF转换失败")
+                
                 # 检查LibreOffice是否可用（更详细的检查）
                 import shutil
                 # os 已在文件开头导入，不需要再次导入
                 libreoffice_found = False
+                libreoffice_path = None
                 check_paths = ['/bin/libreoffice', '/bin/soffice', '/usr/bin/libreoffice', '/usr/bin/soffice']
                 for path in check_paths:
                     if os.path.exists(path):
                         libreoffice_found = True
+                        libreoffice_path = path
                         log_msg = f"[Word转PDF] 找到LibreOffice路径: {path}"
                         print(log_msg, flush=True)
                         logger.info(log_msg)
                         break
                 
                 if not libreoffice_found and not shutil.which("libreoffice") and not shutil.which("soffice"):
+                    error_details.append("LibreOffice未安装")
                     error_msg = "LibreOffice未安装，请先安装LibreOffice: sudo yum install -y libreoffice-headless"
                     print(f"[Word转PDF] {error_msg}", flush=True)
                     logger.error(f"[Word转PDF] {error_msg}")
                 else:
-                    error_msg = "PDF转换失败，可能是LibreOffice权限问题或配置问题，请查看服务器日志"
+                    error_details.append(f"LibreOffice已找到: {libreoffice_path or shutil.which('libreoffice') or shutil.which('soffice')}")
+                    # 检查文件是否存在
+                    if not temp_input.exists():
+                        error_details.append(f"输入文件不存在: {temp_input}")
+                    else:
+                        error_details.append(f"输入文件存在: {temp_input}")
+                        try:
+                            file_stat = temp_input.stat()
+                            error_details.append(f"文件权限: {oct(file_stat.st_mode)}, 所有者UID: {file_stat.st_uid}")
+                        except Exception as e:
+                            error_details.append(f"无法获取文件权限: {e}")
+                    
+                    # 检查输出目录
+                    if not temp_pdf.parent.exists():
+                        error_details.append(f"输出目录不存在: {temp_pdf.parent}")
+                    else:
+                        error_details.append(f"输出目录存在: {temp_pdf.parent}")
+                        try:
+                            dir_stat = temp_pdf.parent.stat()
+                            error_details.append(f"目录权限: {oct(dir_stat.st_mode)}, 所有者UID: {dir_stat.st_uid}")
+                        except Exception as e:
+                            error_details.append(f"无法获取目录权限: {e}")
+                    
+                    # 检查当前用户
+                    try:
+                        current_uid = os.getuid()
+                        error_details.append(f"当前用户UID: {current_uid}")
+                    except Exception as e:
+                        error_details.append(f"无法获取当前用户: {e}")
+                    
+                    error_msg = "PDF转换失败，详细错误信息请查看服务器日志。可能的原因：1) LibreOffice权限问题 2) 文件权限问题 3) 临时目录权限问题"
                     print(f"[Word转PDF] {error_msg}", flush=True)
+                    print(f"[Word转PDF] 详细诊断信息: {'; '.join(error_details)}", flush=True)
                     logger.error(f"[Word转PDF] {error_msg}")
+                    logger.error(f"[Word转PDF] 详细诊断信息: {'; '.join(error_details)}")
+                
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=error_msg
+                    detail=error_msg + "。详细诊断信息已记录到服务器日志，请查看 /var/log/geshixiugai/error.log"
                 )
         except HTTPException:
             raise

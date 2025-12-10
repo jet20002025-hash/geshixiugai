@@ -4289,8 +4289,11 @@ read_file
                         if result.returncode != 0:
                             log_msg = f"[PDF预览] LibreOffice返回错误码: {result.returncode}"
                             print(log_msg, flush=True)
+                            if result.stdout:
+                                log_msg = f"[PDF预览] LibreOffice标准输出: {result.stdout}"
+                                print(log_msg, flush=True)
                             if result.stderr:
-                                log_msg = f"[PDF预览] 详细错误信息: {result.stderr}"
+                                log_msg = f"[PDF预览] LibreOffice错误输出: {result.stderr}"
                                 print(log_msg, flush=True)
                         # 检查输出目录权限
                         try:
@@ -4300,6 +4303,9 @@ read_file
                         except Exception as e:
                             log_msg = f"[PDF预览] 无法获取目录权限: {e}"
                             print(log_msg, flush=True)
+                        # 输出详细的诊断信息
+                        log_msg = f"[PDF预览] 转换失败诊断: 输入文件={abs_docx_path}, 输出目录={abs_output_dir}, LibreOffice命令={libreoffice_cmd}"
+                        print(log_msg, flush=True)
                         return False
                 except Exception as e:
                     print(f"[PDF预览] 列出文件时出错: {e}")
