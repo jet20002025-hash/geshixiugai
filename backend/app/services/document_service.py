@@ -2791,6 +2791,9 @@ class DocumentService:
                 images_html = self._extract_images_from_paragraph(paragraph, document)
                 if idx < 5 or idx % 50 == 0:
                     print(f"[HTML预览] 段落 {idx} 图片提取完成，HTML长度: {len(images_html)} 字符")
+                # 如果检测到图片但提取失败，记录警告
+                if not images_html:
+                    print(f"[HTML预览] ⚠️ 警告：段落 {idx} 检测到图片但提取失败！")
                 # 如果提取到图片但HTML为空，记录警告
                 if not images_html:
                     print(f"[HTML预览] ⚠️ 警告：段落 {idx} 检测到图片但提取失败！")
@@ -2859,8 +2862,10 @@ class DocumentService:
                 
                 # 如果有图片，先显示图片，再显示文本
                 if images_html:
-                    # 图片段落通常居中显示
-                    html_content += f'<div style="text-align: center; margin: 10px 0;">{images_html}</div>\n'
+                    # 图片段落通常居中显示，确保图片能正确显示
+                    html_content += f'<div style="text-align: center; margin: 10px 0; page-break-inside: avoid;">{images_html}</div>\n'
+                    if idx < 5:  # 只记录前5个段落的详细信息
+                        print(f"[HTML预览] 段落 {idx} 添加图片HTML: {len(images_html)} 字符")
                 if text:
                     # 确保文字被添加到HTML中
                     html_content += f'<p{class_attr}{style_attr}>{escaped_text}</p>\n'
