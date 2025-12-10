@@ -2822,8 +2822,13 @@ class DocumentService:
                 class_attr = f' class="{" ".join(classes)}"' if classes else ""
                 style_attr = f' style="{" ".join(style_attrs)}"' if style_attrs else ""
                 
-                # 处理文本中的特殊字符（使用xml.sax.saxutils.escape进行更安全的转义）
-                escaped_text = xml.sax.saxutils.escape(text) if text else ""
+                # 处理文本中的特殊字符
+                # 注意：xml.sax.saxutils.escape 只转义 & < >，不会影响中文字符
+                # 但为了安全，我们只转义必要的字符，保留中文字符
+                if text:
+                    escaped_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                else:
+                    escaped_text = ""
                 
                 # 如果有图片，先显示图片，再显示文本
                 if images_html:
@@ -3228,13 +3233,16 @@ class DocumentService:
             # 生成PDF专用样式（使用Word文档的页面设置）
             pdf_css = self._generate_pdf_css(page_settings)
             
-            # 在HTML的head中添加CSS
+            # 在HTML的head中添加CSS和meta标签（确保UTF-8编码）
             if '</head>' in html_content:
+                # 检查是否已有charset meta标签
+                if 'charset' not in html_content.lower():
+                    html_content = html_content.replace('</head>', '<meta charset="UTF-8">\n</head>')
                 html_content = html_content.replace('</head>', f'<style>{pdf_css}</style></head>')
             else:
                 # 如果没有head标签，添加一个
                 if '<html' in html_content:
-                    html_content = html_content.replace('<html', '<html><head><style>' + pdf_css + '</style></head>')
+                    html_content = html_content.replace('<html', '<html><head><meta charset="UTF-8"><style>' + pdf_css + '</style></head>')
             
             print(f"[PDF预览] 开始转换HTML到PDF，HTML大小: {len(html_content) / 1024:.2f} KB")
             
