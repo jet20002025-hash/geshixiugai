@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word转PDF测试工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f2ff;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+        
+        .file-name {
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .file-size {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            display: none;
+        }
+        
+        .btn.show {
+            display: block;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .progress {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress.show {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #666;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .result.success {
+            background: #f0fff4;
+            border: 2px solid #48bb78;
+        }
+        
+        .result.error {
+            background: #fff5f5;
+            border: 2px solid #f56565;
+        }
+        
+        .result-message {
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+        
+        .result.success .result-message {
+            color: #22543d;
+        }
+        
+        .result.error .result-message {
+            color: #742a2a;
+        }
+        
+        .download-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
+        }
+        
+        .error-detail {
+            color: #742a2a;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Word转PDF测试工具</h1>
+        <p class="subtitle">使用LibreOffice将Word文档转换为PDF</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📤</div>
+            <div class="upload-text">点击或拖拽文件到此处上传</div>
+            <div class="upload-hint">支持 .doc, .docx, .odt 格式</div>
+            <input type="file" id="fileInput" accept=".doc,.docx,.odt">
+        </div>
+        
+        <div class="file-info" id="fileInfo">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-size" id="fileSize"></div>
+        </div>
+        
+        <button class="btn" id="convertBtn">开始转换</button>
+        
+        <div class="progress" id="progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">正在转换中...</div>
+        </div>
+        
+        <div class="result" id="result">
+            <div class="result-message" id="resultMessage"></div>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+    
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const convertBtn = document.getElementById('convertBtn');
+        const progress = document.getElementById('progress');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const result = document.getElementById('result');
+        const resultMessage = document.getElementById('resultMessage');
+        const resultContent = document.getElementById('resultContent');
+        
+        let selectedFile = null;
+        
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            handleFile(e.target.files[0]);
+        });
+        
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+        
+        // 处理文件
+        function handleFile(file) {
+            if (!file) return;
+            
+            // 检查文件类型
+            const validExtensions = ['.doc', '.docx', '.odt'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(fileExt)) {
+                showError('不支持的文件类型', `请上传 .doc, .docx 或 .odt 格式的文件`);
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // 显示文件信息
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+            convertBtn.classList.add('show');
+            
+            // 隐藏结果
+            result.classList.remove('show');
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        // 转换按钮点击
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            // 禁用按钮
+            convertBtn.disabled = true;
+            convertBtn.textContent = '转换中...';
+            
+            // 显示进度
+            progress.classList.add('show');
+            progressFill.style.width = '30%';
+            progressText.textContent = '正在上传文件...';
+            
+            // 隐藏结果
+            result.classList.remove('show');
+            
+            try {
+                // 创建FormData
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                
+                progressFill.style.width = '50%';
+                progressText.textContent = '文件已上传，正在转换...';
+                
+                // 发送请求
+                const response = await fetch('/documents/convert-to-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                progressFill.style.width = '80%';
+                progressText.textContent = '转换完成，准备下载...';
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: '转换失败' }));
+                    throw new Error(errorData.detail || `服务器错误: ${response.status}`);
+                }
+                
+                // 获取文件名
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let pdfFileName = 'converted.pdf';
+                if (contentDisposition) {
+                    const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (matches) {
+                        pdfFileName = matches[1];
+                    }
+                }
+                
+                // 下载文件
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = pdfFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                progressFill.style.width = '100%';
+                progressText.textContent = '转换成功！';
+                
+                // 显示成功消息
+                setTimeout(() => {
+                    progress.classList.remove('show');
+                    showSuccess('转换成功！', `PDF文件已下载: ${pdfFileName}`);
+                }, 500);
+                
+            } catch (error) {
+                console.error('转换失败:', error);
+                progress.classList.remove('show');
+                showError('转换失败', error.message || '未知错误，请检查LibreOffice是否已安装');
+            } finally {
+                // 恢复按钮
+                convertBtn.disabled = false;
+                convertBtn.textContent = '开始转换';
+            }
+        });
+        
+        // 显示成功消息
+        function showSuccess(message, detail) {
+            result.className = 'result show success';
+            resultMessage.textContent = message;
+            resultContent.innerHTML = `<div style="color: #22543d; font-size: 14px;">${detail}</div>`;
+        }
+        
+        // 显示错误消息
+        function showError(message, detail) {
+            result.className = 'result show error';
+            resultMessage.textContent = message;
+            resultContent.innerHTML = `<div class="error-detail">${detail}</div>`;
+        }
+    </script>
+</body>
+</html>
+

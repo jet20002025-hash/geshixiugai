@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 
 from ..schemas.documents import (
     DocumentCreateResponse,
@@ -487,4 +487,116 @@ async def debug_storage_config() -> dict:
         config_status["storage_type"] = "None (使用本地文件系统)"
     
     return config_status
+
+
+@router.post(
+    "/convert-to-pdf",
+    summary="Word转PDF测试",
+)
+async def convert_word_to_pdf(file: UploadFile):
+    """
+    将Word文档转换为PDF（使用LibreOffice）
+    
+    这是一个测试接口，用于验证LibreOffice转换功能
+    """
+    import tempfile
+    import shutil
+    import uuid
+    from pathlib import Path
+    
+    # 验证文件类型
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未提供文件名"
+        )
+    
+    # 检查文件扩展名
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in ['.doc', '.docx', '.odt']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"不支持的文件类型: {file_ext}，仅支持 .doc, .docx, .odt"
+        )
+    
+    # 创建临时目录
+    temp_dir = Path(tempfile.mkdtemp(prefix="word_to_pdf_"))
+    temp_input = temp_dir / file.filename
+    temp_pdf = temp_dir / f"{Path(file.filename).stem}.pdf"
+    
+    try:
+        # 保存上传的文件
+        with open(temp_input, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        
+        print(f"[Word转PDF] 文件已保存到: {temp_input}")
+        print(f"[Word转PDF] 文件大小: {temp_input.stat().st_size} bytes")
+        
+        # 使用LibreOffice转换
+        document_service = DocumentService(
+            document_dir=DOCUMENT_DIR,
+            template_dir=TEMPLATE_DIR
+        )
+        
+        success = document_service._try_libreoffice_pdf_conversion(
+            docx_path=temp_input,
+            pdf_path=temp_pdf
+        )
+        
+        if not success or not temp_pdf.exists():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="PDF转换失败，请检查LibreOffice是否已正确安装"
+            )
+        
+        print(f"[Word转PDF] PDF生成成功: {temp_pdf}, 大小: {temp_pdf.stat().st_size} bytes")
+        
+        # 读取PDF文件并返回
+        def generate():
+            try:
+                with open(temp_pdf, "rb") as f:
+                    while True:
+                        chunk = f.read(8192)  # 8KB chunks
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                # 清理临时文件
+                try:
+                    shutil.rmtree(temp_dir)
+                    print(f"[Word转PDF] 临时文件已清理: {temp_dir}")
+                except Exception as e:
+                    print(f"[Word转PDF] 清理临时文件失败: {e}")
+        
+        # 返回PDF文件流
+        return StreamingResponse(
+            generate(),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{Path(file.filename).stem}.pdf"'
+            }
+        )
+    
+    except HTTPException:
+        # 清理临时文件
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except:
+            pass
+        raise
+    except Exception as e:
+        print(f"[Word转PDF] 转换出错: {e}")
+        import traceback
+        traceback.print_exc()
+        # 清理临时文件
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"转换失败: {str(e)}"
+        )
 
