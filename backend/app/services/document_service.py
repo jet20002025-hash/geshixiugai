@@ -162,7 +162,7 @@ class DocumentService:
         if not pdf_success:
             # 回退到HTML预览
             print(f"[预览] PDF生成失败，回退到HTML预览")
-        self._generate_html_preview(preview_path, html_path, stats)
+            self._generate_html_preview(preview_path, html_path, stats)
             if html_path.exists():
                 html_size = html_path.stat().st_size
                 print(f"[预览] HTML预览生成成功: {html_path}, 大小: {html_size / 1024:.2f} KB")
@@ -926,20 +926,20 @@ class DocumentService:
                     elif style_name and ("标题" in style_name.lower() or "heading" in style_name.lower()):
                         # 只有当段落很短（<=30字符）且居中对齐时，才认为是标题
                         if len(paragraph_text) <= 30 and paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
-                        is_heading = True
+                            is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（样式: {style_name}，内容: {paragraph_text[:20]}）")
                     # 或者检查段落内容特征（居中对齐的短文本，或"绪论"、"概述"等）
                     elif paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(paragraph_text) < 30:
                         # 更严格：只有非常短的文本（<=20字符）且居中对齐才认为是标题
                         if len(paragraph_text) <= 20:
-                        is_heading = True
+                            is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（居中短文本: {paragraph_text[:20]}）")
                     # 或者检查是否是"绪论"、"概述"等标题
                     elif paragraph_text == "绪论" or paragraph_text == "概述" or paragraph_text.startswith("1 绪论") or paragraph_text.startswith("1 概述"):
                         if len(paragraph_text) <= 20:  # 更严格：只有很短的文本才认为是标题
-                        is_heading = True
+                            is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（绪论/概述: {paragraph_text}）")
                     # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过30个）
@@ -981,9 +981,9 @@ class DocumentService:
                     # 无论应用什么规则，正文段落都必须使用宋体
                         if DEFAULT_STYLE in FONT_STANDARDS:
                             standard_body = FONT_STANDARDS[DEFAULT_STYLE]
-                        # 强制设置正文格式：宋体、12pt、非加粗、20磅行距
+                            # 强制设置正文格式：宋体、12pt、非加粗、20磅行距
                             rule["font_name"] = standard_body.get("font_name", "宋体")
-                        rule["font_size"] = standard_body.get("font_size", 12)
+                            rule["font_size"] = standard_body.get("font_size", 12)
                             rule["bold"] = standard_body.get("bold", False)
                             rule["line_spacing"] = standard_body.get("line_spacing", 20)
                             rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
@@ -2494,7 +2494,7 @@ class DocumentService:
                 if file_type == "pdf":
                     key = f"{prefix}/pdf.pdf"
                 else:
-                key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
+                    key = f"{prefix}/{file_type}.{file_path.suffix[1:]}"  # 去掉点号
                 
                 file_size = file_path.stat().st_size
                 print(f"[Storage] 准备上传文件: {file_type} -> {key}, 大小: {file_size / 1024:.2f} KB")
@@ -2879,7 +2879,7 @@ class DocumentService:
                 # 转义标题文字（只转义特殊字符，保留中文）
                 if text:
                     escaped_title = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            else:
+                else:
                     escaped_title = ""
                 html_content += f"<h{level}>{escaped_title}</h{level}>\n"
                 if images_html:
