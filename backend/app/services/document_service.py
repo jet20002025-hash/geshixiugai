@@ -3283,6 +3283,18 @@ class DocumentService:
             data_uri_count = len(re.findall(r'data:image/[^;]+;base64,', html_content, re.IGNORECASE))
             print(f"[PDF预览] HTML中包含 {img_count} 个img标签，其中 {data_uri_count} 个使用data URI")
             
+            # 检查HTML中的中文字符数量
+            html_chinese_count = len([c for c in html_content if '\u4e00' <= c <= '\u9fff'])
+            print(f"[PDF预览] HTML中的中文字符数: {html_chinese_count} 字符")
+            if html_chinese_count > 0:
+                print(f"[PDF预览] ✅ HTML中包含中文字符，如果PDF中看不到中文，可能是服务器缺少中文字体")
+                # 显示前几个中文字符作为示例
+                chinese_chars_in_html = [c for c in html_content if '\u4e00' <= c <= '\u9fff'][:10]
+                if chinese_chars_in_html:
+                    print(f"[PDF预览] HTML中的中文字符示例: {''.join(chinese_chars_in_html)}")
+            else:
+                print(f"[PDF预览] ⚠️ 警告：HTML中没有中文字符！可能是文字提取或转义时丢失了")
+            
             # 使用weasyprint转换
             # 设置base_url为HTML文件所在目录，帮助weasyprint解析相对路径和data URI
             # 注意：不使用FontConfiguration()，因为它可能导致transform错误
