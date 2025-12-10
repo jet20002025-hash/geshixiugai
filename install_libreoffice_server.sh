@@ -43,7 +43,7 @@ echo ""
 
 # 根据操作系统类型安装
 case $OS in
-    "centos"|"rhel"|"almalinux"|"rocky")
+    "centos"|"rhel"|"almalinux"|"rocky"|"alinux")
         echo "📦 使用 yum 安装 LibreOffice (CentOS/RHEL/Alibaba Cloud Linux)..."
         echo ""
         
