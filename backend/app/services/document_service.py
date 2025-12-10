@@ -2798,8 +2798,11 @@ class DocumentService:
                     level = 3
                 else:
                     level = 2
-                # 转义标题文字
-                escaped_title = xml.sax.saxutils.escape(text) if text else ""
+                # 转义标题文字（只转义特殊字符，保留中文）
+                if text:
+                    escaped_title = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                else:
+                    escaped_title = ""
                 html_content += f"<h{level}>{escaped_title}</h{level}>\n"
                 if images_html:
                     html_content += f"<div style='text-align: center; margin: 10px 0;'>{images_html}</div>\n"
@@ -3380,10 +3383,15 @@ class DocumentService:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 read_file
             body {{
-                font-family: "SimSun", "宋体", "Times New Roman", serif;
+                font-family: "SimSun", "宋体", "STSong", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "Arial", "Times New Roman", serif;
                 padding: 0;
                 margin: 0;
                 background: #ffffff;
+                /* 确保中文字符正确显示 */
+                -webkit-font-smoothing: antialiased;
+            }}
+            p, h1, h2, h3, h4, h5, h6 {{
+                font-family: "SimSun", "宋体", "STSong", "STKaiti", "KaiTi", "Microsoft YaHei", "微软雅黑", "Arial", "Times New Roman", serif;
             }}
             /* 分页控制 - 使用CSS分页，不添加可见分隔线 */
             .page-break {{
