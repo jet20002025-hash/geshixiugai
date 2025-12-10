@@ -513,10 +513,19 @@ async def convert_word_to_pdf(file: UploadFile):
     
     这是一个测试接口，用于验证LibreOffice转换功能
     """
-    # 立即输出日志，确认函数被调用
+    # 立即输出日志，确认函数被调用（使用多种方式确保日志能被看到）
+    import sys
     log_msg = f"[Word转PDF] ========== 开始处理转换请求 =========="
-    print(log_msg, flush=True)
+    # 方式1: print 到 stderr（Gunicorn 会捕获）
+    print(log_msg, file=sys.stderr, flush=True)
+    # 方式2: logger
     logger.info(log_msg)
+    # 方式3: 直接写入日志文件（作为备选）
+    try:
+        with open("/var/log/geshixiugai/error.log", "a") as f:
+            f.write(f"{log_msg}\n")
+    except Exception:
+        pass
     
     import tempfile
     import shutil
@@ -567,14 +576,25 @@ async def convert_word_to_pdf(file: UploadFile):
         # 确保文件权限正确（可读）
         os.chmod(temp_input, 0o644)
         
-        # 使用 print 和 logger 双重记录
+        # 使用多种方式记录日志，确保能被看到
+        import sys
         log_msg = f"[Word转PDF] 文件已保存到: {temp_input}"
-        print(log_msg, flush=True)
+        print(log_msg, file=sys.stderr, flush=True)
         logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         log_msg = f"[Word转PDF] 文件大小: {temp_input.stat().st_size} bytes"
-        print(log_msg, flush=True)
+        print(log_msg, file=sys.stderr, flush=True)
         logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         # 使用LibreOffice转换
         document_service = DocumentService(
@@ -582,14 +602,25 @@ async def convert_word_to_pdf(file: UploadFile):
             template_dir=TEMPLATE_DIR
         )
         
-        # 使用 print 和 logger 双重记录，确保日志能被看到
+        # 使用多种方式记录日志，确保能被看到
+        import sys
         log_msg = f"[Word转PDF] 开始转换: {temp_input} -> {temp_pdf}"
-        print(log_msg, flush=True)
+        print(log_msg, file=sys.stderr, flush=True)
         logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         log_msg = f"[Word转PDF] 输入文件存在: {temp_input.exists()}, 大小: {temp_input.stat().st_size} bytes"
-        print(log_msg, flush=True)
+        print(log_msg, file=sys.stderr, flush=True)
         logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         try:
             success = document_service._try_libreoffice_pdf_conversion(
