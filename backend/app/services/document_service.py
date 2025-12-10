@@ -2735,10 +2735,11 @@ class DocumentService:
             font-weight: bold;
         }}
         p {{
-            margin: 12px 0;
-            text-indent: 2em;
+            margin: 0;
+            padding: 0;
             position: relative;
             z-index: 2;
+            /* 默认格式会被内联样式覆盖 */
         }}
         h1, h2, h3, h4, h5, h6 {{
             margin: 20px 0 10px 0;
@@ -2872,20 +2873,75 @@ class DocumentService:
                 if images_html:
                     html_content += f"<div style='text-align: center; margin: 10px 0;'>{images_html}</div>\n"
             else:
-                # 普通段落
+                # 普通段落 - 从Word文档中提取完整的格式信息
+                # 提取段落格式
+                para_format = docx_format_utils.extract_paragraph_format(paragraph)
+                
+                # 应用对齐方式
                 if alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
-                    classes.append("center")
-                if alignment == WD_PARAGRAPH_ALIGNMENT.RIGHT:
+                    style_attrs.append("text-align: center;")
+                elif alignment == WD_PARAGRAPH_ALIGNMENT.RIGHT:
                     style_attrs.append("text-align: right;")
+                elif alignment == WD_PARAGRAPH_ALIGNMENT.JUSTIFY:
+                    style_attrs.append("text-align: justify;")
+                else:
+                    style_attrs.append("text-align: left;")
                 
-                # 检查首行缩进
-                if paragraph.paragraph_format.first_line_indent and paragraph.paragraph_format.first_line_indent.pt > 0:
-                    classes.append("no-indent")
+                # 应用字体和字号（从runs中提取）
+                font_name = para_format.get("font_name")
+                font_size = para_format.get("font_size")
+                if font_name:
+                    # 确保中文字体正确映射
+                    if "宋" in font_name or "SimSun" in font_name:
+                        style_attrs.append('font-family: "SimSun", "宋体", "STSong", serif;')
+                    elif "黑" in font_name or "SimHei" in font_name:
+                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                    else:
+                        style_attrs.append(f'font-family: "{font_name}", serif;')
+                if font_size:
+                    style_attrs.append(f"font-size: {font_size}pt;")
                 
-                # 检查加粗
-                is_bold = any(run.bold for run in paragraph.runs if run.bold)
+                # 应用加粗
+                is_bold = para_format.get("bold") or any(run.bold for run in paragraph.runs if run.bold)
                 if is_bold:
-                    classes.append("bold")
+                    style_attrs.append("font-weight: bold;")
+                
+                # 应用行距
+                line_spacing = para_format.get("line_spacing")
+                if line_spacing:
+                    if isinstance(line_spacing, (int, float)):
+                        # 固定行距（磅）
+                        style_attrs.append(f"line-height: {line_spacing}pt;")
+                    elif line_spacing == "single":
+                        style_attrs.append("line-height: 1.0;")
+                    elif line_spacing == "double":
+                        style_attrs.append("line-height: 2.0;")
+                    elif line_spacing == "1.5":
+                        style_attrs.append("line-height: 1.5;")
+                
+                # 应用首行缩进
+                first_line_indent = para_format.get("first_line_indent")
+                if first_line_indent and first_line_indent > 0:
+                    style_attrs.append(f"text-indent: {first_line_indent}pt;")
+                else:
+                    # 默认首行缩进2字符（24pt）
+                    style_attrs.append("text-indent: 24pt;")
+                
+                # 应用段前段后间距
+                space_before = para_format.get("space_before")
+                space_after = para_format.get("space_after")
+                if space_before and space_before > 0:
+                    style_attrs.append(f"margin-top: {space_before}pt;")
+                if space_after and space_after > 0:
+                    style_attrs.append(f"margin-bottom: {space_after}pt;")
+                
+                # 应用左右缩进
+                left_indent = para_format.get("left_indent")
+                right_indent = para_format.get("right_indent")
+                if left_indent and left_indent > 0:
+                    style_attrs.append(f"margin-left: {left_indent}pt;")
+                if right_indent and right_indent > 0:
+                    style_attrs.append(f"margin-right: {right_indent}pt;")
                 
                 class_attr = f' class="{" ".join(classes)}"' if classes else ""
                 style_attr = f' style="{" ".join(style_attrs)}"' if style_attrs else ""
