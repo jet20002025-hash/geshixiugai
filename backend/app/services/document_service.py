@@ -3448,6 +3448,23 @@ class DocumentService:
                 base_url=str(html_path.parent)  # 设置base_url，帮助解析图片
             )
             
+            # 检查系统可用字体（用于诊断）
+            try:
+                import subprocess
+                result = subprocess.run(['fc-list', ':lang=zh'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    fonts = result.stdout.strip().split('\n')
+                    chinese_fonts = [f for f in fonts if any(keyword in f.lower() for keyword in ['song', 'simsun', '宋', 'hei', 'simhei', '黑', 'wqy', 'wenquanyi'])]
+                    print(f"[PDF预览] 系统检测到 {len(chinese_fonts)} 个中文字体:")
+                    for font in chinese_fonts[:5]:  # 只显示前5个
+                        print(f"[PDF预览]   - {font[:100]}")
+                    if len(chinese_fonts) == 0:
+                        print(f"[PDF预览] ⚠️ 警告：系统未检测到中文字体！PDF可能无法正确显示中文")
+                else:
+                    print(f"[PDF预览] ⚠️ 无法检测系统字体（fc-list命令失败）")
+            except Exception as e:
+                print(f"[PDF预览] ⚠️ 字体检测失败: {e}")
+            
             print(f"[PDF预览] 开始生成PDF文件...")
             # 生成PDF（不使用font_config，避免transform错误）
             # 根据WeasyPrint文档，font_config是可选的，不使用也能正常工作
@@ -3458,6 +3475,27 @@ class DocumentService:
             
             pdf_size = pdf_path.stat().st_size
             print(f"[PDF预览] PDF生成成功，大小: {pdf_size / 1024:.2f} KB")
+            
+            # 检查PDF中的字体（使用pypdf）
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(str(pdf_path))
+                if len(reader.pages) > 0:
+                    page = reader.pages[0]
+                    if '/Font' in page.get('/Resources', {}):
+                        fonts_used = page['/Resources']['/Font']
+                        print(f"[PDF预览] PDF中使用的字体:")
+                        for font_name, font_obj in fonts_used.items():
+                            try:
+                                font_info = font_obj.get_object()
+                                base_font = font_info.get('/BaseFont', 'Unknown')
+                                print(f"[PDF预览]   - {font_name}: {base_font}")
+                            except:
+                                print(f"[PDF预览]   - {font_name}: (无法读取字体信息)")
+                    else:
+                        print(f"[PDF预览] ⚠️ PDF中未找到字体信息")
+            except Exception as e:
+                print(f"[PDF预览] ⚠️ 无法读取PDF字体信息: {e}")
             
             # 检查PDF中是否包含中文字符（通过读取PDF文本内容）
             if html_chinese_count > 0:
