@@ -2793,7 +2793,9 @@ class DocumentService:
                     level = 3
                 else:
                     level = 2
-                html_content += f"<h{level}>{text}</h{level}>\n"
+                # 转义标题文字
+                escaped_title = xml.sax.saxutils.escape(text) if text else ""
+                html_content += f"<h{level}>{escaped_title}</h{level}>\n"
                 if images_html:
                     html_content += f"<div style='text-align: center; margin: 10px 0;'>{images_html}</div>\n"
             else:
