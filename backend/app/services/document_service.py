@@ -2854,7 +2854,19 @@ class DocumentService:
             style_attrs = []
             classes = []
             
+            # 判断是否是标题（用于确定字体）
+            is_heading_para = False
             if "Heading" in style_name or "标题" in style_name:
+                is_heading_para = True
+            elif paragraph.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER and len(text) <= 20:
+                # 居中对齐的短文本可能是标题
+                is_heading_para = True
+            elif text and text[0].isdigit() and len(text) <= 20:
+                # 以数字开头的短文本可能是标题
+                if re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', text):
+                    is_heading_para = True
+            
+            if is_heading_para:
                 level = 1
                 if "1" in style_name or "一" in style_name:
                     level = 1
@@ -2890,9 +2902,6 @@ class DocumentService:
                 # 应用字体和字号（从runs中提取）
                 font_name = para_format.get("font_name")
                 font_size = para_format.get("font_size")
-                
-                # 判断是否是标题（用于确定默认字体）
-                is_heading_para = is_heading if 'is_heading' in locals() else False
                 
                 # 如果没有提取到字体名称，根据段落类型设置默认字体
                 if not font_name:
