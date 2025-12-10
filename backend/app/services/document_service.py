@@ -2840,6 +2840,10 @@ class DocumentService:
 </body>
 </html>"""
         
+        # 记录统计信息
+        print(f"[HTML预览] HTML生成完成，总段落数: {len(document.paragraphs)}, 总文字长度: {total_text_length} 字符")
+        print(f"[HTML预览] HTML内容大小: {len(html_content) / 1024:.2f} KB")
+        
         html_path.write_text(html_content, encoding="utf-8")
     
     def _extract_images_from_paragraph(self, paragraph, document: Document) -> str:
