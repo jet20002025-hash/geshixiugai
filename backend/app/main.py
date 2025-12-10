@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -45,15 +45,44 @@ def create_app() -> FastAPI:
         """返回空响应，避免浏览器请求 favicon 时出现 404"""
         return Response(status_code=204)  # No Content
 
-    frontend_dir = Path("frontend")
-    if frontend_dir.exists():
-        app.mount("/web", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    # 尝试多个可能的 frontend 目录路径
+    frontend_dir = None
+    possible_paths = [
+        Path("frontend"),  # 相对路径（开发环境）
+        Path(__file__).parent.parent.parent / "frontend",  # 从 backend/app/main.py 向上查找
+        Path("/var/www/geshixiugai/frontend"),  # 服务器部署路径
+    ]
+    
+    for path in possible_paths:
+        if path.exists() and path.is_dir():
+            frontend_dir = path
+            print(f"[Frontend] 找到前端目录: {frontend_dir}")
+            break
+    
+    if frontend_dir:
+        app.mount("/web", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+        print(f"[Frontend] 静态文件已挂载到 /web，目录: {frontend_dir}")
+        
+        # 添加直接路由作为备选（如果静态文件挂载失败）
+        @app.get("/web/convert.html", include_in_schema=False)
+        async def convert_page():
+            """Word转PDF测试页面"""
+            convert_file = frontend_dir / "convert.html"
+            if convert_file.exists():
+                return Response(
+                    content=convert_file.read_text(encoding="utf-8"),
+                    media_type="text/html"
+                )
+            raise HTTPException(status_code=404, detail="convert.html not found")
         
         # 根路径重定向到前端页面
         @app.get("/", summary="首页重定向")
         async def root():
             return RedirectResponse(url="/web")
     else:
+        print("[Frontend] 警告: 未找到前端目录，尝试的路径:")
+        for path in possible_paths:
+            print(f"  - {path} (存在: {path.exists()})")
         # 如果没有前端文件，返回健康检查
         @app.get("/", summary="健康检查")
         async def health_check() -> dict[str, str]:
