@@ -3485,17 +3485,44 @@ class DocumentService:
                     if '/Font' in page.get('/Resources', {}):
                         fonts_used = page['/Resources']['/Font']
                         print(f"[PDF预览] PDF中使用的字体:")
+                        font_embedded_count = 0
+                        font_referenced_count = 0
                         for font_name, font_obj in fonts_used.items():
                             try:
                                 font_info = font_obj.get_object()
                                 base_font = font_info.get('/BaseFont', 'Unknown')
-                                print(f"[PDF预览]   - {font_name}: {base_font}")
-                            except:
-                                print(f"[PDF预览]   - {font_name}: (无法读取字体信息)")
+                                
+                                # 检查字体是否嵌入（如果有/FontDescriptor和/FontFile，说明字体已嵌入）
+                                is_embedded = False
+                                if '/FontDescriptor' in font_info:
+                                    font_desc = font_info['/FontDescriptor']
+                                    if isinstance(font_desc, dict):
+                                        # 检查是否有字体文件（嵌入的字体）
+                                        if any(key in font_desc for key in ['/FontFile', '/FontFile2', '/FontFile3']):
+                                            is_embedded = True
+                                            font_embedded_count += 1
+                                        else:
+                                            font_referenced_count += 1
+                                
+                                font_status = "已嵌入" if is_embedded else "仅引用（未嵌入）"
+                                print(f"[PDF预览]   - {font_name}: {base_font} ({font_status})")
+                                
+                                # 检查是否是中文字体
+                                if any(keyword in str(base_font).lower() for keyword in ['song', 'simsun', '宋', 'hei', 'simhei', '黑', 'wqy', 'wenquanyi']):
+                                    if not is_embedded:
+                                        print(f"[PDF预览]     ⚠️ 警告：中文字体未嵌入，在不同系统上可能显示不同字体")
+                            except Exception as e:
+                                print(f"[PDF预览]   - {font_name}: (无法读取字体信息: {e})")
+                        
+                        print(f"[PDF预览] 字体统计: {font_embedded_count} 个已嵌入, {font_referenced_count} 个仅引用")
+                        if font_referenced_count > 0:
+                            print(f"[PDF预览] ⚠️ 注意：有 {font_referenced_count} 个字体未嵌入，在不同系统（如Mac）上可能显示不同字体")
                     else:
                         print(f"[PDF预览] ⚠️ PDF中未找到字体信息")
             except Exception as e:
                 print(f"[PDF预览] ⚠️ 无法读取PDF字体信息: {e}")
+                import traceback
+                print(f"[PDF预览] 错误详情: {traceback.format_exc()}")
             
             # 检查PDF中是否包含中文字符（通过读取PDF文本内容）
             if html_chinese_count > 0:
