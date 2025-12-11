@@ -2544,18 +2544,6 @@ class DocumentService:
             # 检查是否是空白段落
             is_blank = len(para_text) == 0
             
-            # 检查段落是否包含分页符
-            has_page_break = False
-            if paragraph.paragraph_format.page_break_before:
-                has_page_break = True
-            else:
-                for run in paragraph.runs:
-                    if hasattr(run, 'element'):
-                        run_xml = str(run.element.xml)
-                        if 'w:br' in run_xml and 'type="page"' in run_xml:
-                            has_page_break = True
-                            break
-            
             if is_blank:
                 if consecutive_blanks == 0:
                     blank_start_idx = idx
