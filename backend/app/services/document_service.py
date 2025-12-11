@@ -2227,20 +2227,20 @@ class DocumentService:
             # 处理末尾的连续空白
             if consecutive_blanks >= 2 and blank_start_idx is not None:
                 deleted_count = 0
-                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
-                            if delete_idx < len(document.paragraphs):
-                                para_to_delete = document.paragraphs[delete_idx]
-                                if is_blank_paragraph(para_to_delete):
-                                    # 检查：确保不删除包含字段代码的段落（如TOC字段）
-                                    para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
-                                    if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
-                                        # 包含字段代码，不删除
-                                        continue
-                                    # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
-                                    if has_page_break(para_to_delete):
-                                        continue
-                                    para_to_delete._element.getparent().remove(para_to_delete._element)
-                                    deleted_count += 1
+                for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                    if delete_idx < len(document.paragraphs):
+                        para_to_delete = document.paragraphs[delete_idx]
+                        if is_blank_paragraph(para_to_delete):
+                            # 检查：确保不删除包含字段代码的段落（如TOC字段）
+                            para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                            if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                # 包含字段代码，不删除
+                                continue
+                            # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                            if has_page_break(para_to_delete):
+                                continue
+                            para_to_delete._element.getparent().remove(para_to_delete._element)
+                            deleted_count += 1
                 
                 if deleted_count > 0:
                     issues.append({
