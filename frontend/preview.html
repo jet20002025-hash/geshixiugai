@@ -1032,23 +1032,37 @@
             }
             
             try {
+                console.log('--- 步骤1: 尝试Word文档预览 ---');
+                if (loadingStep) loadingStep.textContent = '尝试Word文档预览...';
+                
                 // 优先尝试Word文档预览（避免PDF转换误差）
                 // 添加超时控制，避免一直等待
+                console.log('创建Word预览Promise...');
                 const docxPreviewPromise = loadDocxPreview();
+                console.log('创建超时Promise（15秒）...');
                 const timeoutPromise = new Promise((resolve) => {
-                    setTimeout(() => resolve(false), 15000); // 15秒超时
+                    setTimeout(() => {
+                        console.log('⏰ Word预览超时（15秒）');
+                        resolve(false);
+                    }, 15000); // 15秒超时
                 });
                 
+                console.log('等待Word预览或超时...');
                 const docxSuccess = await Promise.race([docxPreviewPromise, timeoutPromise]);
+                console.log('Word预览结果:', docxSuccess);
                 
                 if (docxSuccess) {
                     console.log('✅ 使用Word文档预览（无转换误差）');
+                    if (loadingStep) loadingStep.textContent = 'Word预览成功';
                     return;
                 }
                 
                 console.log('⚠️ Word文档预览失败或超时，回退到PDF/HTML预览');
+                if (loadingStep) loadingStep.textContent = 'Word预览失败，尝试PDF预览...';
             } catch (error) {
-                console.error('Word预览尝试出错:', error);
+                console.error('❌ Word预览尝试出错:', error);
+                console.error('错误堆栈:', error.stack);
+                if (loadingStep) loadingStep.textContent = 'Word预览出错，尝试PDF预览...';
                 console.log('回退到PDF/HTML预览');
             }
             
@@ -1092,12 +1106,17 @@
                 
                 const requestTime = performance.now() - requestStart;
                 
+                console.log('--- 步骤3: 处理响应 ---');
                 logStep('响应收到', `收到响应 (${requestTime.toFixed(2)}ms)`);
                 console.log('响应状态:', response.status, response.statusText);
                 console.log('响应Content-Type:', response.headers.get('content-type'));
                 console.log('响应大小:', response.headers.get('content-length') || '未知');
+                console.log('请求耗时:', requestTime.toFixed(2), 'ms');
+                
+                if (loadingStep) loadingStep.textContent = `收到响应 (${response.status})`;
                 
                 if (!response.ok) {
+                    console.error('❌ 响应状态错误:', response.status);
                     let errorMessage = `加载失败 (${response.status})`;
                     try {
                         const errorData = await response.json();
@@ -1115,7 +1134,9 @@
                 
                 // 检查响应类型
                 const contentType = response.headers.get('content-type') || '';
+                console.log('--- 步骤4: 检查响应类型 ---');
                 console.log('响应Content-Type:', contentType);
+                if (loadingStep) loadingStep.textContent = '检查响应类型...';
                 
                 // 如果是PDF，使用PDF.js渲染
                 if (contentType.includes('application/pdf') || contentType.includes('pdf')) {
@@ -1542,11 +1563,23 @@
         }
         
         // 页面加载时开始加载预览
+        console.log('========== 页面初始化 ==========');
+        console.log('文档就绪状态:', document.readyState);
+        console.log('文档ID:', docId);
+        console.log('当前URL:', window.location.href);
+        
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadPreview);
+            console.log('文档正在加载，等待DOMContentLoaded事件...');
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('✅ DOMContentLoaded事件触发，开始加载预览');
+                loadPreview();
+            });
         } else {
+            console.log('✅ 文档已就绪，立即开始加载预览');
             loadPreview();
         }
+        
+        console.log('========== 初始化脚本执行完成 ==========');
         })(); // 立即执行函数结束
     </script>
 </body>
