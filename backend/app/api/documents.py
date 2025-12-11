@@ -760,11 +760,20 @@ async def convert_word_to_pdf(file: UploadFile):
         ascii_filename = f"{safe_stem}.pdf"
         
         # 只使用 ASCII 文件名，避免任何编码问题
-        content_disposition = f'attachment; filename="{ascii_filename}"'
+        # 确保文件名只包含 ASCII 字符（移除非ASCII字符）
+        ascii_filename_clean = ''.join(c if ord(c) < 128 else '_' for c in ascii_filename)
+        # 如果清理后为空或只有下划线，使用默认名称
+        if not ascii_filename_clean or ascii_filename_clean.replace('_', '').replace('.', '').replace('-', '') == '':
+            ascii_filename_clean = "converted_document.pdf"
+        elif not ascii_filename_clean.endswith('.pdf'):
+            ascii_filename_clean = ascii_filename_clean + '.pdf'
         
-        # 验证 Content-Disposition 只包含 ASCII 字符
+        # 构建 Content-Disposition 头
+        content_disposition = f'attachment; filename="{ascii_filename_clean}"'
+        
+        # 验证 Content-Disposition 可以编码为 latin-1（HTTP 头要求）
         try:
-            content_disposition.encode('ascii')
+            content_disposition.encode('latin-1')
         except UnicodeEncodeError as e:
             # 如果仍然包含非ASCII字符，使用默认文件名
             log_msg = f"[Word转PDF] Content-Disposition 编码验证失败: {e}，使用默认文件名"
@@ -772,6 +781,7 @@ async def convert_word_to_pdf(file: UploadFile):
             logger.warning(log_msg)
             content_disposition = 'attachment; filename="converted_document.pdf"'
         
+        # 使用 StreamingResponse 进行流式传输
         return StreamingResponse(
             generate(),
             media_type="application/pdf",
