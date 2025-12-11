@@ -2915,25 +2915,47 @@ class DocumentService:
                     except:
                         pass
                 
-                # 根据段落类型和提取到的字体信息，确定最终使用的字体
-                # 正文段落必须使用宋体，标题使用黑体
-                if is_heading_para:
-                    # 标题：优先使用提取到的黑体，否则强制使用黑体
-                    if font_name and ("黑" in font_name or "SimHei" in font_name or "Hei" in font_name):
-                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                # 根据提取到的字体信息，确定最终使用的字体
+                # 支持：黑体、宋体、楷体、Times New Roman
+                font_family_css = None
+                
+                if font_name:
+                    font_name_lower = font_name.lower()
+                    # 黑体识别
+                    if "黑" in font_name or "simhei" in font_name_lower or "hei" in font_name_lower or "heiti" in font_name_lower:
+                        font_family_css = '"SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif'
                         if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 标题字体: {font_name} -> 黑体")
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 黑体")
+                    # 宋体识别
+                    elif "宋" in font_name or "simsun" in font_name_lower or "song" in font_name_lower or "songti" in font_name_lower:
+                        font_family_css = '"SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", serif'
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 宋体")
+                    # 楷体识别
+                    elif "楷" in font_name or "kaiti" in font_name_lower or "kai" in font_name_lower:
+                        font_family_css = '"KaiTi", "楷体", "STKaiti", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", serif'
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> 楷体")
+                    # Times New Roman 识别
+                    elif "times" in font_name_lower or "new roman" in font_name_lower or "tnr" in font_name_lower:
+                        font_family_css = '"Times New Roman", "Times", "Liberation Serif", "DejaVu Serif", serif'
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 字体: {font_name} -> Times New Roman")
+                
+                # 如果没有识别到字体，根据段落类型使用默认字体
+                if not font_family_css:
+                    if is_heading_para:
+                        # 标题默认使用黑体
+                        font_family_css = '"SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif'
+                        if idx < 10:
+                            print(f"[HTML预览] 段落 {idx} 标题使用默认字体：黑体（原字体: {font_name or '未提取'}）")
                     else:
-                        # 标题强制使用黑体
-                        style_attrs.append('font-family: "SimHei", "黑体", "STHeiti", sans-serif;')
+                        # 正文默认使用宋体
+                        font_family_css = '"SimSun", "宋体", "STSong", "STSongti-SC-Regular", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", serif'
                         if idx < 10:
-                            print(f"[HTML预览] 段落 {idx} 标题强制使用黑体（原字体: {font_name or '未提取'}）")
-                else:
-                    # 正文：无论提取到什么字体，都强制使用宋体
-                    # 因为格式应用阶段已经将正文设置为宋体了
-                    style_attrs.append('font-family: "SimSun", "宋体", "STSong", "STSongti-SC-Regular", serif;')
-                    if idx < 10:
-                        print(f"[HTML预览] 段落 {idx} 正文强制使用宋体（原字体: {font_name or '未提取'}）")
+                            print(f"[HTML预览] 段落 {idx} 正文使用默认字体：宋体（原字体: {font_name or '未提取'}）")
+                
+                style_attrs.append(f'font-family: {font_family_css};')
                 
                 if font_size:
                     style_attrs.append(f"font-size: {font_size}pt;")
@@ -3683,6 +3705,8 @@ read_file
             h1, h2, h3, h4, h5, h6 {{
                 font-family: "SimHei", "黑体", "STHeiti", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif;
             }}
+            /* 支持多种字体：黑体、宋体、楷体、Times New Roman */
+            /* 这些字体栈会在内联样式中被使用 */
             /* 确保图片正确显示 */
             img {{
                 max-width: 100%;
