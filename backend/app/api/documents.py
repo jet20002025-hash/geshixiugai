@@ -714,10 +714,29 @@ async def convert_document_to_pdf(document_id: str):
                 detail=error_msg
             )
         
+        # 为PDF添加水印（确保免费用户只能下载带水印的PDF）
+        print(f"[文档转PDF] 为PDF添加水印...")
+        watermarked_pdf = temp_dir / f"{document_id}_watermarked.pdf"
+        watermark_success = document_service._add_pdf_watermarks(
+            pdf_path=temp_pdf,
+            output_path=watermarked_pdf,
+            watermark_text="www.geshixiugai.cn",
+            watermarks_per_page=10
+        )
+        
+        if watermark_success and watermarked_pdf.exists():
+            # 使用带水印的PDF
+            final_pdf = watermarked_pdf
+            print(f"[文档转PDF] 水印添加成功")
+        else:
+            # 如果水印添加失败，使用原始PDF（但应该确保原始PDF也有水印）
+            print(f"[文档转PDF] 水印添加失败，使用原始PDF")
+            final_pdf = temp_pdf
+        
         # 获取原始文件名
         metadata = document_service.get_document_metadata(document_id)
         original_filename = metadata.get("original_filename", f"{document_id}.docx")
-        pdf_filename = Path(original_filename).stem + ".pdf"
+        pdf_filename = Path(original_filename).stem + "_带水印版.pdf"
         
         # 读取PDF文件并返回
         def generate():
