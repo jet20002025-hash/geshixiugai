@@ -1172,48 +1172,40 @@
                     // PDF.js 3.x 的全局变量可能是 pdfjsLib 或 pdfjs
                     let pdfjsLib = window.pdfjsLib || window.pdfjs;
                     
+                    // 如果PDF.js未加载，直接使用iframe方式（不等待）
                     if (typeof pdfjsLib === 'undefined') {
-                        logStep('等待PDF.js', '等待PDF.js库加载');
-                        console.log('PDF.js未加载，等待中...');
+                        console.log('PDF.js未加载，直接使用iframe方式');
                         console.log('检查全局变量: pdfjsLib=', typeof window.pdfjsLib, 'pdfjs=', typeof window.pdfjs);
+                        logStep('使用iframe', '使用iframe方式显示PDF');
                         
-                        // 等待最多10秒
-                        let waitCount = 0;
-                        while (typeof pdfjsLib === 'undefined' && waitCount < 100) {
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                            waitCount++;
-                            // 重新检查
-                            pdfjsLib = window.pdfjsLib || window.pdfjs;
-                            if (waitCount % 10 === 0) {
-                                console.log(`等待PDF.js加载... ${waitCount * 100}ms`);
-                                console.log('pdfjsLib:', typeof window.pdfjsLib, 'pdfjs:', typeof window.pdfjs);
-                            }
-                        }
+                        // 使用iframe方式
+                        const iframe = document.getElementById('previewFrame');
+                        const mainPreview = document.getElementById('mainPreview');
                         
-                        if (typeof pdfjsLib === 'undefined') {
-                            console.warn('PDF.js库未加载，使用iframe方式');
-                            console.warn('检查结果: pdfjsLib=', typeof window.pdfjsLib, 'pdfjs=', typeof window.pdfjs);
-                            logStep('回退iframe', 'PDF.js未加载，使用iframe方式');
-                            // 回退到iframe方式
-                            const iframe = document.getElementById('previewFrame');
-                            const mainPreview = document.getElementById('mainPreview');
-                            iframe.src = blobUrl;
-                            iframe.onload = () => {
-                                console.log('iframe加载成功');
-                                document.getElementById('loading').style.display = 'none';
-                                document.getElementById('thumbnailSidebar').style.display = 'none';
-                                mainPreview.style.display = 'block';
-                                iframe.style.display = 'block';
-                            };
-                            iframe.onerror = (e) => {
-                                console.error('iframe加载失败:', e);
-                                showError('PDF加载失败', '无法在iframe中加载PDF，请检查浏览器控制台');
-                            };
-                            // 显示主预览区域
-                            document.getElementById('loading').style.display = 'none';
-                            mainPreview.style.display = 'block';
+                        if (!iframe || !mainPreview) {
+                            console.error('❌ 无法找到iframe或mainPreview元素');
+                            showError('加载失败', '页面元素缺失，请刷新页面重试');
                             return;
                         }
+                        
+                        iframe.src = blobUrl;
+                        iframe.onload = () => {
+                            console.log('✅ iframe加载成功');
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('thumbnailSidebar').style.display = 'none';
+                            mainPreview.style.display = 'block';
+                            iframe.style.display = 'block';
+                            logStep('完成', 'PDF预览加载完成');
+                        };
+                        iframe.onerror = (e) => {
+                            console.error('❌ iframe加载失败:', e);
+                            showError('PDF加载失败', '无法在iframe中加载PDF，请检查浏览器控制台');
+                        };
+                        
+                        // 显示主预览区域
+                        document.getElementById('loading').style.display = 'none';
+                        mainPreview.style.display = 'block';
+                        return;
                     }
                     
                     console.log('✅ PDF.js已加载，开始使用PDF.js渲染');
@@ -1656,15 +1648,39 @@
         console.log('文档ID:', docId);
         console.log('当前URL:', window.location.href);
         
+        // 确保loadPreview函数存在
+        if (typeof loadPreview !== 'function') {
+            console.error('❌ loadPreview函数不存在！');
+            showError('页面加载错误', '预览功能未正确初始化，请刷新页面重试');
+            return;
+        }
+        
+        // 延迟一点时间，确保所有元素都已创建
+        const startLoad = () => {
+            console.log('✅ 开始执行loadPreview');
+            try {
+                loadPreview().catch(error => {
+                    console.error('❌ loadPreview执行失败:', error);
+                    console.error('错误堆栈:', error.stack);
+                    showError('加载预览失败', error.message || '未知错误，请查看控制台');
+                });
+            } catch (error) {
+                console.error('❌ loadPreview调用异常:', error);
+                showError('加载预览失败', error.message || '未知错误，请查看控制台');
+            }
+        };
+        
         if (document.readyState === 'loading') {
             console.log('文档正在加载，等待DOMContentLoaded事件...');
             document.addEventListener('DOMContentLoaded', () => {
-                console.log('✅ DOMContentLoaded事件触发，开始加载预览');
-                loadPreview();
+                console.log('✅ DOMContentLoaded事件触发');
+                // 稍微延迟，确保所有脚本都加载完成
+                setTimeout(startLoad, 100);
             });
         } else {
-            console.log('✅ 文档已就绪，立即开始加载预览');
-            loadPreview();
+            console.log('✅ 文档已就绪，延迟100ms后开始加载预览');
+            // 稍微延迟，确保所有脚本都加载完成
+            setTimeout(startLoad, 100);
         }
         
         console.log('========== 初始化脚本执行完成 ==========');
