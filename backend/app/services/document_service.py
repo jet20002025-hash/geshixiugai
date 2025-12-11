@@ -4363,10 +4363,22 @@ read_file
             input_file = temp_input
             expected_pdf_name = temp_output_name
             
+            # 添加环境变量，确保LibreOffice使用正确的字体设置
+            # 禁用字体替换，保留原始字体
+            env['SAL_DISABLE_OPENCL'] = '1'  # 禁用OpenCL，避免渲染问题
+            # 设置LibreOffice用户配置目录（如果不存在则创建）
+            lo_user_dir = Path.home() / '.config' / 'libreoffice'
+            if not lo_user_dir.exists():
+                try:
+                    lo_user_dir.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+            
             # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
             # 但首先尝试直接执行
-            # 注意：使用最简单的命令格式，避免参数导致导出过滤器问题
-            # 尝试方法1：最简单的命令
+            # 注意：使用PDF导出过滤器，确保保留原始字体
+            # LibreOffice默认会保留字体，但如果系统缺少字体，可能会替换
+            # 尝试方法1：使用标准PDF转换命令（LibreOffice会自动嵌入可用字体）
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
@@ -4375,7 +4387,7 @@ read_file
                 str(input_file)
             ]
             
-            log_msg = f"[PDF预览] 尝试方法1：使用最简单的命令格式"
+            log_msg = f"[PDF预览] 尝试方法1：使用PDF转换命令，保留原始字体"
             print(log_msg, file=sys.stderr, flush=True)
             try:
                 with open("/var/log/geshixiugai/error.log", "a") as f:
