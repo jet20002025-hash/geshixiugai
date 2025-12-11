@@ -146,13 +146,21 @@ class DocumentService:
         preview_path = task_dir / "preview.docx"
         self._generate_watermarked_preview(final_path, preview_path)
         
-        # 生成PDF预览（优先，格式完美）
+        # 生成PDF预览（优先使用LibreOffice直接转换，保持格式完全一致）
+        # 预览PDF = 修改后的文档 + 水印，格式与最终文档完全一致，仅格式为PDF
         pdf_path = preview_path.with_suffix('.pdf')
         print(f"[预览] 开始生成PDF预览: {pdf_path}")
+        print(f"[预览] 预览策略：直接从Word转PDF（使用LibreOffice），保持格式完全一致，仅添加水印")
         # 初始化 html_path，确保在所有情况下都有定义
         html_path = preview_path.with_suffix('.html')
         
-        pdf_success = self._generate_pdf_preview(preview_path, pdf_path, stats)
+        # 优先使用LibreOffice直接从Word转PDF（格式完美，只加水印，与最终文档完全一致）
+        pdf_success = self._try_libreoffice_pdf_conversion(preview_path, pdf_path)
+        
+        # 如果LibreOffice转换失败，回退到HTML转PDF（不推荐，格式会有变化）
+        if not pdf_success:
+            print(f"[预览] ⚠️ LibreOffice转换失败，回退到HTML转PDF（格式可能有变化，不推荐）")
+            pdf_success = self._generate_pdf_preview(preview_path, pdf_path, stats)
         if pdf_success:
             # 验证PDF文件是否真的存在
             if pdf_path.exists():
