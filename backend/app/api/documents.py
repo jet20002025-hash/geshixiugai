@@ -900,8 +900,15 @@ async def convert_word_to_pdf(file: UploadFile):
         
         # 生成 ASCII 文件名作为备选（避免编码问题）
         ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in pdf_filename)
+        # 如果 ASCII 文件名全是下划线或无效，使用更有意义的名称
         if not ascii_filename or ascii_filename.replace('_', '').replace('.', '').replace('-', '') == '':
-            ascii_filename = "converted_document.pdf"
+            # 使用时间戳生成唯一文件名
+            import time
+            timestamp = int(time.time())
+            ascii_filename = f"converted_{timestamp}.pdf"
+            log_msg = f"[Word转PDF] ASCII文件名无效，使用时间戳文件名: {ascii_filename}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
         elif not ascii_filename.endswith('.pdf'):
             ascii_filename = ascii_filename + '.pdf'
         
@@ -910,14 +917,16 @@ async def convert_word_to_pdf(file: UploadFile):
         logger.info(log_msg)
         
         # 使用 RFC 5987 格式编码 UTF-8 文件名
+        # 注意：优先使用 UTF-8 编码的文件名，ASCII 文件名仅作为备选
         try:
             encoded_filename = quote(pdf_filename.encode('utf-8'))
-            content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-            log_msg = f"[Word转PDF] Content-Disposition: {content_disposition}"
+            # 只使用 UTF-8 编码的文件名，不提供 ASCII 备选（避免浏览器使用下划线文件名）
+            content_disposition = f'attachment; filename*=UTF-8\'\'{encoded_filename}'
+            log_msg = f"[Word转PDF] Content-Disposition (仅UTF-8): {content_disposition}"
             print(log_msg, file=sys.stderr, flush=True)
             logger.info(log_msg)
         except Exception as e:
-            # 如果编码失败，只使用 ASCII 文件名
+            # 如果编码失败，使用 ASCII 文件名
             log_msg = f"[Word转PDF] 文件名编码失败: {e}，使用ASCII文件名"
             print(log_msg, file=sys.stderr, flush=True)
             logger.warning(log_msg)
