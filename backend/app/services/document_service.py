@@ -2660,38 +2660,8 @@ class DocumentService:
         document = Document(docx_path)
         print(f"[HTML预览] Word文档读取成功，总段落数: {len(document.paragraphs)}")
         
-        # 生成修改摘要HTML
-        changes_summary_html = ""
-        if stats.get("changes_summary"):
-            field_names = {
-                "font_name": "字体",
-                "font_size": "字号",
-                "bold": "加粗",
-                "alignment": "对齐方式",
-                "line_spacing": "行距",
-                "space_before": "段前间距",
-                "space_after": "段后间距",
-                "first_line_indent": "首行缩进",
-                "left_indent": "左缩进",
-                "right_indent": "右缩进",
-            }
-            changes_summary_html = '<div class="changes-summary"><h3>📝 格式修改摘要</h3><ul>'
-            for field, count in sorted(stats["changes_summary"].items(), key=lambda x: x[1], reverse=True):
-                field_name = field_names.get(field, field)
-                changes_summary_html += f'<li><strong>{field_name}</strong>: 修改了 <strong>{count}</strong> 处</li>'
-            changes_summary_html += f'</ul><p>总计修改了 <strong>{stats.get("paragraphs_adjusted", 0)}</strong> 个段落</p></div>'
-        
-        # 生成图片检测结果HTML
-        figure_issues_html = ""
-        if stats.get("figure_issues"):
-            issues = stats["figure_issues"]
-            figure_issues_html = '<div class="figure-issues" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; z-index: 2;"><h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>'
-            figure_issues_html += f'<p style="color: #856404; font-weight: bold;">发现 <strong>{len(issues)}</strong> 处图片缺少图题：</p><ul style="list-style: none; padding-left: 0;">'
-            for issue in issues[:10]:  # 最多显示10个问题
-                figure_issues_html += f'<li style="padding: 10px 0; border-bottom: 1px solid #ffc107;"><strong>第 {issue["paragraph_index"] + 1} 段</strong>: {issue["message"]}<br><small style="color: #666;">{issue["suggestion"]}</small></li>'
-            if len(issues) > 10:
-                figure_issues_html += f'<li style="padding: 10px 0; color: #666;">... 还有 {len(issues) - 10} 处问题未显示</li>'
-            figure_issues_html += '</ul></div>'
+        # 不再在预览文档中添加检测结果，保持文档干净
+        # 检测结果只在首页（报告）中显示
         
         html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -2796,8 +2766,6 @@ class DocumentService:
 <body>
     <div class="watermark">预览版 仅供查看</div>
     <div class="document-container">
-        {changes_summary_html}
-        {figure_issues_html}
 """
         
         paragraph_count = 0
@@ -3988,37 +3956,8 @@ read_file
             except:
                 pass
             
-            # 在HTML开头添加修改摘要和图片检测结果
-            changes_summary_html = ""
-            if stats.get("changes_summary"):
-                field_names = {
-                    "font_name": "字体",
-                    "font_size": "字号",
-                    "bold": "加粗",
-                    "alignment": "对齐方式",
-                    "line_spacing": "行距",
-                    "space_before": "段前间距",
-                    "space_after": "段后间距",
-                    "first_line_indent": "首行缩进",
-                    "left_indent": "左缩进",
-                    "right_indent": "右缩进",
-                }
-                changes_summary_html = '<div class="changes-summary" style="background: #e7f3ff; border: 2px solid #2196F3; border-radius: 8px; padding: 20px; margin-bottom: 30px;"><h3 style="margin-top: 0; color: #1976D2;">📝 格式修改摘要</h3><ul style="list-style: none; padding-left: 0;">'
-                for field, count in sorted(stats["changes_summary"].items(), key=lambda x: x[1], reverse=True):
-                    field_name = field_names.get(field, field)
-                    changes_summary_html += f'<li style="padding: 8px 0; border-bottom: 1px solid #BBDEFB;"><strong>{field_name}</strong>: 修改了 <strong>{count}</strong> 处</li>'
-                changes_summary_html += f'</ul><p style="margin-top: 15px; font-size: 16px; color: #1976D2; font-weight: bold;">总计修改了 <strong>{stats.get("paragraphs_adjusted", 0)}</strong> 个段落</p></div>'
-            
-            figure_issues_html = ""
-            if stats.get("figure_issues"):
-                issues = stats["figure_issues"]
-                figure_issues_html = '<div class="figure-issues" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px;"><h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>'
-                figure_issues_html += f'<p style="color: #856404; font-weight: bold;">发现 <strong>{len(issues)}</strong> 处图片缺少图题：</p><ul style="list-style: none; padding-left: 0;">'
-                for issue in issues[:10]:
-                    figure_issues_html += f'<li style="padding: 10px 0; border-bottom: 1px solid #ffc107;"><strong>第 {issue["paragraph_index"] + 1} 段</strong>: {issue["message"]}<br><small style="color: #666;">{issue["suggestion"]}</small></li>'
-                if len(issues) > 10:
-                    figure_issues_html += f'<li style="padding: 10px 0; color: #666;">... 还有 {len(issues) - 10} 处问题未显示</li>'
-                figure_issues_html += '</ul></div>'
+            # 不再在预览文档中添加检测结果，保持文档干净
+            # 检测结果只在首页（报告）中显示
             
             # 添加水印和警告样式
             watermark_style = """
@@ -4054,13 +3993,13 @@ read_file
             if '</head>' in html_content:
                 html_content = html_content.replace('</head>', watermark_style + '</head>')
             
-            # 在body标签后插入摘要和水印
+            # 在body标签后插入水印（不插入检测结果）
             if '<body' in html_content:
                 # 找到body标签结束位置
                 body_end = html_content.find('>', html_content.find('<body'))
                 if body_end != -1:
                     insert_pos = body_end + 1
-                    insert_content = '<div class="preview-watermark">预览版 仅供查看</div>' + changes_summary_html + figure_issues_html
+                    insert_content = '<div class="preview-watermark">预览版 仅供查看</div>'
                     html_content = html_content[:insert_pos] + insert_content + html_content[insert_pos:]
             
             # 在文档末尾添加警告
