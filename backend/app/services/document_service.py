@@ -2588,7 +2588,10 @@ class DocumentService:
         blank_start_idx = None
         
         # 在整个文档中检测整页空白
-        for idx, paragraph in enumerate(document.paragraphs):
+        # 使用while循环，因为删除段落后索引会变化
+        idx = 0
+        while idx < len(document.paragraphs):
+            paragraph = document.paragraphs[idx]
             para_text = paragraph.text.strip() if paragraph.text else ""
             
             # 检查是否是空白段落
@@ -2598,6 +2601,7 @@ class DocumentService:
                 if consecutive_blanks == 0:
                     blank_start_idx = idx
                 consecutive_blanks += 1
+                idx += 1
             else:
                 # 遇到非空白段落
                 # 如果之前有大量连续空白（可能是整页空白），检查是否需要删除
@@ -2607,7 +2611,7 @@ class DocumentService:
                     # 检查这些空白段落前后是否有分页符，如果有，可能是整页空白
                     # 检查空白段落之前是否有分页符
                     has_break_before = False
-                    if blank_start_idx > 0:
+                    if blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
                         prev_para = document.paragraphs[blank_start_idx - 1]
                         if prev_para.paragraph_format.page_break_before:
                             has_break_before = True
@@ -2652,8 +2656,10 @@ class DocumentService:
                         deleted_count = 0
                         # 从后往前删除，保留最后一个空白段落
                         delete_end = blank_start_idx + consecutive_blanks - 1
+                        # 确保索引在有效范围内
+                        delete_end = min(delete_end, len(document.paragraphs) - 1)
                         for delete_idx in range(delete_end, blank_start_idx, -1):
-                            if delete_idx < len(document.paragraphs):
+                            if delete_idx >= 0 and delete_idx < len(document.paragraphs):
                                 para_to_delete = document.paragraphs[delete_idx]
                                 if len(para_to_delete.text.strip()) == 0:
                                     # 检查是否包含字段代码
@@ -2665,6 +2671,9 @@ class DocumentService:
                                         continue
                                     para_to_delete._element.getparent().remove(para_to_delete._element)
                                     deleted_count += 1
+                                    # 如果删除的段落在当前索引之前，需要调整索引
+                                    if delete_idx < idx:
+                                        idx -= 1
                         
                         if deleted_count > 0:
                             issues.append({
@@ -2674,14 +2683,20 @@ class DocumentService:
                                 "blank_start": blank_start_idx,
                                 "blank_count": deleted_count,
                             })
+                            # 删除段落后，重新从删除位置开始检查
+                            idx = blank_start_idx
+                            consecutive_blanks = 0
+                            blank_start_idx = None
+                            continue
                 
                 consecutive_blanks = 0
                 blank_start_idx = None
+                idx += 1
         
         # 处理文档末尾的整页空白
         # 检查末尾是否有分页符，如果有，可能是只有页眉的空白页
         has_break_before_end = False
-        if blank_start_idx is not None and blank_start_idx > 0:
+        if blank_start_idx is not None and blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
             prev_para = document.paragraphs[blank_start_idx - 1]
             if prev_para.paragraph_format.page_break_before:
                 has_break_before_end = True
@@ -2697,9 +2712,9 @@ class DocumentService:
             (consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and has_break_before_end)) and blank_start_idx is not None:
             # 删除末尾的整页空白，但保留最后一个空白段落
             deleted_count = 0
-            delete_end = blank_start_idx + consecutive_blanks - 1
+            delete_end = min(blank_start_idx + consecutive_blanks - 1, len(document.paragraphs) - 1)
             for delete_idx in range(delete_end, blank_start_idx, -1):
-                if delete_idx < len(document.paragraphs):
+                if delete_idx >= 0 and delete_idx < len(document.paragraphs):
                     para_to_delete = document.paragraphs[delete_idx]
                     if len(para_to_delete.text.strip()) == 0:
                         # 检查是否包含字段代码
