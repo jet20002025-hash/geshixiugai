@@ -314,11 +314,32 @@ async def preview_docx_document(document_id: str) -> FileResponse:
     
     print(f"[Preview DOCX] 返回Word文档: {docx_file}, 大小: {docx_file.stat().st_size / 1024:.2f} KB")
     
+    # 使用原始文件名（如果存在）
+    original_filename = metadata.get("original_filename", "")
+    if original_filename:
+        # 提取文件名（不含扩展名）并添加后缀
+        filename_stem = Path(original_filename).stem
+        preview_filename = f"{filename_stem}_预览版.docx"
+    else:
+        preview_filename = "preview.docx"
+    
+    # 处理中文文件名编码
+    ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in preview_filename)
+    if not ascii_filename or ascii_filename.replace('_', '').replace('.', '').replace('-', '') == '':
+        ascii_filename = "preview.docx"
+    
+    # 使用 RFC 5987 格式编码 UTF-8 文件名
+    try:
+        encoded_filename = quote(preview_filename.encode('utf-8'))
+        content_disposition = f'inline; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+    except Exception:
+        content_disposition = f'inline; filename="{ascii_filename}"'
+    
     return FileResponse(
         path=str(docx_file),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
-            "Content-Disposition": "inline; filename=preview.docx",
+            "Content-Disposition": content_disposition,
             "Cache-Control": "no-cache",
             "Access-Control-Allow-Origin": "*",  # 允许跨域，用于前端加载
         }
