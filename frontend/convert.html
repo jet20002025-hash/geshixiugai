@@ -395,13 +395,28 @@
                 
                 // 获取文件名
                 const contentDisposition = response.headers.get('Content-Disposition');
-                let pdfFileName = 'converted.pdf';
+                // 使用原始文件名（去掉扩展名，添加 .pdf）作为默认值
+                let pdfFileName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
+                
                 if (contentDisposition) {
-                    const matches = contentDisposition.match(/filename="?([^"]+)"?/);
-                    if (matches) {
-                        pdfFileName = matches[1];
+                    // 优先解析 UTF-8 编码的文件名 (RFC 5987 格式: filename*=UTF-8''...)
+                    const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+                    if (utf8Match) {
+                        try {
+                            pdfFileName = decodeURIComponent(utf8Match[1]);
+                        } catch (e) {
+                            console.warn('UTF-8 文件名解析失败，使用原始文件名:', e);
+                        }
+                    } else {
+                        // 回退到普通文件名格式
+                        const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+                        if (matches && matches[1] && !matches[1].startsWith('converted_')) {
+                            pdfFileName = matches[1];
+                        }
                     }
                 }
+                
+                console.log('使用的文件名:', pdfFileName);
                 
                 // 下载文件
                 const blob = await response.blob();
