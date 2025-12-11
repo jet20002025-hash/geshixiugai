@@ -635,9 +635,23 @@
         
         // 如果还是没有，显示错误并退出
         if (!docId) {
-            showError('缺少文档ID参数', '请在URL中包含文档ID，例如：/web/preview.html?id=文档ID');
+            console.error('❌ 未找到文档ID');
+            console.error('URL参数:', urlParams.toString());
+            console.error('当前路径:', window.location.pathname);
+            console.error('当前hash:', window.location.hash);
+            showError('缺少文档ID参数', '请在URL中包含文档ID，例如：/web/preview.html?id=文档ID 或 /web/preview.html?document_id=文档ID');
+            // 确保错误信息显示
+            setTimeout(() => {
+                const errorEl = document.getElementById('error');
+                if (errorEl && errorEl.style.display !== 'block') {
+                    console.error('错误元素未显示，强制显示');
+                    errorEl.style.display = 'block';
+                }
+            }, 100);
             return;
         }
+        
+        console.log('✅ 文档ID已提取:', docId);
         
         // 显示文档ID（只显示前8位，保护隐私）
         const displayId = docId.length > 8 ? docId.substring(0, 8) + '...' : docId;
@@ -1095,10 +1109,20 @@
                     console.error('❌ Fetch请求失败:', error);
                     console.error('错误名称:', error.name);
                     console.error('错误消息:', error.message);
+                    console.error('错误堆栈:', error.stack);
+                    
+                    let errorMessage = '请求失败';
                     if (error.name === 'AbortError') {
-                        throw new Error('请求超时：服务器响应时间超过30秒，可能是文档太大或服务器负载过高');
+                        errorMessage = '请求超时：服务器响应时间超过30秒，可能是文档太大或服务器负载过高';
+                    } else if (error.message) {
+                        errorMessage = error.message;
+                    } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                        errorMessage = '无法连接到服务器，请检查网络连接或服务器是否正常运行';
                     }
-                    throw error;
+                    
+                    // 立即显示错误，不要继续尝试
+                    showError('加载预览失败', errorMessage);
+                    return; // 直接返回，不再继续
                 }
                 
                 const requestTime = performance.now() - requestStart;
@@ -1315,18 +1339,35 @@
                 });
                 
             } catch (error) {
-                console.error('加载预览失败:', error);
+                console.error('========== 捕获到错误 ==========');
+                console.error('错误对象:', error);
+                console.error('错误消息:', error.message);
+                console.error('错误名称:', error.name);
                 console.error('错误堆栈:', error.stack);
+                
+                let errorMessage = '加载预览失败';
                 let errorDetail = error.message || '请检查文档ID是否正确，或文档是否已处理完成';
                 
-                // 如果是404错误，提供更友好的提示
-                if (error.message && (error.message.includes('404') || error.message.includes('未找到'))) {
-                    errorDetail = '文档不存在或尚未处理完成。请返回主页重新上传文档并等待处理完成。';
-                } else if (error.message && error.message.includes('网络')) {
-                    errorDetail = '网络连接失败，请检查网络连接后重试。';
+                // 根据错误类型提供更友好的提示
+                if (error.message) {
+                    if (error.message.includes('404') || error.message.includes('未找到') || error.message.includes('Not Found')) {
+                        errorMessage = '文档不存在';
+                        errorDetail = '文档不存在或尚未处理完成。请返回主页重新上传文档并等待处理完成。';
+                    } else if (error.message.includes('网络') || error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+                        errorMessage = '网络连接失败';
+                        errorDetail = '无法连接到服务器，请检查网络连接或服务器是否正常运行。';
+                    } else if (error.message.includes('超时') || error.message.includes('timeout')) {
+                        errorMessage = '请求超时';
+                        errorDetail = '服务器响应时间过长，可能是文档太大或服务器负载过高。请稍后重试。';
+                    } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+                        errorMessage = '服务器错误';
+                        errorDetail = '服务器处理请求时发生错误。请稍后重试，或联系管理员。';
+                    }
                 }
                 
-                showError('加载预览失败', errorDetail);
+                // 确保错误信息被显示
+                console.log('准备显示错误:', errorMessage, errorDetail);
+                showError(errorMessage, errorDetail);
                 console.error('========== 错误处理完成 ==========');
             }
             
@@ -1545,10 +1586,52 @@
         
         // 显示错误
         function showError(message, detail) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'block';
-            document.getElementById('errorMessage').textContent = message;
-            document.getElementById('errorDetail').textContent = detail;
+            console.error('显示错误:', message, detail);
+            try {
+                const loadingEl = document.getElementById('loading');
+                const errorEl = document.getElementById('error');
+                const errorMsgEl = document.getElementById('errorMessage');
+                const errorDetailEl = document.getElementById('errorDetail');
+                
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                    console.log('✅ 隐藏加载元素');
+                } else {
+                    console.error('❌ 加载元素不存在');
+                }
+                
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    console.log('✅ 显示错误元素');
+                } else {
+                    console.error('❌ 错误元素不存在');
+                }
+                
+                if (errorMsgEl) {
+                    errorMsgEl.textContent = message || '加载预览失败';
+                    console.log('✅ 设置错误消息:', message);
+                } else {
+                    console.error('❌ 错误消息元素不存在');
+                }
+                
+                if (errorDetailEl) {
+                    errorDetailEl.textContent = detail || '请检查文档ID是否正确，或文档是否已处理完成';
+                    console.log('✅ 设置错误详情:', detail);
+                } else {
+                    console.error('❌ 错误详情元素不存在');
+                }
+            } catch (e) {
+                console.error('显示错误时发生异常:', e);
+                // 如果所有方法都失败，至少尝试在页面上显示一些信息
+                document.body.innerHTML = `
+                    <div style="padding: 2rem; text-align: center;">
+                        <h1>加载预览失败</h1>
+                        <p>${message || '未知错误'}</p>
+                        <p style="color: #666; font-size: 0.9rem;">${detail || ''}</p>
+                        <a href="/web" style="display: inline-block; margin-top: 1rem; padding: 0.5rem 1rem; background: #667eea; color: white; text-decoration: none; border-radius: 4px;">返回主页</a>
+                    </div>
+                `;
+            }
         }
         
         // 页面加载时开始加载预览
