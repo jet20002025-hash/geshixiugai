@@ -60,11 +60,12 @@ class SupabaseStorage(StorageBase):
             encoded_parts = [quote(part, safe='') for part in key_parts]
             encoded_key = '/'.join(encoded_parts)
             
-            # 使用httpx.URL直接构建URL，确保正确编码
-            # 这样可以避免字符串拼接导致的编码问题
-            base_url = httpx.URL(self.api_url)
-            path_segments = ['object', self.bucket_name] + encoded_parts
-            upload_url = base_url.copy_with(path='/'.join([''] + path_segments))
+            # 构建URL路径，确保所有部分都已编码
+            path = '/object/' + self.bucket_name + '/' + '/'.join(encoded_parts)
+            # 使用urljoin确保URL正确构建
+            upload_url_str = urljoin(self.api_url + '/', path.lstrip('/'))
+            # 使用httpx.URL解析URL，确保正确编码
+            upload_url = httpx.URL(upload_url_str)
             
             with httpx.Client() as client:
                 response = client.post(
@@ -93,10 +94,10 @@ class SupabaseStorage(StorageBase):
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
             
-            # 使用httpx.URL直接构建URL
-            base_url = httpx.URL(self.api_url)
-            path_segments = ['object', self.bucket_name] + encoded_parts
-            download_url = base_url.copy_with(path='/'.join([''] + path_segments))
+            # 构建URL路径
+            path = '/object/' + self.bucket_name + '/' + '/'.join(encoded_parts)
+            download_url_str = urljoin(self.api_url + '/', path.lstrip('/'))
+            download_url = httpx.URL(download_url_str)
             
             with httpx.Client() as client:
                 response = client.get(
@@ -119,10 +120,10 @@ class SupabaseStorage(StorageBase):
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
             
-            # 使用httpx.URL直接构建URL
-            base_url = httpx.URL(self.api_url)
-            path_segments = ['object', 'info', self.bucket_name] + encoded_parts
-            info_url = base_url.copy_with(path='/'.join([''] + path_segments))
+            # 构建URL路径
+            path = '/object/info/' + self.bucket_name + '/' + '/'.join(encoded_parts)
+            info_url_str = urljoin(self.api_url + '/', path.lstrip('/'))
+            info_url = httpx.URL(info_url_str)
             
             with httpx.Client() as client:
                 response = client.get(
@@ -143,10 +144,10 @@ class SupabaseStorage(StorageBase):
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
             
-            # 使用httpx.URL直接构建URL
-            base_url = httpx.URL(self.api_url)
-            path_segments = ['object', self.bucket_name] + encoded_parts
-            delete_url = base_url.copy_with(path='/'.join([''] + path_segments))
+            # 构建URL路径
+            path = '/object/' + self.bucket_name + '/' + '/'.join(encoded_parts)
+            delete_url_str = urljoin(self.api_url + '/', path.lstrip('/'))
+            delete_url = httpx.URL(delete_url_str)
             
             with httpx.Client() as client:
                 response = client.delete(
