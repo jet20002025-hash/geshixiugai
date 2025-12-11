@@ -719,16 +719,25 @@ async def convert_word_to_pdf(file: UploadFile):
         # 重置文件指针到开头（确保读取完整内容）
         file.file.seek(0)
         
-        # 计算上传文件大小（通过文件指针位置）
-        file_start_pos = file.file.tell()
-        file.file.seek(0, 2)  # 移动到文件末尾
-        file_end_pos = file.file.tell()
-        uploaded_size = file_end_pos - file_start_pos
-        file.file.seek(0)  # 重置到开头
-        
-        log_msg = f"[Word转PDF] 上传文件大小: {uploaded_size} bytes"
-        print(log_msg, file=sys.stderr, flush=True)
-        logger.info(log_msg)
+        # 尝试计算上传文件大小（通过文件指针位置）
+        # 注意：某些流可能不支持 seek，所以需要捕获异常
+        uploaded_size = None
+        try:
+            file_start_pos = file.file.tell()
+            file.file.seek(0, 2)  # 移动到文件末尾
+            file_end_pos = file.file.tell()
+            uploaded_size = file_end_pos - file_start_pos
+            file.file.seek(0)  # 重置到开头
+            
+            log_msg = f"[Word转PDF] 上传文件大小: {uploaded_size} bytes"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
+        except (AttributeError, OSError, io.UnsupportedOperation) as e:
+            # 流不支持 seek，无法预先获取大小
+            log_msg = f"[Word转PDF] 无法预先获取文件大小（流不支持seek）: {e}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
+            file.file.seek(0)  # 确保重置到开头
         
         # 保存文件
         with open(temp_input, "wb") as f:
