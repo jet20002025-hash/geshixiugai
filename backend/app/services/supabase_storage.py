@@ -17,9 +17,20 @@ class SupabaseStorage(StorageBase):
         self.key = os.getenv('SUPABASE_KEY', '')  # service_role key
         self.bucket_name = os.getenv('SUPABASE_BUCKET', 'word-formatter-storage')
         
-        # 构建 API 基础 URL
-        if self.url:
-            self.api_url = f"{self.url}/storage/v1"
+        # 检查URL是否包含占位符或非ASCII字符
+        if self.url and ('你的项目ID' in self.url or 'your-project-id' in self.url.lower()):
+            print(f"⚠️ SUPABASE_URL包含占位符，请设置正确的环境变量")
+            print(f"⚠️ 当前URL: {self.url[:50]}...")
+            self.api_url = None
+        elif self.url:
+            # 检查URL是否包含非ASCII字符
+            try:
+                self.url.encode('ascii')
+                self.api_url = f"{self.url}/storage/v1"
+            except UnicodeEncodeError:
+                print(f"⚠️ SUPABASE_URL包含非ASCII字符: {self.url[:50]}...")
+                print(f"⚠️ 请检查环境变量 SUPABASE_URL 是否正确设置")
+                self.api_url = None
         else:
             self.api_url = None
     
@@ -36,15 +47,32 @@ class SupabaseStorage(StorageBase):
             # 尝试将key编码为ASCII，如果失败则说明key本身有问题
             ascii_key = self.key.encode('ascii').decode('ascii')
         except UnicodeEncodeError:
-            # 如果key包含非ASCII字符，记录错误但不使用
+            # 如果key包含非ASCII字符，尝试使用UTF-8编码后base64编码
+            # 但这通常不应该发生，因为Supabase key应该是ASCII
             print(f"⚠️ SUPABASE_KEY包含非ASCII字符，可能导致上传失败")
+            print(f"⚠️ Key前10个字符: {repr(self.key[:10])}")
+            # 如果key包含非ASCII字符，我们无法在HTTP头中使用它
+            # 这种情况下应该返回错误，但为了不中断流程，我们尝试使用原始key
+            # 实际上，如果key包含非ASCII字符，Supabase API调用肯定会失败
             ascii_key = self.key
         
-        return {
-            "apikey": ascii_key,
+        # 确保所有头值都是字符串类型，并且可以编码为ASCII
+        headers = {
+            "apikey": str(ascii_key),
             "Authorization": f"Bearer {ascii_key}",
             "Content-Type": "application/octet-stream"
         }
+        
+        # 验证所有头值都可以编码为ASCII
+        for header_name, header_value in headers.items():
+            try:
+                str(header_value).encode('ascii')
+            except UnicodeEncodeError as e:
+                print(f"❌ HTTP头 '{header_name}' 的值包含非ASCII字符: {repr(header_value[:20])}")
+                print(f"❌ 这会导致httpx请求失败。请检查环境变量 SUPABASE_KEY 是否正确设置。")
+                raise ValueError(f"HTTP头 '{header_name}' 包含非ASCII字符，无法发送请求") from e
+        
+        return headers
     
     def upload_file(self, key: str, file_obj: BinaryIO) -> bool:
         """上传文件到 Supabase Storage"""
