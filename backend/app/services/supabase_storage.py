@@ -4,7 +4,7 @@ Supabase Storage 存储适配器
 """
 import os
 import httpx
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 from typing import BinaryIO, Optional
 from .storage_base import StorageBase
 
@@ -29,9 +29,20 @@ class SupabaseStorage(StorageBase):
     
     def _get_headers(self) -> dict:
         """获取请求头"""
+        # 确保所有头值都是ASCII或已正确编码的字符串
+        # 如果key包含非ASCII字符，httpx会尝试编码为ASCII并失败
+        # 所以我们需要确保key是纯ASCII
+        try:
+            # 尝试将key编码为ASCII，如果失败则说明key本身有问题
+            ascii_key = self.key.encode('ascii').decode('ascii')
+        except UnicodeEncodeError:
+            # 如果key包含非ASCII字符，记录错误但不使用
+            print(f"⚠️ SUPABASE_KEY包含非ASCII字符，可能导致上传失败")
+            ascii_key = self.key
+        
         return {
-            "apikey": self.key,
-            "Authorization": f"Bearer {self.key}",
+            "apikey": ascii_key,
+            "Authorization": f"Bearer {ascii_key}",
             "Content-Type": "application/octet-stream"
         }
     
@@ -49,8 +60,11 @@ class SupabaseStorage(StorageBase):
             encoded_parts = [quote(part, safe='') for part in key_parts]
             encoded_key = '/'.join(encoded_parts)
             
-            # 上传文件
-            upload_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
+            # 使用httpx.URL直接构建URL，确保正确编码
+            # 这样可以避免字符串拼接导致的编码问题
+            base_url = httpx.URL(self.api_url)
+            path_segments = ['object', self.bucket_name] + encoded_parts
+            upload_url = base_url.copy_with(path='/'.join([''] + path_segments))
             
             with httpx.Client() as client:
                 response = client.post(
@@ -65,6 +79,9 @@ class SupabaseStorage(StorageBase):
             print(f"Supabase upload error: {e}")
             import traceback
             print(f"Supabase upload traceback: {traceback.format_exc()}")
+            # 打印调试信息
+            print(f"Debug: key={key}, encoded_key={encoded_key if 'encoded_key' in locals() else 'N/A'}")
+            print(f"Debug: api_url={self.api_url}, bucket_name={self.bucket_name}")
             return False
     
     def download_file(self, key: str) -> Optional[bytes]:
@@ -75,9 +92,11 @@ class SupabaseStorage(StorageBase):
             # URL编码key中的路径部分（处理中文字符）
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
-            encoded_key = '/'.join(encoded_parts)
             
-            download_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
+            # 使用httpx.URL直接构建URL
+            base_url = httpx.URL(self.api_url)
+            path_segments = ['object', self.bucket_name] + encoded_parts
+            download_url = base_url.copy_with(path='/'.join([''] + path_segments))
             
             with httpx.Client() as client:
                 response = client.get(
@@ -99,10 +118,11 @@ class SupabaseStorage(StorageBase):
             # URL编码key中的路径部分（处理中文字符）
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
-            encoded_key = '/'.join(encoded_parts)
             
-            # 尝试获取文件信息
-            info_url = f"{self.api_url}/object/info/{self.bucket_name}/{encoded_key}"
+            # 使用httpx.URL直接构建URL
+            base_url = httpx.URL(self.api_url)
+            path_segments = ['object', 'info', self.bucket_name] + encoded_parts
+            info_url = base_url.copy_with(path='/'.join([''] + path_segments))
             
             with httpx.Client() as client:
                 response = client.get(
@@ -122,9 +142,11 @@ class SupabaseStorage(StorageBase):
             # URL编码key中的路径部分（处理中文字符）
             key_parts = key.split('/')
             encoded_parts = [quote(part, safe='') for part in key_parts]
-            encoded_key = '/'.join(encoded_parts)
             
-            delete_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
+            # 使用httpx.URL直接构建URL
+            base_url = httpx.URL(self.api_url)
+            path_segments = ['object', self.bucket_name] + encoded_parts
+            delete_url = base_url.copy_with(path='/'.join([''] + path_segments))
             
             with httpx.Client() as client:
                 response = client.delete(
