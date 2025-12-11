@@ -117,6 +117,11 @@ class DocumentService:
         if blank_issues:
             stats["blank_issues"] = blank_issues
         
+        # 检测并删除整页空白页（不允许整页空白）
+        blank_page_issues = self._check_and_remove_blank_pages(final_doc)
+        if blank_page_issues:
+            stats["blank_page_issues"] = blank_page_issues
+        
         # 检测页眉
         header_issues = self._check_header(final_doc)
         if header_issues:
