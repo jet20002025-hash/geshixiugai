@@ -1408,39 +1408,14 @@ class DocumentService:
                     })
                     missing_caption_indices.append(idx)
         
-        # 在文档中标记缺少图题的位置（从后往前插入，避免索引变化）
-        for img_idx in reversed(missing_caption_indices):
-            # 找到图片段落
-            img_paragraph = document.paragraphs[img_idx]
-            
-            # 创建完整的标记段落XML（包含段落属性、run、文本、颜色、高亮等）
-            marker_text = "⚠️ 【缺少图题】请在图片后添加图题，格式如：图X-X 图片说明"
-            # 转义XML特殊字符
-            escaped_text = xml.sax.saxutils.escape(marker_text)
-            
-            new_para_xml = f'''<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                <w:pPr>
-                    <w:jc w:val="left"/>
-                </w:pPr>
-                <w:r>
-                    <w:rPr>
-                        <w:b/>
-                        <w:color w:val="FF0000"/>
-                        <w:highlight w:val="yellow"/>
-                    </w:rPr>
-                    <w:t xml:space="preserve">{escaped_text}</w:t>
-                </w:r>
-            </w:p>'''
-            
-            # 解析并插入新段落
-            new_para_element = parse_xml(new_para_xml)
-            img_paragraph._element.addnext(new_para_element)
+        # 不再在文档中插入标记，只记录问题到issues中
+        # 最终文档应该看起来像标准文档，不显示修改痕迹
         
         return issues
 
     def _check_reference_citations(self, document: Document) -> list:
         """检测参考文献引用标注，检查正文中是否有引用标注，返回缺失引用的问题列表
-        同时标记未被引用的参考文献（标红并添加提示）
+        注意：不在文档中插入标记，只记录问题到issues中，保持文档干净
         """
         issues = []
         
@@ -1911,41 +1886,14 @@ class DocumentService:
             locations = citation_locations.get(ref_num, [])
             
             # 检查是否找到了引用：必须在 cited_reference_numbers 中，并且有位置记录
-            # 如果找到了引用，不添加任何标记（已删除页码信息）
+            # 不再在文档中标记，只记录问题到issues中
+            # 最终文档应该看起来像标准文档，不显示修改痕迹
             if ref_num in cited_reference_numbers and locations:
                 # 找到了引用，不添加任何标记
-                print(f"[DocumentService] 参考文献 {ref_num} 已找到引用，不添加页码信息")
+                print(f"[DocumentService] 参考文献 {ref_num} 已找到引用")
             else:
-                # 未找到标注页码，标记为"未找到标注页"
-                try:
-                    # 将参考文献段落标红
-                    if para.runs:
-                        # 如果段落有 runs，直接设置颜色
-                        for run in para.runs:
-                            run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
-                            run.font.bold = True  # 加粗
-                    else:
-                        # 如果段落没有 runs，尝试添加一个 run（处理空段落或特殊格式）
-                        para_text = para.text if para.text else ""
-                        if para_text:
-                            # 清空段落内容，然后添加带格式的 run
-                            para.clear()
-                            run = para.add_run(para_text)
-                        else:
-                            run = para.add_run("")
-                        run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
-                        run.font.bold = True  # 加粗
-                    
-                    # 在参考文献文本后添加提示
-                    marker_text = "（未找到标注页）"
-                    # 在段落末尾添加红色提示文本
-                    new_run = para.add_run(marker_text)
-                    new_run.font.color.rgb = RGBColor(255, 0, 0)  # 红色
-                    new_run.font.bold = True  # 加粗
-                    print(f"[DocumentService] 参考文献 {ref_num} 未找到标注页")
-                except Exception as e:
-                    # 如果处理失败，记录错误但不中断流程
-                    print(f"[DocumentService] 标记参考文献失败: {e}")
+                # 未找到标注页码，只记录到日志，不修改文档
+                print(f"[DocumentService] 参考文献 {ref_num} 未找到标注页（仅记录，不修改文档）")
         
         # 6. 生成问题报告
         # 统计未找到标注页的参考文献数量
