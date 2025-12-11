@@ -2698,37 +2698,6 @@ class DocumentService:
             z-index: 1;
             white-space: nowrap;
         }}
-        .changes-summary {{
-            background: #e7f3ff;
-            border: 2px solid #2196F3;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
-            position: relative;
-            z-index: 2;
-        }}
-        .changes-summary h3 {{
-            margin-top: 0;
-            color: #1976D2;
-            font-size: 18px;
-        }}
-        .changes-summary ul {{
-            list-style: none;
-            padding-left: 0;
-        }}
-        .changes-summary li {{
-            padding: 8px 0;
-            border-bottom: 1px solid #BBDEFB;
-        }}
-        .changes-summary li:last-child {{
-            border-bottom: none;
-        }}
-        .changes-summary p {{
-            margin-top: 15px;
-            font-size: 16px;
-            color: #1976D2;
-            font-weight: bold;
-        }}
         p {{
             margin: 0;
             padding: 0;
