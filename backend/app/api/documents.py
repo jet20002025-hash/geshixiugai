@@ -890,15 +890,50 @@ async def convert_word_to_pdf(file: UploadFile):
             )
         
         pdf_size = temp_pdf.stat().st_size
-        print(f"[Word转PDF] PDF生成成功: {temp_pdf}, 大小: {pdf_size} bytes")
+        log_msg = f"[Word转PDF] PDF生成成功: {temp_pdf}, 大小: {pdf_size} bytes"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         if pdf_size == 0:
             error_msg = "PDF文件大小为0，转换可能失败"
-            print(f"[Word转PDF] 错误: {error_msg}")
+            print(f"[Word转PDF] 错误: {error_msg}", file=sys.stderr, flush=True)
+            logger.error(error_msg)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_msg
             )
+        
+        # 验证PDF文件内容（检查文件头）
+        try:
+            with open(temp_pdf, "rb") as f:
+                pdf_header = f.read(8)
+                if not pdf_header.startswith(b'%PDF-'):
+                    log_msg = f"[Word转PDF] 警告：PDF文件头不正确: {pdf_header.hex()}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    logger.warning(log_msg)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
+                else:
+                    log_msg = f"[Word转PDF] PDF文件头验证通过: {pdf_header[:5].decode('ascii', errors='ignore')}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    logger.info(log_msg)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
+        except Exception as e:
+            log_msg = f"[Word转PDF] 无法验证PDF文件头: {e}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.warning(log_msg)
         
         # 读取PDF文件并返回
         def generate():
