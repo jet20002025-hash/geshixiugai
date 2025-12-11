@@ -396,7 +396,27 @@ async def download_document(document_id: str, token: str) -> FileResponse:
     pdf_file = service._get_file_from_storage_or_local(document_id, "pdf", "pdf", pdf_path)
     
     if pdf_file and pdf_file.exists():
-        print(f"[Download] 返回带水印的PDF文件: {pdf_file}")
+        # 为下载的PDF添加水印（每页10个水印）
+        import tempfile
+        temp_watermarked_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        temp_watermarked_pdf.close()
+        temp_watermarked_path = Path(temp_watermarked_pdf.name)
+        
+        # 添加水印
+        watermark_success = service._add_pdf_watermarks(
+            pdf_path=pdf_file,
+            output_path=temp_watermarked_path,
+            watermark_text="www.geshixiugai.cn",
+            watermarks_per_page=10
+        )
+        
+        if watermark_success and temp_watermarked_path.exists():
+            # 使用带水印的PDF
+            pdf_file = temp_watermarked_path
+            print(f"[Download] 返回带水印的PDF文件（已添加下载水印）: {pdf_file}")
+        else:
+            # 如果水印添加失败，使用原始PDF
+            print(f"[Download] 水印添加失败，返回原始PDF文件: {pdf_file}")
         # 使用原始文件名（如果存在），否则使用 document_id
         original_filename = metadata.get("original_filename", "")
         if original_filename:

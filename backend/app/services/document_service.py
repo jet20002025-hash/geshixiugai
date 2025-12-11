@@ -2583,6 +2583,125 @@ class DocumentService:
         
         return None
 
+    def _add_pdf_watermarks(self, pdf_path: Path, output_path: Path, watermark_text: str = "www.geshixiugai.cn", watermarks_per_page: int = 10) -> bool:
+        """在PDF的每一页添加多个水印
+        
+        Args:
+            pdf_path: 原始PDF文件路径
+            output_path: 输出PDF文件路径
+            watermark_text: 水印文本
+            watermarks_per_page: 每页水印数量
+        
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            from pypdf import PdfReader, PdfWriter
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.colors import gray
+            import io
+            import math
+            
+            print(f"[PDF水印] 开始为PDF添加水印: {pdf_path}")
+            print(f"[PDF水印] 水印文本: {watermark_text}, 每页水印数: {watermarks_per_page}")
+            
+            # 读取原始PDF
+            reader = PdfReader(str(pdf_path))
+            writer = PdfWriter()
+            
+            # 获取PDF页数
+            num_pages = len(reader.pages)
+            print(f"[PDF水印] PDF总页数: {num_pages}")
+            
+            # 为每一页添加水印
+            for page_num in range(num_pages):
+                page = reader.pages[page_num]
+                
+                # 获取页面尺寸
+                page_box = page.mediabox
+                page_width = float(page_box.width)
+                page_height = float(page_box.height)
+                
+                print(f"[PDF水印] 处理第 {page_num + 1} 页, 尺寸: {page_width}x{page_height}")
+                
+                # 创建水印PDF（使用reportlab）
+                watermark_pdf = io.BytesIO()
+                c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
+                
+                # 设置水印样式
+                c.setFillColor(gray(0.6))  # 浅灰色，稍微深一点以便可见
+                c.setFont("Helvetica-Bold", 18)  # 字体大小
+                
+                # 计算水印位置（在页面上均匀分布）
+                # 使用网格布局：3列4行或类似布局
+                cols = 3
+                rows = math.ceil(watermarks_per_page / cols)
+                
+                # 计算每个水印的位置（留出边距）
+                margin_x = page_width * 0.1
+                margin_y = page_height * 0.1
+                usable_width = page_width - 2 * margin_x
+                usable_height = page_height - 2 * margin_y
+                
+                x_step = usable_width / (cols + 1) if cols > 1 else usable_width / 2
+                y_step = usable_height / (rows + 1) if rows > 1 else usable_height / 2
+                
+                # 添加水印
+                watermark_count = 0
+                for row in range(rows):
+                    for col in range(cols):
+                        if watermark_count >= watermarks_per_page:
+                            break
+                        
+                        # 计算水印位置（相对于页面左下角）
+                        x = margin_x + (col + 1) * x_step
+                        y = margin_y + (row + 1) * y_step
+                        
+                        # 绘制水印文本（旋转45度）
+                        c.saveState()
+                        c.translate(x, y)
+                        c.rotate(45)  # 旋转45度
+                        c.drawString(0, 0, watermark_text)
+                        c.restoreState()
+                        
+                        watermark_count += 1
+                    
+                    if watermark_count >= watermarks_per_page:
+                        break
+                
+                c.save()
+                watermark_pdf.seek(0)
+                
+                # 读取水印PDF
+                watermark_reader = PdfReader(watermark_pdf)
+                watermark_page = watermark_reader.pages[0]
+                
+                # 合并水印到原页面
+                page.merge_page(watermark_page)
+                
+                # 添加到输出PDF
+                writer.add_page(page)
+                
+                print(f"[PDF水印] 第 {page_num + 1} 页水印添加完成（共 {watermark_count} 个水印）")
+            
+            # 保存输出PDF
+            with open(output_path, 'wb') as output_file:
+                writer.write(output_file)
+            
+            output_size = output_path.stat().st_size
+            print(f"[PDF水印] ✅ PDF水印添加成功: {output_path}, 大小: {output_size / 1024:.2f} KB")
+            return True
+            
+        except ImportError as e:
+            print(f"[PDF水印] ❌ 缺少必要的库: {e}")
+            print(f"[PDF水印] 请安装: pip install reportlab")
+            return False
+        except Exception as e:
+            print(f"[PDF水印] ❌ 添加水印失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     def _generate_watermarked_preview(self, final_path: Path, preview_path: Path) -> None:
         shutil.copy2(final_path, preview_path)
         document = Document(preview_path)
