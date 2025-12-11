@@ -646,6 +646,9 @@ async def convert_word_to_pdf(file: UploadFile):
     """
     将Word文档转换为PDF（使用LibreOffice）
     
+    注意：此接口返回转换后的PDF文件，不是原始Word文档。
+    转换过程会保持文档内容和格式，但文件格式从Word变为PDF。
+    
     这是一个测试接口，用于验证LibreOffice转换功能
     """
     # 立即输出日志，确认函数被调用（使用多种方式确保日志能被看到）
