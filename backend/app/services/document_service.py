@@ -216,6 +216,7 @@ class DocumentService:
             "status": "completed",
             "paid": False,
             "download_token": download_token,  # 下载验证 token
+            "original_filename": original_filename,  # 保存原始文件名
             "summary": stats,
             "report_path": str(report_path),
             "preview_path": str(preview_path),
