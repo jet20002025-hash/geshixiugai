@@ -2666,10 +2666,11 @@ class DocumentService:
                         c.saveState()
                         c.translate(x, y)
                         c.rotate(45)  # 旋转45度
-                        # 使用更大的字体，并添加描边使水印更清晰
+                        # 使用红色填充和描边，确保水印清晰可见
+                        c.setFillColor(red)
                         c.setStrokeColor(red)
-                        c.setLineWidth(1)
-                        # 绘制文本（带描边效果，更清晰）
+                        c.setLineWidth(0.5)
+                        # 绘制文本（红色，清晰可见）
                         c.drawString(0, 0, watermark_text)
                         c.restoreState()
                         
