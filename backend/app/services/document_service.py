@@ -692,21 +692,37 @@ class DocumentService:
         toc_end = None
         body_start = None
         
-        # 查找诚信承诺（通常在封面之后，摘要之前）
-        integrity_keywords = ["诚信承诺", "诚信", "承诺", "学术诚信", "原创性声明"]
+        # 查找诚信承诺（通常在封面之后，摘要之前，第二页）
+        # 支持"诚信承诺"中间有空格的情况，如"诚信 承诺"、"诚 信 承 诺"等
+        integrity_pattern = re.compile(r'诚\s*信\s*承\s*诺', re.IGNORECASE)
+        integrity_keywords = ["学术诚信", "原创性声明", "原创声明"]
+        
         for idx in range(cover_end, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if not para_text:
                 continue
-            # 检查是否包含诚信承诺相关关键词
-            for keyword in integrity_keywords:
-                if keyword in para_text and integrity_start is None:
-                    integrity_start = idx
+            
+            # 检查是否匹配"诚信承诺"（允许中间有空格）
+            if integrity_pattern.search(para_text) and integrity_start is None:
+                integrity_start = idx
+                continue
+            
+            # 也检查其他诚信承诺相关关键词
+            if integrity_start is None:
+                for keyword in integrity_keywords:
+                    if keyword in para_text:
+                        integrity_start = idx
+                        break
+            
+            # 诚信承诺的结束标志：遇到"摘要"或"ABSTRACT"时结束
+            # 注意：诚信承诺应该在独立的一页，所以遇到"摘要"就应该结束
+            if integrity_start is not None:
+                # 检查是否是摘要开始
+                if para_text.startswith("摘要") or para_text.startswith("ABSTRACT"):
+                    integrity_end = idx
                     break
-            # 诚信承诺的结束标志：通常是"摘要"或"ABSTRACT"
-            if integrity_start is not None and (para_text.startswith("摘要") or para_text.startswith("ABSTRACT")):
-                integrity_end = idx
-                break
+                # 如果已经找到诚信承诺，且当前段落很长（可能是摘要内容），也结束
+                # 但优先使用"摘要"作为结束标志
         
         # 如果找到了诚信承诺，但没找到结束标志，假设到摘要之前
         if integrity_start is not None and integrity_end is None:
