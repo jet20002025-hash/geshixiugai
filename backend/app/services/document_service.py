@@ -1251,8 +1251,9 @@ class DocumentService:
         return min(skip_count, len(document.paragraphs) - 1)
 
     def _check_figure_captions(self, document: Document) -> list:
-        """检测文档中的图片，检查是否有图题，返回缺失图题的图片列表，并在文档中标记错误
-        注意：只从正文开始检测，跳过封面、目录等前置部分"""
+        """检测文档中的图片，检查是否有图题，返回缺失图题的图片列表
+        注意：只从正文开始检测，跳过封面、目录等前置部分
+        注意：不在文档中插入标记，只记录问题到issues中，保持文档干净"""
         issues = []
         missing_caption_indices = []  # 记录缺少图题的图片段落索引
         
