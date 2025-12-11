@@ -526,9 +526,6 @@
             tryLoadDocxPreview().catch(err => {
                 console.error('加载docx-preview失败:', err);
             });
-            
-            // 立即开始加载
-            tryLoadDocxPreview();
         })();
     </script>
     
@@ -1268,14 +1265,6 @@
                     loaded = true;
                     clearTimeout(loadTimeout);
                     console.error('iframe加载错误:', error);
-                    showError('加载失败', '预览内容加载失败，请刷新页面重试');
-                };
-                
-                // 处理iframe加载错误
-                iframe.onerror = (e) => {
-                    loaded = true;
-                    clearTimeout(loadTimeout);
-                    console.error('iframe加载错误:', e);
                     showError('预览加载失败', '无法在iframe中加载预览内容，请稍后重试');
                 };
                 
