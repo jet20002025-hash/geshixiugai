@@ -1003,8 +1003,9 @@ class DocumentService:
                     if len(unique_fonts) > 1:
                         # 段落中有多种字体，保留各自的字体，只统一字号和行距
                         print(f"[格式应用] 段落 {idx} 检测到多种字体: {unique_fonts}，保留各自字体")
-                        # 移除字体设置，保留其他格式
+                        # 移除字体设置，并标记为保留字体
                         rule.pop("font_name", None)
+                        rule["_preserve_fonts"] = True  # 标记为保留字体
                         # 只设置字号和行距（如果规则中有）
                         if DEFAULT_STYLE in FONT_STANDARDS:
                             standard_body = FONT_STANDARDS[DEFAULT_STYLE]

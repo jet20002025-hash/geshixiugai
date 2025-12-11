@@ -216,6 +216,9 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
     font_name = rule.get("font_name")
     bold_value = rule.get("bold")
     
+    # 检查是否应该保留原有字体（如果 rule 中没有 font_name，或者明确标记为保留字体）
+    preserve_fonts = rule.get("_preserve_fonts", False) or font_name is None
+    
     # 如果规则中指定了字体大小，强制应用到所有runs，确保段落内字体大小一致
     if font_size is not None:
         for run in paragraph.runs:
@@ -223,9 +226,9 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             # 强制设置字体大小，覆盖原有的任何设置
             font.size = Pt(font_size)
             
-            # 应用字体名称（只有当规则中明确指定了字体名称时才应用）
-            # 如果 font_name 为 None，保留原有字体
-            if font_name is not None:
+            # 应用字体名称（只有当规则中明确指定了字体名称且不需要保留字体时才应用）
+            # 如果 preserve_fonts 为 True 或 font_name 为 None，保留原有字体
+            if not preserve_fonts and font_name is not None:
                 font.name = font_name
                 r_pr = run._element.get_or_add_rPr()
                 r_fonts = r_pr.rFonts
@@ -257,9 +260,10 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             if unified_font_size is not None:
                 font.size = Pt(unified_font_size)
             
-            # 应用字体名称（只有当规则中明确指定了字体名称时才应用）
-            # 如果 font_name 为 None，保留原有字体
-            if font_name is not None:
+            # 应用字体名称（只有当规则中明确指定了字体名称且不需要保留字体时才应用）
+            # 检查是否应该保留原有字体
+            preserve_fonts = rule.get("_preserve_fonts", False) or font_name is None
+            if not preserve_fonts and font_name is not None:
                 font.name = font_name
                 r_pr = run._element.get_or_add_rPr()
                 r_fonts = r_pr.rFonts
