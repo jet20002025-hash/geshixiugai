@@ -2628,18 +2628,23 @@ class DocumentService:
                 watermark_pdf = io.BytesIO()
                 c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
                 
-                # 设置水印样式
-                c.setFillColor(gray(0.6))  # 浅灰色，稍微深一点以便可见
-                c.setFont("Helvetica-Bold", 18)  # 字体大小
+                # 设置水印样式 - 红色、大字体、清晰可见
+                from reportlab.lib.colors import red
+                c.setFillColor(red)  # 红色
+                # 根据页面大小计算字体大小，确保水印覆盖至少三分之二的页面
+                # 字体大小约为页面宽度的1/15到1/20，确保水印足够大
+                font_size = max(40, int(page_width / 15))
+                c.setFont("Helvetica-Bold", font_size)
                 
-                # 计算水印位置（在页面上均匀分布）
+                # 计算水印位置（覆盖页面至少三分之二的面积）
                 # 使用网格布局：3列4行或类似布局
                 cols = 3
                 rows = math.ceil(watermarks_per_page / cols)
                 
-                # 计算每个水印的位置（留出边距）
-                margin_x = page_width * 0.1
-                margin_y = page_height * 0.1
+                # 计算每个水印的位置（覆盖页面中心区域，至少三分之二）
+                # 边距设置为页面尺寸的1/6，这样中心区域占2/3
+                margin_x = page_width / 6
+                margin_y = page_height / 6
                 usable_width = page_width - 2 * margin_x
                 usable_height = page_height - 2 * margin_y
                 
@@ -2657,10 +2662,14 @@ class DocumentService:
                         x = margin_x + (col + 1) * x_step
                         y = margin_y + (row + 1) * y_step
                         
-                        # 绘制水印文本（旋转45度）
+                        # 绘制水印文本（旋转45度，更大更清晰）
                         c.saveState()
                         c.translate(x, y)
                         c.rotate(45)  # 旋转45度
+                        # 使用更大的字体，并添加描边使水印更清晰
+                        c.setStrokeColor(red)
+                        c.setLineWidth(1)
+                        # 绘制文本（带描边效果，更清晰）
                         c.drawString(0, 0, watermark_text)
                         c.restoreState()
                         
@@ -2668,6 +2677,21 @@ class DocumentService:
                     
                     if watermark_count >= watermarks_per_page:
                         break
+                
+                # 确保水印覆盖足够大的面积 - 在页面中心添加一个大的水印
+                center_x = page_width / 2
+                center_y = page_height / 2
+                c.saveState()
+                c.translate(center_x, center_y)
+                c.rotate(45)
+                # 中心水印使用更大的字体
+                center_font_size = max(60, int(page_width / 10))
+                c.setFont("Helvetica-Bold", center_font_size)
+                c.setFillColor(red)
+                # 获取文本宽度，居中显示
+                text_width = c.stringWidth(watermark_text, "Helvetica-Bold", center_font_size)
+                c.drawString(-text_width / 2, 0, watermark_text)
+                c.restoreState()
                 
                 c.save()
                 watermark_pdf.seek(0)
