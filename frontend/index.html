@@ -408,19 +408,20 @@
         <p><strong>文档 ID：</strong><span id="docId"></span></p>
         <p><strong>处理状态：</strong><span id="docStatus"></span></p>
         <p><strong>已付费：</strong><span id="docPaid"></span></p>
-        <div id="changesSummary" style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+        <!-- 检测结果不再在首页显示，如需展示可放在论文文档末尾作为附录 -->
+        <div id="changesSummary" style="display: none !important;">
           <h3 style="margin-top: 0; color: #1976D2;">📝 格式修改摘要</h3>
           <div id="changesContent"></div>
         </div>
-        <div id="figureIssues" style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+        <div id="figureIssues" style="display: none !important;">
           <h3 style="margin-top: 0; color: #856404;">⚠️ 图片检测结果</h3>
           <div id="figureIssuesContent"></div>
         </div>
-        <div id="referenceIssues" style="background: #ffe0e0; border: 2px solid #f44336; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+        <div id="referenceIssues" style="display: none !important;">
           <h3 style="margin-top: 0; color: #c62828;">📚 参考文献引用检测结果</h3>
           <div id="referenceIssuesContent"></div>
         </div>
-        <div id="blankIssues" style="background: #fff3e0; border: 2px solid #ff9800; padding: 15px; border-radius: 5px; margin: 15px 0; display: none;">
+        <div id="blankIssues" style="display: none !important;">
           <h3 style="margin-top: 0; color: #e65100;">📄 空白检测结果</h3>
           <div id="blankIssuesContent"></div>
         </div>
@@ -1114,103 +1115,26 @@
               html += `<li style='padding: 5px 0;'><strong>${fieldName}</strong>: 修改了 <strong style='color: #1976D2;'>${count}</strong> 处</li>`;
             }
             html += `</ul><p style='margin-top: 10px; font-weight: bold; color: #1976D2;'>总计修改了 <strong>${data.summary.paragraphs_adjusted || 0}</strong> 个段落</p>`;
-            changesContent.innerHTML = html;
-            changesSummary.style.display = "block";
-          } else {
-            changesSummary.style.display = "none";
+            // 检测结果不再在首页显示，如需展示可放在论文文档末尾作为附录
+            // changesContent.innerHTML = html;
+            // changesSummary.style.display = "block";
           }
+          // 始终隐藏格式修改摘要
+          changesSummary.style.display = "none";
 
-          // 显示图片检测结果
-          if (data.summary && data.summary.figure_issues && data.summary.figure_issues.length > 0) {
-            const issues = data.summary.figure_issues;
-            let html = `<p style="color: #856404; font-weight: bold;">发现 <strong>${issues.length}</strong> 处图片缺少图题：</p><ul style="list-style: none; padding-left: 0;">`;
-            for (const issue of issues.slice(0, 10)) {
-              html += `<li style="padding: 8px 0; border-bottom: 1px solid #ffc107;"><strong>第 ${issue.paragraph_index + 1} 段</strong>: ${issue.message}<br><small style="color: #666;">${issue.suggestion}</small></li>`;
-            }
-            if (issues.length > 10) {
-              html += `<li style="padding: 8px 0; color: #666;">... 还有 ${issues.length - 10} 处问题未显示</li>`;
-            }
-            html += '</ul>';
-            figureIssuesContent.innerHTML = html;
-            figureIssues.style.display = "block";
-          } else {
-            figureIssues.style.display = "none";
-          }
+          // 检测结果不再在首页显示，如需展示可放在论文文档末尾作为附录
+          // 隐藏图片检测结果
+          figureIssues.style.display = "none";
 
-          // 显示参考文献引用检测结果
+          // 检测结果不再在首页显示，如需展示可放在论文文档末尾作为附录
+          // 隐藏参考文献引用检测结果
           const referenceIssues = document.getElementById("referenceIssues");
-          const referenceIssuesContent = document.getElementById("referenceIssuesContent");
-          if (data.summary && data.summary.reference_issues && data.summary.reference_issues.length > 0) {
-            const issues = data.summary.reference_issues;
-            let html = "";
-            for (const issue of issues) {
-              if (issue.type === "no_reference_section") {
-                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
-              } else if (issue.type === "no_reference_items") {
-                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p><p style="color: #666; margin-top: 5px;">${issue.suggestion}</p>`;
-              } else if (issue.type === "uncited_references") {
-                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
-                if (issue.uncited_count) {
-                  html += `<p style="color: #666; margin-top: 5px;">发现 <strong style="color: #c62828;">${issue.uncited_count}</strong> 条参考文献在正文中未被引用，已在文档中标记为<strong style="color: #c62828;">红色</strong>。</p>`;
-                }
-                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
-                if (issue.uncited_references && issue.uncited_references.length > 0) {
-                  html += `<p style="color: #666; margin-top: 10px; font-weight: bold;">未被引用的参考文献：</p><ul style="list-style: none; padding-left: 0; margin-top: 5px;">`;
-                  for (const ref of issue.uncited_references) {
-                    html += `<li style="padding: 5px 0; border-bottom: 1px solid #f44336;"><strong style="color: #c62828;">[${ref.number}]</strong>: ${ref.text_preview}</li>`;
-                  }
-                  if (issue.uncited_count > issue.uncited_references.length) {
-                    html += `<li style="padding: 5px 0; color: #666;">... 还有 ${issue.uncited_count - issue.uncited_references.length} 条未被引用的参考文献</li>`;
-                  }
-                  html += '</ul>';
-                }
-              } else if (issue.type === "insufficient_references") {
-                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
-                if (issue.current_count !== undefined && issue.required_count !== undefined) {
-                  html += `<p style="color: #666; margin-top: 5px;">当前有 <strong style="color: #c62828;">${issue.current_count}</strong> 篇参考文献，需要至少 <strong style="color: #c62828;">${issue.required_count}</strong> 篇，还缺少 <strong style="color: #c62828;">${issue.missing_count}</strong> 篇。</p>`;
-                }
-                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
-              } else if (issue.type === "missing_citations") {
-                html += `<p style="color: #c62828; font-weight: bold;">⚠️ ${issue.message}</p>`;
-                if (issue.reference_count) {
-                  html += `<p style="color: #666; margin-top: 5px;">发现 <strong>${issue.reference_count}</strong> 条参考文献，但正文中未找到引用标注。</p>`;
-                }
-                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
-                if (issue.missing_citation_paragraphs && issue.missing_citation_paragraphs.length > 0) {
-                  html += `<p style="color: #666; margin-top: 10px; font-weight: bold;">可能缺少引用的段落：</p><ul style="list-style: none; padding-left: 0; margin-top: 5px;">`;
-                  for (const para of issue.missing_citation_paragraphs) {
-                    html += `<li style="padding: 5px 0; border-bottom: 1px solid #f44336;"><strong>第 ${para.paragraph_index + 1} 段</strong>: ${para.text_preview}</li>`;
-                  }
-                  html += '</ul>';
-                }
-              }
-            }
-            referenceIssuesContent.innerHTML = html;
-            referenceIssues.style.display = "block";
-          } else {
-            referenceIssues.style.display = "none";
-          }
+          referenceIssues.style.display = "none";
 
-          // 显示空白检测结果
+          // 检测结果不再在首页显示，如需展示可放在论文文档末尾作为附录
+          // 隐藏空白检测结果
           const blankIssues = document.getElementById("blankIssues");
-          const blankIssuesContent = document.getElementById("blankIssuesContent");
-          if (data.summary && data.summary.blank_issues && data.summary.blank_issues.length > 0) {
-            const issues = data.summary.blank_issues;
-            let html = "";
-            for (const issue of issues) {
-              if (issue.type === "excessive_blanks_in_chapter") {
-                html += `<p style="color: #e65100; font-weight: bold; margin-top: 10px;">⚠️ ${issue.message}</p>`;
-                html += `<p style="color: #666; margin-top: 5px;"><strong>建议：</strong>${issue.suggestion}</p>`;
-                if (issue.paragraph_indices && issue.paragraph_indices.length > 0) {
-                  html += `<p style="color: #666; margin-top: 5px;">涉及段落：第 ${issue.paragraph_indices[0] + 1} 段到第 ${issue.paragraph_indices[issue.paragraph_indices.length - 1] + 1} 段（共 ${issue.blank_count} 个空白段落）</p>`;
-                }
-              }
-            }
-            blankIssuesContent.innerHTML = html;
-            blankIssues.style.display = "block";
-          } else {
-            blankIssues.style.display = "none";
-          }
+          blankIssues.style.display = "none";
 
           previewLinks.innerHTML = "";
           
