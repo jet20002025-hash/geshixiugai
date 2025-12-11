@@ -1016,7 +1016,7 @@
         }
         
         // 加载预览内容
-        async function loadPreview() {
+        window.loadPreview = async function loadPreview() {
             console.log('========== 开始加载预览 ==========');
             console.log('文档ID:', docId);
             console.log('当前URL:', window.location.href);
