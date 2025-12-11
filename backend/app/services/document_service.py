@@ -2598,7 +2598,7 @@ class DocumentService:
         try:
             from pypdf import PdfReader, PdfWriter
             from reportlab.pdfgen import canvas
-            from reportlab.lib.colors import gray
+            from reportlab.lib.colors import red
             import io
             import math
             
