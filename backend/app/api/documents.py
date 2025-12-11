@@ -727,12 +727,35 @@ async def convert_word_to_pdf(file: UploadFile):
         log_msg = f"[Word转PDF] 文件保存完成: 上传大小={uploaded_size}, 保存大小={saved_size} bytes"
         print(log_msg, file=sys.stderr, flush=True)
         logger.info(log_msg)
+        try:
+            with open("/var/log/geshixiugai/error.log", "a") as f:
+                f.write(f"{log_msg}\n")
+        except Exception:
+            pass
         
         if saved_size == 0:
+            error_msg = "上传的文件为空"
+            log_msg = f"[Word转PDF] 错误: {error_msg}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.error(log_msg)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="上传的文件为空"
+                detail=error_msg
             )
+        
+        # 验证文件大小是否匹配（允许小的差异，但不应超过1%）
+        if uploaded_size > 0:
+            size_diff = abs(saved_size - uploaded_size)
+            size_diff_percent = (size_diff / uploaded_size) * 100
+            if size_diff_percent > 1:
+                log_msg = f"[Word转PDF] 警告：文件大小不匹配！上传={uploaded_size}, 保存={saved_size}, 差异={size_diff} bytes ({size_diff_percent:.2f}%)"
+                print(log_msg, file=sys.stderr, flush=True)
+                logger.warning(log_msg)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
         
         # 确保文件权限正确（可读）
         os.chmod(temp_input, 0o644)
