@@ -746,39 +746,31 @@ async def convert_word_to_pdf(file: UploadFile):
                         logger.warning(f"[Word转PDF] 清理临时文件失败: {e}")
         
         # 返回PDF文件流
-        # 处理中文文件名编码问题：确保响应头只包含 ASCII 字符
-        pdf_filename = f"{Path(file.filename).stem}.pdf"
-        
-        # 生成纯 ASCII 文件名（避免编码问题）
-        ascii_filename = f"converted_{Path(file.filename).stem[:20]}.pdf"
+        # 处理中文文件名编码问题：使用纯 ASCII 文件名，避免 latin-1 编码错误
+        # 生成安全的 ASCII 文件名
+        original_stem = Path(file.filename).stem
         # 移除非ASCII字符，只保留字母、数字、点、下划线、连字符
-        ascii_filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in ascii_filename)
-        if not ascii_filename.endswith('.pdf'):
-            ascii_filename = ascii_filename + '.pdf'
+        safe_stem = ''.join(c if c.isalnum() or c in '._-' else '_' for c in original_stem)
+        # 限制长度，避免文件名过长
+        safe_stem = safe_stem[:30] if len(safe_stem) > 30 else safe_stem
+        # 如果清理后为空，使用默认名称
+        if not safe_stem:
+            safe_stem = "converted_document"
         
-        # 使用 RFC 5987 格式编码 UTF-8 文件名
-        # 注意：确保整个 Content-Disposition 字符串只包含 ASCII 字符
-        try:
-            # 使用 quote 编码 UTF-8 文件名（结果只包含 ASCII 字符）
-            encoded_filename = quote(pdf_filename, safe='', encoding='utf-8')
-            # 构建 Content-Disposition 头（所有字符都是 ASCII）
-            content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-        except Exception as e:
-            # 如果编码失败，只使用 ASCII 文件名
-            log_msg = f"[Word转PDF] 文件名编码失败，使用ASCII文件名: {e}"
-            print(log_msg, file=sys.stderr, flush=True)
-            logger.warning(log_msg)
-            content_disposition = f'attachment; filename="{ascii_filename}"'
+        ascii_filename = f"{safe_stem}.pdf"
+        
+        # 只使用 ASCII 文件名，避免任何编码问题
+        content_disposition = f'attachment; filename="{ascii_filename}"'
         
         # 验证 Content-Disposition 只包含 ASCII 字符
         try:
             content_disposition.encode('ascii')
-        except UnicodeEncodeError:
-            # 如果仍然包含非ASCII字符，只使用 ASCII 文件名
-            log_msg = "[Word转PDF] Content-Disposition 包含非ASCII字符，使用纯ASCII文件名"
+        except UnicodeEncodeError as e:
+            # 如果仍然包含非ASCII字符，使用默认文件名
+            log_msg = f"[Word转PDF] Content-Disposition 编码验证失败: {e}，使用默认文件名"
             print(log_msg, file=sys.stderr, flush=True)
             logger.warning(log_msg)
-            content_disposition = f'attachment; filename="{ascii_filename}"'
+            content_disposition = 'attachment; filename="converted_document.pdf"'
         
         return StreamingResponse(
             generate(),
