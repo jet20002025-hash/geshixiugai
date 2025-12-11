@@ -976,18 +976,48 @@ class DocumentService:
                     # 也移除首行缩进，图片/流程图段落通常不需要缩进
                     rule.pop("first_line_indent", None)
                 
-                # 对于正文段落（非标题、非图片、非公式、非流程图），强制使用宋体
+                # 对于正文段落（非标题、非图片、非公式、非流程图），保留提取到的字体或使用宋体
                 if not is_heading and not has_image_or_equation and not has_flowchart:
-                    # 无论应用什么规则，正文段落都必须使用宋体
+                    # 检查段落中提取到的字体
+                    para_format = docx_format_utils.extract_paragraph_format(paragraph)
+                    extracted_font = para_format.get("font_name")
+                    
+                    # 如果提取到楷体、宋体、Times New Roman，保留这些字体
+                    if extracted_font:
+                        font_lower = extracted_font.lower()
+                        if "楷" in extracted_font or "kaiti" in font_lower or "kai" in font_lower:
+                            rule["font_name"] = "楷体"
+                            print(f"[格式应用] 段落 {idx} 保留字体：楷体")
+                        elif "宋" in extracted_font or "simsun" in font_lower or "song" in font_lower:
+                            rule["font_name"] = "宋体"
+                            print(f"[格式应用] 段落 {idx} 保留字体：宋体")
+                        elif "times" in font_lower or "new roman" in font_lower or "tnr" in font_lower:
+                            rule["font_name"] = "Times New Roman"
+                            print(f"[格式应用] 段落 {idx} 保留字体：Times New Roman")
+                        elif "黑" in extracted_font or "simhei" in font_lower or "hei" in font_lower:
+                            # 正文段落中的黑体，保持为黑体（可能是特殊强调）
+                            rule["font_name"] = "黑体"
+                            print(f"[格式应用] 段落 {idx} 保留字体：黑体")
+                        else:
+                            # 其他字体，默认使用宋体
+                            if DEFAULT_STYLE in FONT_STANDARDS:
+                                standard_body = FONT_STANDARDS[DEFAULT_STYLE]
+                                rule["font_name"] = standard_body.get("font_name", "宋体")
+                                rule["font_size"] = standard_body.get("font_size", 12)
+                                rule["line_spacing"] = standard_body.get("line_spacing", 20)
+                                rule["bold"] = standard_body.get("bold", False)
+                                rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
+                            print(f"[格式应用] 段落 {idx} 使用默认字体：宋体、12pt、行距20磅")
+                    else:
+                        # 如果没有提取到字体，使用默认宋体
                         if DEFAULT_STYLE in FONT_STANDARDS:
                             standard_body = FONT_STANDARDS[DEFAULT_STYLE]
-                            # 强制设置正文格式：宋体、12pt、非加粗、20磅行距
                             rule["font_name"] = standard_body.get("font_name", "宋体")
                             rule["font_size"] = standard_body.get("font_size", 12)
                             rule["bold"] = standard_body.get("bold", False)
                             rule["line_spacing"] = standard_body.get("line_spacing", 20)
                             rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
-                        print(f"[格式应用] 段落 {idx} 强制设置为正文格式：宋体、12pt、行距20磅")
+                        print(f"[格式应用] 段落 {idx} 使用默认字体：宋体、12pt、行距20磅")
                 # 对于标题，确保使用黑体
                 elif is_heading:
                     # 标题必须使用黑体，如果规则中没有指定，使用标准标题格式
