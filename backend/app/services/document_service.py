@@ -4235,6 +4235,34 @@ read_file
             # 确保输入文件可读
             os.chmod(abs_docx_path, 0o644)
             
+            # 处理中文文件名问题：总是使用临时文件，避免中文文件名导致的问题
+            import tempfile
+            import shutil
+            import uuid
+            temp_input = None
+            temp_output_name = None
+            use_temp_file = True  # 总是使用临时文件，避免中文文件名问题
+            
+            # 生成唯一的临时文件名
+            temp_id = str(uuid.uuid4())[:8]
+            temp_input = abs_output_dir / f"temp_input_{temp_id}{abs_docx_path.suffix}"
+            temp_output_name = f"temp_input_{temp_id}.pdf"
+            
+            # 复制文件到临时文件
+            shutil.copy2(abs_docx_path, temp_input)
+            os.chmod(temp_input, 0o644)
+            log_msg = f"[PDF预览] 使用临时文件避免中文文件名问题: {temp_input} -> {temp_output_name}"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
+            
+            # 使用临时文件
+            input_file = temp_input
+            expected_pdf_name = temp_output_name
+            
             # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
             # 但首先尝试直接执行
             cmd_abs = [
@@ -4245,7 +4273,7 @@ read_file
                 '--nolockcheck',  # 不检查文件锁定
                 '--convert-to', 'pdf',
                 '--outdir', str(abs_output_dir),
-                str(abs_docx_path)
+                str(input_file)
             ]
             
             log_msg = f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}"
@@ -4274,14 +4302,29 @@ read_file
             try:
                 file_stat = abs_docx_path.stat()
                 log_msg = f"[PDF预览] 文件权限: {oct(file_stat.st_mode)}, 所有者UID: {file_stat.st_uid}, GID: {file_stat.st_gid}"
-                print(log_msg, flush=True)
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
                 # 检查当前用户
                 current_uid = os.getuid()
                 log_msg = f"[PDF预览] 当前用户UID: {current_uid}"
-                print(log_msg, flush=True)
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
             except Exception as e:
                 log_msg = f"[PDF预览] 无法获取文件权限信息: {e}"
-                print(log_msg, flush=True)
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
             
             result = subprocess.run(
                 cmd_abs,
@@ -4318,7 +4361,7 @@ read_file
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
             # 使用绝对路径查找
-            generated_pdf = abs_output_dir / f"{abs_docx_path.stem}.pdf"
+            generated_pdf = abs_output_dir / expected_pdf_name
             
             # 等待文件生成（LibreOffice 可能需要一点时间）
             import time
@@ -4328,21 +4371,48 @@ read_file
             while not generated_pdf.exists() and waited < max_wait:
                 time.sleep(wait_interval)
                 waited += wait_interval
-                print(f"[PDF预览] 等待PDF文件生成... ({waited:.1f}s)")
+                log_msg = f"[PDF预览] 等待PDF文件生成... ({waited:.1f}s)"
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
             
             # 检查是否成功生成PDF文件（即使返回码非零，也可能成功转换）
             if generated_pdf.exists():
                 # 验证文件大小（应该大于0）
                 pdf_size = generated_pdf.stat().st_size
                 if pdf_size > 0:
-                    print(f"[PDF预览] ✅ PDF文件已生成: {generated_pdf}, 大小: {pdf_size / 1024:.2f} KB")
+                    log_msg = f"[PDF预览] ✅ PDF文件已生成: {generated_pdf}, 大小: {pdf_size / 1024:.2f} KB"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
                     # 即使返回码非零，只要文件生成了就认为成功
                     # 将生成的PDF移动到目标路径
                     shutil.move(str(generated_pdf), str(pdf_path))
-                    print(f"[PDF预览] LibreOffice PDF转换成功，文件已移动到: {pdf_path}")
+                    log_msg = f"[PDF预览] LibreOffice PDF转换成功，文件已移动到: {pdf_path}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
+                    # 清理临时文件
+                    if temp_input and temp_input.exists():
+                        temp_input.unlink()
                     return True
                 else:
-                    print(f"[PDF预览] ⚠️ PDF文件存在但大小为0: {generated_pdf}")
+                    log_msg = f"[PDF预览] ⚠️ PDF文件存在但大小为0: {generated_pdf}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
             
             # 如果找不到预期的PDF文件，尝试列出输出目录中的所有文件
             if not generated_pdf.exists():
