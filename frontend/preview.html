@@ -181,11 +181,15 @@
         
         .main-preview {
             flex: 1;
-            background: #fff;
+            background: #e5e7eb;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: auto;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             position: relative;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem;
         }
         
         .preview-iframe {
@@ -198,17 +202,29 @@
             width: 100%;
             height: 100%;
             overflow: auto;
-            background: #525252;
+            background: #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 2rem;
         }
         
         .pdf-page {
-            margin: 1rem auto;
+            /* A4纸张尺寸：210mm x 297mm，在96 DPI下约为794px x 1123px */
+            width: 794px;
+            min-height: 1123px;
+            margin: 0 auto 2rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             background: #fff;
+            /* 根据可用空间自动缩放，但保持A4比例 */
+            max-width: calc(100vw - 300px); /* 减去侧边栏和padding */
         }
         
         .pdf-page canvas {
             display: block;
+            width: 100%;
+            height: auto;
         }
         
         /* Word文档预览样式 */
@@ -216,19 +232,26 @@
             width: 100%;
             height: 100%;
             overflow: auto;
-            padding: 20px;
-            background: #f5f5f5;
+            padding: 2rem;
+            background: #e5e7eb;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
         }
         
         #docxViewer .docx-wrapper {
-            max-width: 816px; /* A4宽度（96 DPI = 21cm * 37.8px/cm ≈ 816px） */
+            /* A4纸张尺寸：210mm x 297mm，在96 DPI下约为794px x 1123px */
+            width: 794px;
+            min-height: 1123px;
             margin: 0 auto;
             background: #fff;
             /* 页边距：上3cm、下2cm、左3cm、右2cm（根据Word文档实际页边距设置） */
             padding: 113px 76px 76px 113px; /* 上=3cm*37.8≈113px, 下=2cm*37.8≈76px, 左=3cm*37.8≈113px, 右=2cm*37.8≈76px */
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             /* 确保内容区域宽度正确 */
             box-sizing: border-box;
+            /* 根据可用空间自动缩放，但保持A4比例 */
+            max-width: calc(100vw - 300px); /* 减去侧边栏和padding */
         }
         
         /* 强制所有正文段落使用宋体 */
@@ -453,7 +476,7 @@
         <!-- 主预览区域 -->
         <div class="main-preview" id="mainPreview" style="display: none;">
             <!-- Word文档预览容器 -->
-            <div id="docxViewer" style="display: none; width: 100%; height: 100%; overflow: auto; padding: 20px; background: #fff;"></div>
+            <div id="docxViewer" style="display: none;"></div>
             <!-- PDF预览容器 -->
             <div class="pdf-viewer" id="pdfViewer"></div>
             <!-- iframe容器（用于PDF或HTML回退） -->
@@ -1562,10 +1585,25 @@
             try {
                 console.log(`开始渲染第${pageNum}页`);
                 const page = await pdf.getPage(pageNum);
-                const scale = 1.5; // 主视图缩放比例
+                
+                // A4纸张实际尺寸：210mm x 297mm = 794px x 1123px (96 DPI)
+                const A4_WIDTH = 794;
+                const A4_HEIGHT = 1123;
+                
+                // 获取PDF页面的原始尺寸
+                const defaultViewport = page.getViewport({ scale: 1.0 });
+                const pdfWidth = defaultViewport.width;
+                const pdfHeight = defaultViewport.height;
+                
+                // 计算缩放比例，使PDF页面适配A4纸张尺寸
+                const scaleX = A4_WIDTH / pdfWidth;
+                const scaleY = A4_HEIGHT / pdfHeight;
+                const scale = Math.min(scaleX, scaleY); // 使用较小的缩放比例，保持比例
+                
                 const viewport = page.getViewport({ scale });
                 
-                console.log(`页面尺寸: ${viewport.width}x${viewport.height}`);
+                console.log(`PDF原始尺寸: ${pdfWidth}x${pdfHeight}, A4尺寸: ${A4_WIDTH}x${A4_HEIGHT}, 缩放比例: ${scale}`);
+                console.log(`渲染后尺寸: ${viewport.width}x${viewport.height}`);
                 
                 // 清除容器
                 container.innerHTML = '';
@@ -1573,16 +1611,30 @@
                 // 创建页面容器
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'pdf-page';
+                // 设置A4纸张的实际尺寸
+                pageDiv.style.width = A4_WIDTH + 'px';
+                pageDiv.style.minHeight = A4_HEIGHT + 'px';
                 
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
+                // 使用A4纸张的实际尺寸
+                canvas.width = A4_WIDTH;
+                canvas.height = A4_HEIGHT;
+                // 设置canvas显示尺寸（CSS）
+                canvas.style.width = A4_WIDTH + 'px';
+                canvas.style.height = A4_HEIGHT + 'px';
+                
+                // 在canvas上居中绘制PDF内容
+                context.save();
+                // 计算居中偏移量
+                const offsetX = (A4_WIDTH - viewport.width) / 2;
+                const offsetY = (A4_HEIGHT - viewport.height) / 2;
+                context.translate(offsetX, offsetY);
                 
                 pageDiv.appendChild(canvas);
                 container.appendChild(pageDiv);
                 
-                console.log(`开始渲染canvas，尺寸: ${canvas.width}x${canvas.height}`);
+                console.log(`开始渲染canvas，尺寸: ${canvas.width}x${canvas.height} (A4纸张)`);
                 
                 // 渲染页面
                 const renderContext = {
@@ -1591,6 +1643,7 @@
                 };
                 
                 await page.render(renderContext).promise;
+                context.restore();
                 
                 console.log(`第${pageNum}页渲染完成`);
                 
