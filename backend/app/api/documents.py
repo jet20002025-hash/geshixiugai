@@ -746,22 +746,36 @@ async def convert_word_to_pdf(file: UploadFile):
                         logger.warning(f"[Word转PDF] 清理临时文件失败: {e}")
         
         # 返回PDF文件流
-        # 处理中文文件名编码问题：使用 RFC 5987 格式
+        # 处理中文文件名编码问题：确保响应头只包含 ASCII 字符
         pdf_filename = f"{Path(file.filename).stem}.pdf"
         
-        # 生成 ASCII 文件名作为备选（避免编码问题）
+        # 生成纯 ASCII 文件名（避免编码问题）
         ascii_filename = f"converted_{Path(file.filename).stem[:20]}.pdf"
-        # 移除非ASCII字符
-        ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in ascii_filename)
+        # 移除非ASCII字符，只保留字母、数字、点、下划线、连字符
+        ascii_filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in ascii_filename)
+        if not ascii_filename.endswith('.pdf'):
+            ascii_filename = ascii_filename + '.pdf'
         
-        # 使用 quote 编码文件名，支持中文
+        # 使用 RFC 5987 格式编码 UTF-8 文件名
+        # 注意：确保整个 Content-Disposition 字符串只包含 ASCII 字符
         try:
-            encoded_filename = quote(pdf_filename.encode('utf-8'))
-            # 使用 RFC 5987 格式，同时提供 ASCII 和 UTF-8 版本
+            # 使用 quote 编码 UTF-8 文件名（结果只包含 ASCII 字符）
+            encoded_filename = quote(pdf_filename, safe='', encoding='utf-8')
+            # 构建 Content-Disposition 头（所有字符都是 ASCII）
             content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
         except Exception as e:
             # 如果编码失败，只使用 ASCII 文件名
             log_msg = f"[Word转PDF] 文件名编码失败，使用ASCII文件名: {e}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.warning(log_msg)
+            content_disposition = f'attachment; filename="{ascii_filename}"'
+        
+        # 验证 Content-Disposition 只包含 ASCII 字符
+        try:
+            content_disposition.encode('ascii')
+        except UnicodeEncodeError:
+            # 如果仍然包含非ASCII字符，只使用 ASCII 文件名
+            log_msg = "[Word转PDF] Content-Disposition 包含非ASCII字符，使用纯ASCII文件名"
             print(log_msg, file=sys.stderr, flush=True)
             logger.warning(log_msg)
             content_disposition = f'attachment; filename="{ascii_filename}"'
