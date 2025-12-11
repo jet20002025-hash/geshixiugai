@@ -717,28 +717,59 @@ class DocumentService:
             # 诚信承诺的结束标志：遇到"摘要"或"ABSTRACT"时结束
             # 注意：诚信承诺应该在独立的一页，所以遇到"摘要"就应该结束
             if integrity_start is not None:
-                # 检查是否是摘要开始
-                if para_text.startswith("摘要") or para_text.startswith("ABSTRACT"):
+                # 检查是否是摘要开始（支持"摘要"中间有空格）
+                abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
+                if abstract_pattern.match(para_text) or para_text.startswith("ABSTRACT"):
+                    # 检查摘要前是否有分页符，如果有，说明诚信承诺和摘要已经分开
+                    # 如果没有分页符，但摘要标题前有分页符，也认为已经分开
+                    if idx > 0:
+                        prev_para = document.paragraphs[idx - 1]
+                        if prev_para.paragraph_format.page_break_before:
+                            integrity_end = idx
+                            break
+                        # 检查前一个段落是否有分页符
+                        for run in prev_para.runs:
+                            if hasattr(run, 'element'):
+                                run_xml = str(run.element.xml)
+                                if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                    integrity_end = idx
+                                    break
+                        if integrity_end is not None:
+                            break
+                    # 如果摘要标题本身有分页符，也认为已经分开
+                    if paragraph.paragraph_format.page_break_before:
+                        integrity_end = idx
+                        break
+                    # 检查摘要标题的runs中是否有分页符
+                    for run in paragraph.runs:
+                        if hasattr(run, 'element'):
+                            run_xml = str(run.element.xml)
+                            if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                integrity_end = idx
+                                break
+                    if integrity_end is not None:
+                        break
+                    # 如果没有分页符，但已经找到摘要标题，也结束诚信承诺（避免合并）
                     integrity_end = idx
                     break
-                # 如果已经找到诚信承诺，且当前段落很长（可能是摘要内容），也结束
-                # 但优先使用"摘要"作为结束标志
         
         # 如果找到了诚信承诺，但没找到结束标志，假设到摘要之前
         if integrity_start is not None and integrity_end is None:
+            abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
             for idx in range(integrity_start + 1, len(document.paragraphs)):
                 para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-                if para_text.startswith("摘要") or para_text.startswith("ABSTRACT"):
+                if abstract_pattern.match(para_text) or para_text.startswith("ABSTRACT"):
                     integrity_end = idx
                     break
         
         # 确定查找后续部分的起始位置
         search_start = integrity_end if integrity_end is not None else cover_end
         
-        # 查找中文摘要
+        # 查找中文摘要（支持"摘要"中间有空格）
+        abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
         for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-            if para_text.startswith("摘要") and abstract_zh_start is None:
+            if abstract_pattern.match(para_text) and abstract_zh_start is None:
                 abstract_zh_start = idx
             elif abstract_zh_start is not None and (para_text.startswith("关键词") or para_text.startswith("ABSTRACT") or para_text.startswith("目录")):
                 abstract_zh_end = idx
@@ -2534,8 +2565,11 @@ class DocumentService:
         # 2. 检查这些空白段落是否包含分页符
         # 3. 如果确认是整页空白，删除这些空白段落
         
-        # 定义整页空白的阈值：连续10个以上空白段落可能是整页空白
+        # 定义整页空白的阈值：
+        # - 连续10个以上空白段落可能是整页空白
+        # - 连续5个以上空白段落，且前后有分页符，可能是只有页眉的空白页
         BLANK_PAGE_THRESHOLD = 10
+        BLANK_PAGE_WITH_HEADER_THRESHOLD = 5  # 只有页眉的空白页阈值
         
         def has_page_break(paragraph) -> bool:
             """检查段落是否包含分页符"""
@@ -2567,7 +2601,9 @@ class DocumentService:
             else:
                 # 遇到非空白段落
                 # 如果之前有大量连续空白（可能是整页空白），检查是否需要删除
-                if consecutive_blanks >= BLANK_PAGE_THRESHOLD and blank_start_idx is not None:
+                # 或者有中等数量的空白且前后有分页符（可能是只有页眉的空白页）
+                if (consecutive_blanks >= BLANK_PAGE_THRESHOLD or 
+                    (consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and blank_start_idx is not None)) and blank_start_idx is not None:
                     # 检查这些空白段落前后是否有分页符，如果有，可能是整页空白
                     # 检查空白段落之前是否有分页符
                     has_break_before = False
@@ -2598,8 +2634,11 @@ class DocumentService:
                                         break
                     
                     # 如果空白段落前后都有分页符，或者空白段落数量非常多，可能是整页空白
+                    # 或者有中等数量的空白且前后有分页符（可能是只有页眉的空白页）
                     # 删除这些空白段落，但保留最后一个，避免导致新的整页空白
-                    if has_break_before or has_break_after or consecutive_blanks >= BLANK_PAGE_THRESHOLD * 2:
+                    if (has_break_before or has_break_after or 
+                        consecutive_blanks >= BLANK_PAGE_THRESHOLD * 2 or
+                        (consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and (has_break_before or has_break_after))):
                         # 删除空白段落，但保留最后一个
                         deleted_count = 0
                         # 从后往前删除，保留最后一个空白段落
@@ -2631,7 +2670,22 @@ class DocumentService:
                 blank_start_idx = None
         
         # 处理文档末尾的整页空白
-        if consecutive_blanks >= BLANK_PAGE_THRESHOLD and blank_start_idx is not None:
+        # 检查末尾是否有分页符，如果有，可能是只有页眉的空白页
+        has_break_before_end = False
+        if blank_start_idx is not None and blank_start_idx > 0:
+            prev_para = document.paragraphs[blank_start_idx - 1]
+            if prev_para.paragraph_format.page_break_before:
+                has_break_before_end = True
+            else:
+                for run in prev_para.runs:
+                    if hasattr(run, 'element'):
+                        run_xml = str(run.element.xml)
+                        if 'w:br' in run_xml and 'type="page"' in run_xml:
+                            has_break_before_end = True
+                            break
+        
+        if ((consecutive_blanks >= BLANK_PAGE_THRESHOLD) or 
+            (consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and has_break_before_end)) and blank_start_idx is not None:
             # 删除末尾的整页空白，但保留最后一个空白段落
             deleted_count = 0
             delete_end = blank_start_idx + consecutive_blanks - 1
