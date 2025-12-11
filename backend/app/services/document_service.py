@@ -976,30 +976,71 @@ class DocumentService:
                     # 也移除首行缩进，图片/流程图段落通常不需要缩进
                     rule.pop("first_line_indent", None)
                 
-                # 对于正文段落（非标题、非图片、非公式、非流程图），保留提取到的字体或使用宋体
+                # 对于正文段落（非标题、非图片、非公式、非流程图），保留原有字体，不强制统一
                 if not is_heading and not has_image_or_equation and not has_flowchart:
-                    # 检查段落中提取到的字体
-                    para_format = docx_format_utils.extract_paragraph_format(paragraph)
-                    extracted_font = para_format.get("font_name")
+                    # 检查段落中所有 runs 的字体，如果段落内字体不一致，保留各自的字体
+                    run_fonts = []
+                    for run in paragraph.runs:
+                        if run.text.strip():  # 只检查有文本的 run
+                            # 从 run 中提取字体
+                            run_font = None
+                            if run.font and run.font.name:
+                                run_font = run.font.name
+                            else:
+                                # 尝试从 XML 中提取
+                                try:
+                                    r_pr = run._element.get_or_add_rPr()
+                                    r_fonts = r_pr.rFonts
+                                    if r_fonts is not None:
+                                        run_font = r_fonts.get(qn("w:eastAsia")) or r_fonts.get(qn("w:ascii"))
+                                except:
+                                    pass
+                            if run_font:
+                                run_fonts.append(run_font)
                     
-                    # 如果提取到楷体、宋体、Times New Roman，保留这些字体
-                    if extracted_font:
+                    # 如果段落中有多种字体，不设置 rule["font_name"]，保留原有字体
+                    unique_fonts = set(run_fonts)
+                    if len(unique_fonts) > 1:
+                        # 段落中有多种字体，保留各自的字体，只统一字号和行距
+                        print(f"[格式应用] 段落 {idx} 检测到多种字体: {unique_fonts}，保留各自字体")
+                        # 移除字体设置，保留其他格式
+                        rule.pop("font_name", None)
+                        # 只设置字号和行距（如果规则中有）
+                        if DEFAULT_STYLE in FONT_STANDARDS:
+                            standard_body = FONT_STANDARDS[DEFAULT_STYLE]
+                            if "font_size" not in rule:
+                                rule["font_size"] = standard_body.get("font_size", 12)
+                            if "line_spacing" not in rule:
+                                rule["line_spacing"] = standard_body.get("line_spacing", 20)
+                            if "bold" not in rule:
+                                rule["bold"] = standard_body.get("bold", False)
+                            if "first_line_indent" not in rule:
+                                rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
+                    elif len(unique_fonts) == 1:
+                        # 段落中只有一种字体，检查是否需要保留
+                        extracted_font = list(unique_fonts)[0]
                         font_lower = extracted_font.lower()
-                        if "楷" in extracted_font or "kaiti" in font_lower or "kai" in font_lower:
-                            rule["font_name"] = "楷体"
-                            print(f"[格式应用] 段落 {idx} 保留字体：楷体")
-                        elif "宋" in extracted_font or "simsun" in font_lower or "song" in font_lower:
-                            rule["font_name"] = "宋体"
-                            print(f"[格式应用] 段落 {idx} 保留字体：宋体")
-                        elif "times" in font_lower or "new roman" in font_lower or "tnr" in font_lower:
-                            rule["font_name"] = "Times New Roman"
-                            print(f"[格式应用] 段落 {idx} 保留字体：Times New Roman")
-                        elif "黑" in extracted_font or "simhei" in font_lower or "hei" in font_lower:
-                            # 正文段落中的黑体，保持为黑体（可能是特殊强调）
-                            rule["font_name"] = "黑体"
-                            print(f"[格式应用] 段落 {idx} 保留字体：黑体")
+                        # 如果是支持的字体（楷体、宋体、Times New Roman、黑体），保留
+                        if ("楷" in extracted_font or "kaiti" in font_lower or "kai" in font_lower or
+                            "宋" in extracted_font or "simsun" in font_lower or "song" in font_lower or
+                            "times" in font_lower or "new roman" in font_lower or "tnr" in font_lower or
+                            "黑" in extracted_font or "simhei" in font_lower or "hei" in font_lower):
+                            # 保留原有字体
+                            rule["font_name"] = extracted_font
+                            print(f"[格式应用] 段落 {idx} 保留字体：{extracted_font}")
+                            # 只设置字号和行距（如果规则中有）
+                            if DEFAULT_STYLE in FONT_STANDARDS:
+                                standard_body = FONT_STANDARDS[DEFAULT_STYLE]
+                                if "font_size" not in rule:
+                                    rule["font_size"] = standard_body.get("font_size", 12)
+                                if "line_spacing" not in rule:
+                                    rule["line_spacing"] = standard_body.get("line_spacing", 20)
+                                if "bold" not in rule:
+                                    rule["bold"] = standard_body.get("bold", False)
+                                if "first_line_indent" not in rule:
+                                    rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
                         else:
-                            # 其他字体，默认使用宋体
+                            # 不支持的字体，使用默认宋体
                             if DEFAULT_STYLE in FONT_STANDARDS:
                                 standard_body = FONT_STANDARDS[DEFAULT_STYLE]
                                 rule["font_name"] = standard_body.get("font_name", "宋体")
@@ -1009,7 +1050,7 @@ class DocumentService:
                                 rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
                             print(f"[格式应用] 段落 {idx} 使用默认字体：宋体、12pt、行距20磅")
                     else:
-                        # 如果没有提取到字体，使用默认宋体
+                        # 没有提取到字体，使用默认宋体
                         if DEFAULT_STYLE in FONT_STANDARDS:
                             standard_body = FONT_STANDARDS[DEFAULT_STYLE]
                             rule["font_name"] = standard_body.get("font_name", "宋体")

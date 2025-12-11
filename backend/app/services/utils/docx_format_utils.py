@@ -223,8 +223,9 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             # 强制设置字体大小，覆盖原有的任何设置
             font.size = Pt(font_size)
             
-            # 应用字体名称
-            if font_name:
+            # 应用字体名称（只有当规则中明确指定了字体名称时才应用）
+            # 如果 font_name 为 None，保留原有字体
+            if font_name is not None:
                 font.name = font_name
                 r_pr = run._element.get_or_add_rPr()
                 r_fonts = r_pr.rFonts
@@ -256,8 +257,9 @@ def apply_paragraph_rule(paragraph: Paragraph, rule: Dict[str, Optional[str | fl
             if unified_font_size is not None:
                 font.size = Pt(unified_font_size)
             
-            # 应用字体名称
-            if font_name:
+            # 应用字体名称（只有当规则中明确指定了字体名称时才应用）
+            # 如果 font_name 为 None，保留原有字体
+            if font_name is not None:
                 font.name = font_name
                 r_pr = run._element.get_or_add_rPr()
                 r_fonts = r_pr.rFonts
