@@ -882,11 +882,21 @@ async def convert_word_to_pdf(file: UploadFile):
         # 返回PDF文件流
         # 使用原始文件名，处理中文文件名编码问题
         original_filename = file.filename
+        log_msg = f"[Word转PDF] 原始文件名: {original_filename}"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        
         if original_filename:
             # 提取文件名（不含扩展名）并添加 .pdf 扩展名
             pdf_filename = Path(original_filename).stem + ".pdf"
+            log_msg = f"[Word转PDF] 生成的PDF文件名: {pdf_filename}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
         else:
             pdf_filename = "converted_document.pdf"
+            log_msg = f"[Word转PDF] 未提供文件名，使用默认文件名: {pdf_filename}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.warning(log_msg)
         
         # 生成 ASCII 文件名作为备选（避免编码问题）
         ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in pdf_filename)
@@ -895,10 +905,17 @@ async def convert_word_to_pdf(file: UploadFile):
         elif not ascii_filename.endswith('.pdf'):
             ascii_filename = ascii_filename + '.pdf'
         
+        log_msg = f"[Word转PDF] ASCII备选文件名: {ascii_filename}"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        
         # 使用 RFC 5987 格式编码 UTF-8 文件名
         try:
             encoded_filename = quote(pdf_filename.encode('utf-8'))
             content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+            log_msg = f"[Word转PDF] Content-Disposition: {content_disposition}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
         except Exception as e:
             # 如果编码失败，只使用 ASCII 文件名
             log_msg = f"[Word转PDF] 文件名编码失败: {e}，使用ASCII文件名"
@@ -909,6 +926,9 @@ async def convert_word_to_pdf(file: UploadFile):
         # 验证 Content-Disposition 可以编码为 latin-1（HTTP 头要求）
         try:
             content_disposition.encode('latin-1')
+            log_msg = f"[Word转PDF] Content-Disposition 编码验证通过"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.info(log_msg)
         except UnicodeEncodeError as e:
             # 如果仍然包含非ASCII字符，使用默认文件名
             log_msg = f"[Word转PDF] Content-Disposition 编码验证失败: {e}，使用默认文件名"
