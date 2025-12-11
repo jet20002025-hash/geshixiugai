@@ -4265,11 +4265,10 @@ read_file
             
             # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
             # 但首先尝试直接执行
+            # 注意：移除 --invisible 和 --nodefault，这些参数可能导致导出过滤器问题
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
-                '--invisible',  # 添加 invisible 参数，更彻底的无界面模式
-                '--nodefault',  # 不加载默认文档
                 '--nolockcheck',  # 不检查文件锁定
                 '--convert-to', 'pdf',
                 '--outdir', str(abs_output_dir),
