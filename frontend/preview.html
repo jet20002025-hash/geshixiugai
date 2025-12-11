@@ -900,22 +900,26 @@
                     
                     try {
                         await docxLib.renderAsync(blob, docxViewer, null, {
-                        className: 'docx',
-                        inWrapper: true,
-                        ignoreWidth: false,
-                        ignoreHeight: false,
-                        ignoreFonts: false,  // 不忽略字体，读取原始字体
-                        breakPages: true,
-                        ignoreLastRenderedPageBreak: true,
-                        experimental: false,
-                        trimXmlDeclaration: true,
-                        useBase64URL: false,
-                        showChanges: false,
-                        showInsertions: false,
-                        showDeletions: false
-                    });
-                    
-                    console.log('Word文档渲染成功，开始应用字体样式...');
+                            className: 'docx',
+                            inWrapper: true,
+                            ignoreWidth: false,
+                            ignoreHeight: false,
+                            ignoreFonts: false,  // 不忽略字体，读取原始字体
+                            breakPages: true,
+                            ignoreLastRenderedPageBreak: true,
+                            experimental: false,
+                            trimXmlDeclaration: true,
+                            useBase64URL: false,
+                            showChanges: false,
+                            showInsertions: false,
+                            showDeletions: false
+                        });
+                        
+                        console.log('Word文档渲染成功，开始应用字体样式...');
+                    } catch (renderError) {
+                        console.error('Word文档渲染失败:', renderError);
+                        throw renderError; // 重新抛出错误，让外层catch处理
+                    }
                     
                     // 渲染完成后，强制应用正确的字体
                     // 通过检查字体大小、加粗、对齐方式等来区分标题和正文
