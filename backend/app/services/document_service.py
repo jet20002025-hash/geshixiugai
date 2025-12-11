@@ -2503,8 +2503,8 @@ class DocumentService:
         检测并删除整页空白页
         
         规则：
-        - 只在正文部分检测整页空白
-        - 封面、诚信承诺、摘要、目录等部分不检测整页空白
+        - 在整个文档中检测整页空白（包括封面、诚信承诺、摘要、目录、正文等所有部分）
+        - 封面、诚信承诺、摘要、目录等部分的空白行不删除，但整页空白要删除
         - 检测连续的空白段落，如果这些空白段落导致整页空白，则删除
         - 不允许整页空白页存在
         
@@ -2512,20 +2512,6 @@ class DocumentService:
             问题列表
         """
         issues = []
-        
-        # 1. 使用 _find_section_ranges 获取正文范围
-        # 明确排除封面、诚信承诺、摘要、Abstract、目录等部分，这些部分完全不检测整页空白
-        section_ranges = self._find_section_ranges(document)
-        body_start_idx = None
-        body_end_idx = len(document.paragraphs)
-        
-        # 获取正文范围
-        if "body" in section_ranges:
-            body_start_idx, body_end_idx = section_ranges["body"]
-        
-        # 如果没有找到正文范围，直接返回（不检测整页空白）
-        if body_start_idx is None:
-            return issues
         
         # 检测整页空白页的方法：
         # 1. 查找连续的大量空白段落（可能是整页空白）
@@ -2538,9 +2524,8 @@ class DocumentService:
         consecutive_blanks = 0
         blank_start_idx = None
         
-        # 只在正文范围内检测
-        for idx in range(body_start_idx, body_end_idx):
-            paragraph = document.paragraphs[idx]
+        # 在整个文档中检测整页空白
+        for idx, paragraph in enumerate(document.paragraphs):
             para_text = paragraph.text.strip() if paragraph.text else ""
             
             # 检查是否是空白段落
