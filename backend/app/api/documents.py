@@ -466,6 +466,77 @@ async def download_document(document_id: str, token: str) -> FileResponse:
 
 
 @router.get(
+    "/{document_id}/download-docx",
+    summary="下载最终版Word文档（无水印）",
+)
+async def download_final_docx(document_id: str, token: str) -> FileResponse:
+    """
+    下载最终版Word文档（final.docx，无水印），需要提供下载 token 验证身份
+    
+    Args:
+        document_id: 文档ID
+        token: 下载验证 token（支付成功后获取）
+    """
+    service = DocumentService(document_dir=DOCUMENT_DIR, template_dir=TEMPLATE_DIR)
+    metadata = service.get_document_metadata(document_id)
+    if not metadata:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到文档")
+
+    if not metadata.get("paid"):
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="尚未支付，无法下载文档")
+
+    # 验证下载 token
+    expected_token = metadata.get("download_token")
+    if expected_token:
+        if token != expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="下载 token 无效，请使用支付成功后获取的下载链接"
+            )
+    else:
+        if token != document_id:
+            print(f"[API] 警告：文档 {document_id} 已支付但缺少 download_token，token: {token}")
+
+    # 查找 final.docx 文件
+    final_path = Path(metadata.get("final_path", "")) if metadata.get("final_path") else DOCUMENT_DIR / document_id / "final.docx"
+    final_file = service._get_file_from_storage_or_local(document_id, "final", "docx", final_path)
+    
+    if not final_file or not final_file.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="最终版文档不存在")
+    
+    # 使用原始文件名（如果存在）
+    original_filename = metadata.get("original_filename", "")
+    if original_filename:
+        # 直接使用原始文件名（去掉扩展名，添加 .docx）
+        download_filename = Path(original_filename).stem + ".docx"
+    else:
+        download_filename = f"{document_id}.docx"
+    
+    # 处理中文文件名编码
+    ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in download_filename)
+    if not ascii_filename or ascii_filename.replace('_', '').replace('.', '').replace('-', '') == '':
+        ascii_filename = f"{document_id}_final.docx"
+    
+    # 使用 RFC 5987 格式编码 UTF-8 文件名
+    try:
+        encoded_filename = quote(download_filename.encode('utf-8'))
+        content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+    except Exception:
+        content_disposition = f'attachment; filename="{ascii_filename}"'
+    
+    print(f"[Download DOCX] 返回最终版Word文档: {final_file}, 文件名: {download_filename}")
+    
+    return FileResponse(
+        path=str(final_file),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": content_disposition,
+            "Cache-Control": "no-cache"
+        }
+    )
+
+
+@router.get(
     "/{document_id}/status",
     response_model=DocumentStatusResponse,
     summary="查看文档处理状态",
