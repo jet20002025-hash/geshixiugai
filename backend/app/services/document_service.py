@@ -4265,15 +4265,23 @@ read_file
             
             # 检查文件权限，如果文件属于其他用户，可能需要使用sudo
             # 但首先尝试直接执行
-            # 注意：移除 --invisible 和 --nodefault，这些参数可能导致导出过滤器问题
+            # 注意：使用最简单的命令格式，避免参数导致导出过滤器问题
+            # 尝试方法1：最简单的命令
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
-                '--nolockcheck',  # 不检查文件锁定
                 '--convert-to', 'pdf',
                 '--outdir', str(abs_output_dir),
                 str(input_file)
             ]
+            
+            log_msg = f"[PDF预览] 尝试方法1：使用最简单的命令格式"
+            print(log_msg, file=sys.stderr, flush=True)
+            try:
+                with open("/var/log/geshixiugai/error.log", "a") as f:
+                    f.write(f"{log_msg}\n")
+            except Exception:
+                pass
             
             log_msg = f"[PDF预览] 使用绝对路径执行命令: {' '.join(cmd_abs)}"
             print(log_msg, file=sys.stderr, flush=True)
@@ -4356,6 +4364,64 @@ read_file
                         f.write(f"{log_msg}\n")
                 except Exception:
                     pass
+            
+            # 如果出现 "no export filter" 错误，尝试使用不同的方法
+            if result.stderr and "no export filter" in result.stderr.lower():
+                log_msg = f"[PDF预览] 检测到 'no export filter' 错误，尝试使用 soffice 命令"
+                print(log_msg, file=sys.stderr, flush=True)
+                try:
+                    with open("/var/log/geshixiugai/error.log", "a") as f:
+                        f.write(f"{log_msg}\n")
+                except Exception:
+                    pass
+                
+                # 尝试使用 soffice 命令
+                soffice_cmd = None
+                for path in ['/bin/soffice', '/usr/bin/soffice']:
+                    if os.path.exists(path) and os.access(path, os.X_OK):
+                        soffice_cmd = path
+                        break
+                
+                if soffice_cmd:
+                    cmd_abs2 = [
+                        soffice_cmd,
+                        '--headless',
+                        '--convert-to', 'pdf',
+                        '--outdir', str(abs_output_dir),
+                        str(input_file)
+                    ]
+                    
+                    log_msg = f"[PDF预览] 尝试使用 soffice 命令: {' '.join(cmd_abs2)}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
+                    
+                    result = subprocess.run(
+                        cmd_abs2,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        env=env
+                    )
+                    
+                    log_msg = f"[PDF预览] soffice 执行完成，返回码: {result.returncode}"
+                    print(log_msg, file=sys.stderr, flush=True)
+                    try:
+                        with open("/var/log/geshixiugai/error.log", "a") as f:
+                            f.write(f"{log_msg}\n")
+                    except Exception:
+                        pass
+                    if result.stderr:
+                        log_msg = f"[PDF预览] soffice 错误输出: {result.stderr}"
+                        print(log_msg, file=sys.stderr, flush=True)
+                        try:
+                            with open("/var/log/geshixiugai/error.log", "a") as f:
+                                f.write(f"{log_msg}\n")
+                        except Exception:
+                            pass
             
             # LibreOffice 会在输出目录生成与输入文件同名的PDF
             # 例如：preview.docx -> preview.pdf
