@@ -69,6 +69,9 @@ class DocumentService:
         task_dir = self.document_dir / document_id
         task_dir.mkdir(parents=True, exist_ok=True)
 
+        # 保存原始文件名
+        original_filename = upload.filename
+        
         original_path = task_dir / "original.docx"
         original_path.write_bytes(await upload.read())
 

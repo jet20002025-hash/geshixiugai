@@ -375,11 +375,32 @@ async def download_document(document_id: str, token: str) -> FileResponse:
     
     if pdf_file and pdf_file.exists():
         print(f"[Download] 返回带水印的PDF文件: {pdf_file}")
-    return FileResponse(
+        # 使用原始文件名（如果存在），否则使用 document_id
+        original_filename = metadata.get("original_filename", "")
+        if original_filename:
+            # 提取文件名（不含扩展名）并添加后缀
+            filename_stem = Path(original_filename).stem
+            download_filename = f"{filename_stem}_带水印版.pdf"
+        else:
+            download_filename = f"{document_id}_带水印版.pdf"
+        
+        # 处理中文文件名编码
+        ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in download_filename)
+        if not ascii_filename or ascii_filename.replace('_', '').replace('.', '').replace('-', '') == '':
+            ascii_filename = f"{document_id}_watermarked.pdf"
+        
+        # 使用 RFC 5987 格式编码 UTF-8 文件名
+        try:
+            encoded_filename = quote(download_filename.encode('utf-8'))
+            content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+        except Exception:
+            content_disposition = f'attachment; filename="{ascii_filename}"'
+        
+        return FileResponse(
             path=str(pdf_file),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{document_id}_带水印版.pdf"; filename*=UTF-8\'\'{quote(f"{document_id}_带水印版.pdf".encode("utf-8"))}',
+                "Content-Disposition": content_disposition,
                 "Cache-Control": "no-cache"
             }
         )
@@ -390,11 +411,32 @@ async def download_document(document_id: str, token: str) -> FileResponse:
     
     if html_file and html_file.exists():
         print(f"[Download] PDF不存在，返回HTML文件: {html_file}")
+        # 使用原始文件名（如果存在），否则使用 document_id
+        original_filename = metadata.get("original_filename", "")
+        if original_filename:
+            # 提取文件名（不含扩展名）并添加后缀
+            filename_stem = Path(original_filename).stem
+            download_filename = f"{filename_stem}_预览版.html"
+        else:
+            download_filename = f"{document_id}_预览版.html"
+        
+        # 处理中文文件名编码
+        ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in download_filename)
+        if not ascii_filename or ascii_filename.replace('_', '').replace('.', '').replace('-', '') == '':
+            ascii_filename = f"{document_id}_preview.html"
+        
+        # 使用 RFC 5987 格式编码 UTF-8 文件名
+        try:
+            encoded_filename = quote(download_filename.encode('utf-8'))
+            content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+        except Exception:
+            content_disposition = f'attachment; filename="{ascii_filename}"'
+        
         return FileResponse(
             path=str(html_file),
             media_type="text/html",
             headers={
-                "Content-Disposition": f'attachment; filename="{document_id}_预览版.html"; filename*=UTF-8\'\'{quote(f"{document_id}_预览版.html".encode("utf-8"))}',
+                "Content-Disposition": content_disposition,
                 "Cache-Control": "no-cache"
             }
         )
