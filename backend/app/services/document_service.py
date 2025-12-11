@@ -160,20 +160,40 @@ class DocumentService:
         html_path = preview_path.with_suffix('.html')
         
         # 优先使用LibreOffice直接从Word转PDF（格式完美，只加水印，与最终文档完全一致）
-        pdf_success = self._try_libreoffice_pdf_conversion(preview_path, pdf_path)
+        # 先生成临时PDF，然后添加水印
+        temp_pdf_path = pdf_path.with_suffix('.temp.pdf')
+        pdf_success = self._try_libreoffice_pdf_conversion(preview_path, temp_pdf_path)
         
         # 如果LibreOffice转换失败，回退到HTML转PDF（不推荐，格式会有变化）
         if not pdf_success:
             print(f"[预览] ⚠️ LibreOffice转换失败，回退到HTML转PDF（格式可能有变化，不推荐）")
-            pdf_success = self._generate_pdf_preview(preview_path, pdf_path, stats)
-        if pdf_success:
-            # 验证PDF文件是否真的存在
-            if pdf_path.exists():
+            pdf_success = self._generate_pdf_preview(preview_path, temp_pdf_path, stats)
+        
+        if pdf_success and temp_pdf_path.exists():
+            # 为预览PDF添加水印（确保免费用户只能看到带水印的PDF）
+            print(f"[预览] 为预览PDF添加水印...")
+            watermark_success = self._add_pdf_watermarks(
+                pdf_path=temp_pdf_path,
+                output_path=pdf_path,
+                watermark_text="www.geshixiugai.cn",
+                watermarks_per_page=10
+            )
+            
+            if watermark_success and pdf_path.exists():
                 pdf_size = pdf_path.stat().st_size
-                print(f"[预览] ✅ PDF预览生成成功: {pdf_path}, 大小: {pdf_size / 1024:.2f} KB")
+                print(f"[预览] ✅ PDF预览生成成功（已添加水印）: {pdf_path}, 大小: {pdf_size / 1024:.2f} KB")
+                # 删除临时PDF文件
+                if temp_pdf_path.exists():
+                    temp_pdf_path.unlink()
             else:
-                print(f"[预览] ⚠️ PDF生成返回成功但文件不存在: {pdf_path}")
-                pdf_success = False
+                print(f"[预览] ⚠️ 水印添加失败，使用原始PDF")
+                if temp_pdf_path.exists():
+                    # 如果水印添加失败，使用原始PDF（但应该确保原始PDF也有水印）
+                    temp_pdf_path.rename(pdf_path)
+                pdf_success = True
+        elif pdf_success:
+            print(f"[预览] ⚠️ PDF生成返回成功但文件不存在: {temp_pdf_path}")
+            pdf_success = False
         
         if not pdf_success:
             # 回退到HTML预览
