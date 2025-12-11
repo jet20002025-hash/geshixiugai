@@ -2636,9 +2636,18 @@ class DocumentService:
                     # 如果空白段落前后都有分页符，或者空白段落数量非常多，可能是整页空白
                     # 或者有中等数量的空白且前后有分页符（可能是只有页眉的空白页）
                     # 删除这些空白段落，但保留最后一个，避免导致新的整页空白
-                    if (has_break_before or has_break_after or 
-                        consecutive_blanks >= BLANK_PAGE_THRESHOLD * 2 or
-                        (consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and (has_break_before or has_break_after))):
+                    should_delete = False
+                    if consecutive_blanks >= BLANK_PAGE_THRESHOLD * 2:
+                        # 空白段落数量非常多，肯定是整页空白
+                        should_delete = True
+                    elif consecutive_blanks >= BLANK_PAGE_THRESHOLD:
+                        # 空白段落数量多，可能是整页空白
+                        should_delete = True
+                    elif consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and (has_break_before or has_break_after):
+                        # 中等数量的空白且前后有分页符，可能是只有页眉的空白页
+                        should_delete = True
+                    
+                    if should_delete:
                         # 删除空白段落，但保留最后一个
                         deleted_count = 0
                         # 从后往前删除，保留最后一个空白段落
