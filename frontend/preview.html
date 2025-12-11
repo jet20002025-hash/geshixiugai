@@ -531,7 +531,8 @@
     
     <!-- PDF.js库：作为备选方案 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" 
-            onerror="console.error('PDF.js库加载失败'); window.pdfjsLoadError = true;"></script>
+            onload="console.log('✅ PDF.js库加载成功'); window.pdfjsLibLoaded = true;"
+            onerror="console.error('❌ PDF.js库加载失败'); window.pdfjsLoadError = true;"></script>
     
     <script>
         (function() {
@@ -1167,22 +1168,31 @@
                     const blobUrl = URL.createObjectURL(blob);
                     console.log('Blob URL创建:', blobUrl);
                     
-                    // 等待PDF.js库加载完成
+                    // 检查PDF.js库是否已加载
+                    // PDF.js 3.x 的全局变量可能是 pdfjsLib 或 pdfjs
+                    let pdfjsLib = window.pdfjsLib || window.pdfjs;
+                    
                     if (typeof pdfjsLib === 'undefined') {
                         logStep('等待PDF.js', '等待PDF.js库加载');
                         console.log('PDF.js未加载，等待中...');
-                        // 等待最多5秒
+                        console.log('检查全局变量: pdfjsLib=', typeof window.pdfjsLib, 'pdfjs=', typeof window.pdfjs);
+                        
+                        // 等待最多10秒
                         let waitCount = 0;
-                        while (typeof pdfjsLib === 'undefined' && waitCount < 50) {
+                        while (typeof pdfjsLib === 'undefined' && waitCount < 100) {
                             await new Promise(resolve => setTimeout(resolve, 100));
                             waitCount++;
+                            // 重新检查
+                            pdfjsLib = window.pdfjsLib || window.pdfjs;
                             if (waitCount % 10 === 0) {
                                 console.log(`等待PDF.js加载... ${waitCount * 100}ms`);
+                                console.log('pdfjsLib:', typeof window.pdfjsLib, 'pdfjs:', typeof window.pdfjs);
                             }
                         }
                         
                         if (typeof pdfjsLib === 'undefined') {
                             console.warn('PDF.js库未加载，使用iframe方式');
+                            console.warn('检查结果: pdfjsLib=', typeof window.pdfjsLib, 'pdfjs=', typeof window.pdfjs);
                             logStep('回退iframe', 'PDF.js未加载，使用iframe方式');
                             // 回退到iframe方式
                             const iframe = document.getElementById('previewFrame');
@@ -1206,9 +1216,10 @@
                         }
                     }
                     
-                    console.log('PDF.js已加载，开始使用PDF.js渲染');
+                    console.log('✅ PDF.js已加载，开始使用PDF.js渲染');
+                    console.log('PDF.js版本:', pdfjsLib.version || '未知');
                     // 使用PDF.js加载和渲染PDF
-                    await loadPdfWithThumbnails(blobUrl);
+                    await loadPdfWithThumbnails(blobUrl, pdfjsLib);
                     
                     return;
                 }
@@ -1375,18 +1386,23 @@
         }
         
         // 使用PDF.js加载PDF并生成缩略图
-        async function loadPdfWithThumbnails(blobUrl) {
+        async function loadPdfWithThumbnails(blobUrl, pdfjsLibParam = null) {
             try {
                 logStep('PDF.js初始化', '正在初始化PDF.js');
                 console.log('开始使用PDF.js加载PDF，Blob URL:', blobUrl);
                 
+                // 获取PDF.js库引用
+                const pdfjsLib = pdfjsLibParam || window.pdfjsLib || window.pdfjs;
+                
                 // 检查PDF.js是否已加载
                 if (typeof pdfjsLib === 'undefined') {
                     console.error('PDF.js库未定义');
+                    console.error('检查: window.pdfjsLib=', typeof window.pdfjsLib);
+                    console.error('检查: window.pdfjs=', typeof window.pdfjs);
                     throw new Error('PDF.js库未加载，请检查网络连接');
                 }
                 
-                console.log('PDF.js库已加载，版本:', pdfjsLib.version || '未知');
+                console.log('✅ PDF.js库已加载，版本:', pdfjsLib.version || '未知');
                 
                 // 设置PDF.js worker
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
