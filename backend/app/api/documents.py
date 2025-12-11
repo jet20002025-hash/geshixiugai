@@ -379,7 +379,7 @@ async def download_document(document_id: str, token: str) -> FileResponse:
             path=str(pdf_file),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{document_id}_带水印版.pdf"',
+                "Content-Disposition": f'attachment; filename="{document_id}_带水印版.pdf"; filename*=UTF-8\'\'{quote(f"{document_id}_带水印版.pdf".encode("utf-8"))}',
                 "Cache-Control": "no-cache"
             }
         )
@@ -394,7 +394,7 @@ async def download_document(document_id: str, token: str) -> FileResponse:
             path=str(html_file),
             media_type="text/html",
             headers={
-                "Content-Disposition": f'attachment; filename="{document_id}_预览版.html"',
+                "Content-Disposition": f'attachment; filename="{document_id}_预览版.html"; filename*=UTF-8\'\'{quote(f"{document_id}_预览版.html".encode("utf-8"))}',
                 "Cache-Control": "no-cache"
             }
         )
