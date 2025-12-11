@@ -718,9 +718,21 @@ async def convert_word_to_pdf(file: UploadFile):
         
         # 重置文件指针到开头（确保读取完整内容）
         file.file.seek(0)
-        uploaded_size = 0
+        
+        # 计算上传文件大小（通过文件指针位置）
+        file_start_pos = file.file.tell()
+        file.file.seek(0, 2)  # 移动到文件末尾
+        file_end_pos = file.file.tell()
+        uploaded_size = file_end_pos - file_start_pos
+        file.file.seek(0)  # 重置到开头
+        
+        log_msg = f"[Word转PDF] 上传文件大小: {uploaded_size} bytes"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        
+        # 保存文件
         with open(temp_input, "wb") as f:
-            uploaded_size = shutil.copyfileobj(file.file, f)
+            shutil.copyfileobj(file.file, f)
         
         # 验证文件大小
         saved_size = temp_input.stat().st_size
@@ -756,6 +768,10 @@ async def convert_word_to_pdf(file: UploadFile):
                         f.write(f"{log_msg}\n")
                 except Exception:
                     pass
+        elif uploaded_size == 0:
+            log_msg = f"[Word转PDF] 警告：无法确定上传文件大小，但保存的文件大小为 {saved_size} bytes"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.warning(log_msg)
         
         # 确保文件权限正确（可读）
         os.chmod(temp_input, 0o644)
