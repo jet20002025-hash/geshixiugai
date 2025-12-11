@@ -2474,6 +2474,142 @@ class DocumentService:
         # 空白段落已直接删除，不需要标记
         return issues
 
+    def _check_and_remove_blank_pages(self, document: Document) -> list:
+        """
+        检测并删除整页空白页
+        
+        规则：
+        - 检测连续的空白段落，如果这些空白段落导致整页空白，则删除
+        - 不允许整页空白页存在
+        
+        Returns:
+            问题列表
+        """
+        issues = []
+        
+        # 检测整页空白页的方法：
+        # 1. 查找连续的大量空白段落（可能是整页空白）
+        # 2. 检查这些空白段落是否包含分页符
+        # 3. 如果确认是整页空白，删除这些空白段落
+        
+        # 定义整页空白的阈值：连续10个以上空白段落可能是整页空白
+        BLANK_PAGE_THRESHOLD = 10
+        
+        consecutive_blanks = 0
+        blank_start_idx = None
+        
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            
+            # 检查是否是空白段落
+            is_blank = len(para_text) == 0
+            
+            # 检查段落是否包含分页符
+            has_page_break = False
+            if paragraph.paragraph_format.page_break_before:
+                has_page_break = True
+            else:
+                for run in paragraph.runs:
+                    if hasattr(run, 'element'):
+                        run_xml = str(run.element.xml)
+                        if 'w:br' in run_xml and 'type="page"' in run_xml:
+                            has_page_break = True
+                            break
+            
+            if is_blank:
+                if consecutive_blanks == 0:
+                    blank_start_idx = idx
+                consecutive_blanks += 1
+            else:
+                # 遇到非空白段落
+                # 如果之前有大量连续空白（可能是整页空白），检查是否需要删除
+                if consecutive_blanks >= BLANK_PAGE_THRESHOLD and blank_start_idx is not None:
+                    # 检查这些空白段落前后是否有分页符，如果有，可能是整页空白
+                    # 检查空白段落之前是否有分页符
+                    has_break_before = False
+                    if blank_start_idx > 0:
+                        prev_para = document.paragraphs[blank_start_idx - 1]
+                        if prev_para.paragraph_format.page_break_before:
+                            has_break_before = True
+                        else:
+                            for run in prev_para.runs:
+                                if hasattr(run, 'element'):
+                                    run_xml = str(run.element.xml)
+                                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                        has_break_before = True
+                                        break
+                    
+                    # 检查空白段落之后是否有分页符
+                    has_break_after = False
+                    if idx < len(document.paragraphs):
+                        next_para = document.paragraphs[idx]
+                        if next_para.paragraph_format.page_break_before:
+                            has_break_after = True
+                        else:
+                            for run in next_para.runs:
+                                if hasattr(run, 'element'):
+                                    run_xml = str(run.element.xml)
+                                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                        has_break_after = True
+                                        break
+                    
+                    # 如果空白段落前后都有分页符，或者空白段落数量非常多，可能是整页空白
+                    # 删除这些空白段落，但保留最后一个，避免导致新的整页空白
+                    if has_break_before or has_break_after or consecutive_blanks >= BLANK_PAGE_THRESHOLD * 2:
+                        # 删除空白段落，但保留最后一个
+                        deleted_count = 0
+                        # 从后往前删除，保留最后一个空白段落
+                        delete_end = blank_start_idx + consecutive_blanks - 1
+                        for delete_idx in range(delete_end, blank_start_idx, -1):
+                            if delete_idx < len(document.paragraphs):
+                                para_to_delete = document.paragraphs[delete_idx]
+                                if len(para_to_delete.text.strip()) == 0:
+                                    # 检查是否包含字段代码
+                                    para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                                    if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                        continue
+                                    para_to_delete._element.getparent().remove(para_to_delete._element)
+                                    deleted_count += 1
+                        
+                        if deleted_count > 0:
+                            issues.append({
+                                "type": "blank_page_removed",
+                                "message": f"已删除第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个空白段落（疑似整页空白）",
+                                "suggestion": "已自动删除整页空白页",
+                                "blank_start": blank_start_idx,
+                                "blank_count": deleted_count,
+                            })
+                
+                consecutive_blanks = 0
+                blank_start_idx = None
+        
+        # 处理文档末尾的整页空白
+        if consecutive_blanks >= BLANK_PAGE_THRESHOLD and blank_start_idx is not None:
+            # 删除末尾的整页空白，但保留最后一个空白段落
+            deleted_count = 0
+            delete_end = blank_start_idx + consecutive_blanks - 1
+            for delete_idx in range(delete_end, blank_start_idx, -1):
+                if delete_idx < len(document.paragraphs):
+                    para_to_delete = document.paragraphs[delete_idx]
+                    if len(para_to_delete.text.strip()) == 0:
+                        # 检查是否包含字段代码
+                        para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                        if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                            continue
+                        para_to_delete._element.getparent().remove(para_to_delete._element)
+                        deleted_count += 1
+            
+            if deleted_count > 0:
+                issues.append({
+                    "type": "blank_page_removed",
+                    "message": f"已删除文档末尾第 {blank_start_idx + 1} 段到第 {blank_start_idx + consecutive_blanks} 段之间的 {deleted_count} 个空白段落（疑似整页空白）",
+                    "suggestion": "已自动删除整页空白页",
+                    "blank_start": blank_start_idx,
+                    "blank_count": deleted_count,
+                })
+        
+        return issues
+
     def _save_file_to_storage(self, key: str, content: bytes) -> bool:
         """
         保存文件到云存储
