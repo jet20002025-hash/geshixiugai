@@ -640,6 +640,110 @@ async def debug_storage_config() -> dict:
 
 
 @router.post(
+    "/{document_id}/convert-to-pdf",
+    summary="将处理后的文档转换为PDF",
+)
+async def convert_document_to_pdf(document_id: str):
+    """
+    将处理后的文档（final.docx）转换为PDF
+    
+    使用LibreOffice将文档转换为PDF，保留原始字体和格式。
+    """
+    import sys
+    log_msg = f"[文档转PDF] 开始转换文档: {document_id}"
+    print(log_msg, file=sys.stderr, flush=True)
+    logger.info(log_msg)
+    
+    # 查找 final.docx 文件
+    final_docx_path = DOCUMENT_DIR / document_id / "final.docx"
+    
+    if not final_docx_path.exists():
+        # 如果final.docx不存在，尝试preview.docx
+        final_docx_path = DOCUMENT_DIR / document_id / "preview.docx"
+        if not final_docx_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="文档不存在或尚未处理完成"
+            )
+    
+    # 使用DocumentService的PDF转换功能
+    document_service = DocumentService(
+        document_dir=DOCUMENT_DIR,
+        template_dir=TEMPLATE_DIR
+    )
+    
+    # 创建临时PDF路径
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp(prefix="doc_to_pdf_"))
+    temp_pdf = temp_dir / f"{document_id}.pdf"
+    
+    try:
+        # 使用LibreOffice转换
+        success = document_service._try_libreoffice_pdf_conversion(
+            docx_path=final_docx_path,
+            pdf_path=temp_pdf
+        )
+        
+        if not success or not temp_pdf.exists():
+            error_msg = "PDF转换失败，可能是LibreOffice权限问题或配置问题，请查看服务器日志"
+            log_msg = f"[文档转PDF] 转换失败: {document_id}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.error(log_msg)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg
+            )
+        
+        # 获取原始文件名
+        metadata = document_service.get_document_metadata(document_id)
+        original_filename = metadata.get("original_filename", f"{document_id}.docx")
+        pdf_filename = Path(original_filename).stem + ".pdf"
+        
+        # 读取PDF文件并返回
+        def generate():
+            try:
+                with open(temp_pdf, "rb") as f:
+                    while True:
+                        chunk = f.read(8192)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.info(f"[文档转PDF] 临时文件已清理: {temp_dir}")
+                except Exception as e:
+                    logger.warning(f"[文档转PDF] 清理临时文件失败: {e}")
+        
+        # 使用 RFC 5987 格式编码 UTF-8 文件名
+        try:
+            encoded_filename = quote(pdf_filename.encode('utf-8'))
+            content_disposition = f'attachment; filename*=UTF-8\'\'{encoded_filename}'
+        except Exception:
+            content_disposition = f'attachment; filename="{pdf_filename}"'
+        
+        return StreamingResponse(
+            generate(),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": content_disposition,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_msg = f"[文档转PDF] 转换过程出现异常: {e}"
+        print(log_msg, file=sys.stderr, flush=True)
+        import traceback
+        traceback.print_exc()
+        logger.exception(log_msg)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF转换失败: {str(e)}"
+        )
+
+
+@router.post(
     "/convert-to-pdf",
     summary="Word转PDF测试",
 )
