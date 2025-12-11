@@ -2521,6 +2521,19 @@ class DocumentService:
         # 定义整页空白的阈值：连续10个以上空白段落可能是整页空白
         BLANK_PAGE_THRESHOLD = 10
         
+        def has_page_break(paragraph) -> bool:
+            """检查段落是否包含分页符"""
+            # 检查段落格式中的分页符
+            if paragraph.paragraph_format.page_break_before:
+                return True
+            # 检查runs中的分页符
+            for run in paragraph.runs:
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        return True
+            return False
+        
         consecutive_blanks = 0
         blank_start_idx = None
         
