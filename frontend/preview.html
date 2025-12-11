@@ -1005,9 +1005,31 @@
         
         // 加载预览内容
         async function loadPreview() {
+            console.log('========== 开始加载预览 ==========');
+            console.log('文档ID:', docId);
+            console.log('当前URL:', window.location.href);
+            console.log('时间戳:', new Date().toISOString());
+            
             perf.start = performance.now();
             logStep('开始', '初始化预览加载');
             console.log('开始加载预览，文档ID:', docId);
+            
+            // 更新加载状态显示
+            const loadingElement = document.getElementById('loading');
+            const loadingStep = document.getElementById('loadingStep');
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+                console.log('✅ 加载元素已显示');
+            } else {
+                console.error('❌ 加载元素不存在！');
+            }
+            
+            if (loadingStep) {
+                loadingStep.textContent = '初始化中...';
+                console.log('✅ 加载步骤元素已更新');
+            } else {
+                console.error('❌ 加载步骤元素不存在！');
+            }
             
             try {
                 // 优先尝试Word文档预览（避免PDF转换误差）
@@ -1031,26 +1053,37 @@
             }
             
             try {
+                console.log('--- 步骤2: 请求PDF/HTML预览 ---');
+                if (loadingStep) loadingStep.textContent = '请求预览接口...';
+                
                 logStep('请求前', '准备发送预览请求');
                 console.log('请求预览接口:', `/documents/${docId}/preview`);
+                console.log('完整URL:', `${window.location.origin}/documents/${docId}/preview`);
                 
                 const requestStart = performance.now();
                 
                 // 添加请求超时控制
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
+                    console.error('⏰ 请求超时（30秒）');
                     controller.abort();
                     logStep('请求超时', '请求超过30秒未响应');
                 }, 30000);
                 
                 let response;
                 try {
+                    console.log('发送fetch请求...');
+                    if (loadingStep) loadingStep.textContent = '正在连接服务器...';
                     response = await fetch(`/documents/${docId}/preview`, {
                         signal: controller.signal
                     });
                     clearTimeout(timeoutId);
+                    console.log('✅ 收到响应:', response.status, response.statusText);
                 } catch (error) {
                     clearTimeout(timeoutId);
+                    console.error('❌ Fetch请求失败:', error);
+                    console.error('错误名称:', error.name);
+                    console.error('错误消息:', error.message);
                     if (error.name === 'AbortError') {
                         throw new Error('请求超时：服务器响应时间超过30秒，可能是文档太大或服务器负载过高');
                     }
@@ -1284,7 +1317,10 @@
                 }
                 
                 showError('加载预览失败', errorDetail);
+                console.error('========== 错误处理完成 ==========');
             }
+            
+            console.log('========== loadPreview函数执行完成 ==========');
         }
         
         // 使用PDF.js加载PDF并生成缩略图
