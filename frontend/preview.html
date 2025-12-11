@@ -1649,12 +1649,15 @@
         console.log('文档ID:', docId);
         console.log('当前URL:', window.location.href);
         
-        // 确保loadPreview函数存在
-        if (typeof loadPreview !== 'function') {
+        // 确保loadPreview函数存在（检查window对象）
+        if (typeof window.loadPreview !== 'function') {
             console.error('❌ loadPreview函数不存在！');
+            console.error('window.loadPreview:', typeof window.loadPreview);
             showError('页面加载错误', '预览功能未正确初始化，请刷新页面重试');
             return;
         }
+        
+        console.log('✅ loadPreview函数已找到:', typeof window.loadPreview);
         
         // 延迟一点时间，确保所有元素都已创建
         const startLoad = () => {
