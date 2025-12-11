@@ -2154,6 +2154,19 @@ class DocumentService:
             para_text = paragraph.text.strip() if paragraph.text else ""
             return len(para_text) == 0
         
+        def has_page_break(paragraph) -> bool:
+            """检查段落是否包含分页符"""
+            # 检查段落格式中的分页符
+            if paragraph.paragraph_format.page_break_before:
+                return True
+            # 检查runs中的分页符
+            for run in paragraph.runs:
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        return True
+            return False
+        
         # 排除关键词列表（摘要、Abstract、目录等部分完全不检测空白行）
         excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
         
@@ -2192,6 +2205,9 @@ class DocumentService:
                             if delete_idx < len(document.paragraphs):
                                 para_to_delete = document.paragraphs[delete_idx]
                                 if is_blank_paragraph(para_to_delete):
+                                    # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                                    if has_page_break(para_to_delete):
+                                        continue
                                     para_to_delete._element.getparent().remove(para_to_delete._element)
                                     deleted_count += 1
                         
@@ -2211,17 +2227,20 @@ class DocumentService:
             # 处理末尾的连续空白
             if consecutive_blanks >= 2 and blank_start_idx is not None:
                 deleted_count = 0
-                for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
-                    if delete_idx < len(document.paragraphs):
-                        para_to_delete = document.paragraphs[delete_idx]
-                        if is_blank_paragraph(para_to_delete):
-                            # 检查：确保不删除包含字段代码的段落（如TOC字段）
-                            para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
-                            if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
-                                # 包含字段代码，不删除
-                                continue
-                            para_to_delete._element.getparent().remove(para_to_delete._element)
-                            deleted_count += 1
+                        for delete_idx in range(blank_start_idx + consecutive_blanks - 1, blank_start_idx - 1, -1):
+                            if delete_idx < len(document.paragraphs):
+                                para_to_delete = document.paragraphs[delete_idx]
+                                if is_blank_paragraph(para_to_delete):
+                                    # 检查：确保不删除包含字段代码的段落（如TOC字段）
+                                    para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
+                                    if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                                        # 包含字段代码，不删除
+                                        continue
+                                    # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                                    if has_page_break(para_to_delete):
+                                        continue
+                                    para_to_delete._element.getparent().remove(para_to_delete._element)
+                                    deleted_count += 1
                 
                 if deleted_count > 0:
                     issues.append({
@@ -2358,6 +2377,9 @@ class DocumentService:
                                         if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
                                             # 包含字段代码，不删除
                                             continue
+                                        # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                                        if has_page_break(para_to_delete):
+                                            continue
                                         # 删除段落
                                         para_to_delete._element.getparent().remove(para_to_delete._element)
                                         deleted_count += 1
@@ -2454,6 +2476,9 @@ class DocumentService:
                                     para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
                                     if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
                                         # 包含字段代码，不删除
+                                        continue
+                                    # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                                    if has_page_break(para_to_delete):
                                         continue
                                     # 删除段落
                                     para_to_delete._element.getparent().remove(para_to_delete._element)
@@ -2585,6 +2610,9 @@ class DocumentService:
                                     para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
                                     if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
                                         continue
+                                    # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                                    if has_page_break(para_to_delete):
+                                        continue
                                     para_to_delete._element.getparent().remove(para_to_delete._element)
                                     deleted_count += 1
                         
@@ -2612,6 +2640,9 @@ class DocumentService:
                         # 检查是否包含字段代码
                         para_xml = para_to_delete._element.xml if hasattr(para_to_delete._element, 'xml') else ""
                         if 'TOC' in para_xml or 'w:fldChar' in para_xml or 'w:instrText' in para_xml:
+                            continue
+                        # 检查是否包含分页符，如果包含则不删除（避免导致空白页）
+                        if has_page_break(para_to_delete):
                             continue
                         para_to_delete._element.getparent().remove(para_to_delete._element)
                         deleted_count += 1
