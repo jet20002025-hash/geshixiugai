@@ -4,6 +4,7 @@ Supabase Storage 存储适配器
 """
 import os
 import httpx
+from urllib.parse import quote
 from typing import BinaryIO, Optional
 from .storage_base import StorageBase
 
@@ -42,8 +43,14 @@ class SupabaseStorage(StorageBase):
             # 读取文件内容
             file_content = file_obj.read()
             
+            # URL编码key中的路径部分（处理中文字符）
+            # 将路径分割为目录和文件名，分别编码
+            key_parts = key.split('/')
+            encoded_parts = [quote(part, safe='') for part in key_parts]
+            encoded_key = '/'.join(encoded_parts)
+            
             # 上传文件
-            upload_url = f"{self.api_url}/object/{self.bucket_name}/{key}"
+            upload_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
             
             with httpx.Client() as client:
                 response = client.post(
@@ -56,6 +63,8 @@ class SupabaseStorage(StorageBase):
                 return True
         except Exception as e:
             print(f"Supabase upload error: {e}")
+            import traceback
+            print(f"Supabase upload traceback: {traceback.format_exc()}")
             return False
     
     def download_file(self, key: str) -> Optional[bytes]:
@@ -63,7 +72,12 @@ class SupabaseStorage(StorageBase):
         if not self.is_available():
             return None
         try:
-            download_url = f"{self.api_url}/object/{self.bucket_name}/{key}"
+            # URL编码key中的路径部分（处理中文字符）
+            key_parts = key.split('/')
+            encoded_parts = [quote(part, safe='') for part in key_parts]
+            encoded_key = '/'.join(encoded_parts)
+            
+            download_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
             
             with httpx.Client() as client:
                 response = client.get(
@@ -82,8 +96,13 @@ class SupabaseStorage(StorageBase):
         if not self.is_available():
             return False
         try:
+            # URL编码key中的路径部分（处理中文字符）
+            key_parts = key.split('/')
+            encoded_parts = [quote(part, safe='') for part in key_parts]
+            encoded_key = '/'.join(encoded_parts)
+            
             # 尝试获取文件信息
-            info_url = f"{self.api_url}/object/info/{self.bucket_name}/{key}"
+            info_url = f"{self.api_url}/object/info/{self.bucket_name}/{encoded_key}"
             
             with httpx.Client() as client:
                 response = client.get(
@@ -100,7 +119,12 @@ class SupabaseStorage(StorageBase):
         if not self.is_available():
             return False
         try:
-            delete_url = f"{self.api_url}/object/{self.bucket_name}/{key}"
+            # URL编码key中的路径部分（处理中文字符）
+            key_parts = key.split('/')
+            encoded_parts = [quote(part, safe='') for part in key_parts]
+            encoded_key = '/'.join(encoded_parts)
+            
+            delete_url = f"{self.api_url}/object/{self.bucket_name}/{encoded_key}"
             
             with httpx.Client() as client:
                 response = client.delete(
