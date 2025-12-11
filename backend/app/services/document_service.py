@@ -670,8 +670,9 @@ class DocumentService:
         """
         识别文档各个部分的段落范围
         返回: {
-            "cover": (0, cover_end),
-            "abstract_zh": (start, end),  # 中文摘要
+            "cover": (0, cover_end),  # 封面（第一页）
+            "integrity": (start, end),  # 诚信承诺（第二页）
+            "abstract_zh": (start, end),  # 中文摘要（第三页）
             "abstract_en": (start, end),  # 英文摘要
             "toc": (start, end),  # 目录
             "body": (start, end),  # 正文
@@ -681,6 +682,8 @@ class DocumentService:
         cover_end = self._find_cover_end_index(document)
         ranges["cover"] = (0, cover_end)
         
+        integrity_start = None
+        integrity_end = None
         abstract_zh_start = None
         abstract_zh_end = None
         abstract_en_start = None
@@ -689,8 +692,35 @@ class DocumentService:
         toc_end = None
         body_start = None
         
-        # 查找中文摘要
+        # 查找诚信承诺（通常在封面之后，摘要之前）
+        integrity_keywords = ["诚信承诺", "诚信", "承诺", "学术诚信", "原创性声明"]
         for idx in range(cover_end, len(document.paragraphs)):
+            para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+            if not para_text:
+                continue
+            # 检查是否包含诚信承诺相关关键词
+            for keyword in integrity_keywords:
+                if keyword in para_text and integrity_start is None:
+                    integrity_start = idx
+                    break
+            # 诚信承诺的结束标志：通常是"摘要"或"ABSTRACT"
+            if integrity_start is not None and (para_text.startswith("摘要") or para_text.startswith("ABSTRACT")):
+                integrity_end = idx
+                break
+        
+        # 如果找到了诚信承诺，但没找到结束标志，假设到摘要之前
+        if integrity_start is not None and integrity_end is None:
+            for idx in range(integrity_start + 1, len(document.paragraphs)):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                if para_text.startswith("摘要") or para_text.startswith("ABSTRACT"):
+                    integrity_end = idx
+                    break
+        
+        # 确定查找后续部分的起始位置
+        search_start = integrity_end if integrity_end is not None else cover_end
+        
+        # 查找中文摘要
+        for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if para_text.startswith("摘要") and abstract_zh_start is None:
                 abstract_zh_start = idx
@@ -707,7 +737,7 @@ class DocumentService:
                     break
         
         # 查找英文摘要
-        for idx in range(cover_end, len(document.paragraphs)):
+        for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if para_text.startswith("ABSTRACT") and abstract_en_start is None:
                 abstract_en_start = idx
@@ -716,7 +746,7 @@ class DocumentService:
                 break
         
         # 查找目录
-        for idx in range(cover_end, len(document.paragraphs)):
+        for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if (para_text.startswith("目录") or para_text.startswith("Contents")) and toc_start is None:
                 toc_start = idx
@@ -725,7 +755,7 @@ class DocumentService:
                 break
         
         # 查找正文开始（从"绪论"或"概述"开始）
-        for idx in range(cover_end, len(document.paragraphs)):
+        for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if (para_text.startswith("第一章") or para_text.startswith("第1章") or para_text.startswith("Chapter 1") or 
                 para_text.startswith("1 引言") or para_text.startswith("1 绪论") or para_text.startswith("1 概述") or
@@ -733,6 +763,8 @@ class DocumentService:
                 body_start = idx
                 break
         
+        if integrity_start is not None:
+            ranges["integrity"] = (integrity_start, integrity_end if integrity_end else (abstract_zh_start if abstract_zh_start else len(document.paragraphs)))
         if abstract_zh_start is not None:
             ranges["abstract_zh"] = (abstract_zh_start, abstract_zh_end if abstract_zh_end else (abstract_en_start if abstract_en_start else (toc_start if toc_start else len(document.paragraphs))))
         if abstract_en_start is not None:
@@ -767,14 +799,14 @@ class DocumentService:
             # 跳过封面部分，不修改封面内容
             if idx < cover_end_idx:
                 continue
-            style_name = paragraph.style.name if paragraph.style else None
-            rule = None
-            applied_rule_name = None
-            paragraph_text = paragraph.text.strip() if paragraph.text else ""
             
             # 判断当前段落属于哪个部分
             current_section = None
-            if "abstract_zh" in section_ranges:
+            if "integrity" in section_ranges:
+                start, end = section_ranges["integrity"]
+                if start <= idx < end:
+                    current_section = "integrity"
+            if current_section is None and "abstract_zh" in section_ranges:
                 start, end = section_ranges["abstract_zh"]
                 if start <= idx < end:
                     current_section = "abstract_zh"
@@ -790,6 +822,15 @@ class DocumentService:
                 start, end = section_ranges["body"]
                 if start <= idx < end:
                     current_section = "body"
+            
+            # 跳过诚信承诺部分，不修改任何内容（只检查有无即可）
+            if current_section == "integrity":
+                continue
+            
+            style_name = paragraph.style.name if paragraph.style else None
+            rule = None
+            applied_rule_name = None
+            paragraph_text = paragraph.text.strip() if paragraph.text else ""
             
             # 根据当前部分应用特定格式规则
             # 处理中文摘要部分
@@ -1967,6 +2008,8 @@ class DocumentService:
         检测文档中的大段空白
         
         规则：
+        - 只在正文部分检测空白行
+        - 封面、诚信承诺、摘要、目录等部分不检测空白行
         - 先识别大章节（1、2、3或一、二、三开头，字体三号约16磅）
         - 只在大章节内部检测空白行（连续2个以上空白段落）
         - 章节之间不需要检测空白行
@@ -1976,64 +2019,20 @@ class DocumentService:
         """
         issues = []
         
-        # 1. 找到正文开始位置（从"绪论"、"概述"或"第一章"开始）
-        # 明确排除摘要、Abstract、目录等部分，这些部分完全不检测空白行
+        # 1. 使用 _find_section_ranges 获取正文范围
+        # 明确排除封面、诚信承诺、摘要、Abstract、目录等部分，这些部分完全不检测空白行
+        section_ranges = self._find_section_ranges(document)
         body_start_idx = None
+        body_end_idx = len(document.paragraphs)
         
-        # 找到正文开始位置：从"绪论"、"概述"或"第一章"开始
-        body_start_patterns = [
-            r'^第一章', r'^第1章', r'^第[一二三四五六七八九十]章',  # 第一章、第二章等
-            r'^绪论$', r'^概述$',  # 绪论、概述（精确匹配）
-            r'^1\s+绪论', r'^1\s+概述',  # 1 绪论、1 概述
-            r'^1\.\s+绪论', r'^1\.\s+概述',  # 1. 绪论、1. 概述
-        ]
+        # 获取正文范围
+        if "body" in section_ranges:
+            body_start_idx, body_end_idx = section_ranges["body"]
         
-        # 先找到摘要、Abstract、目录等部分，确保这些部分不被检测
-        excluded_keywords = ['摘要', 'Abstract', '目录', 'Contents', '关键词', 'Key words', 'KeyWords']
-        
-        for idx, paragraph in enumerate(document.paragraphs):
-            para_text = paragraph.text.strip() if paragraph.text else ""
-            if not para_text:
-                continue
-            
-            # 如果遇到摘要、Abstract、目录等关键词，跳过这些部分
-            is_excluded = False
-            for keyword in excluded_keywords:
-                if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
-                    is_excluded = True
-                    break
-            
-            if is_excluded:
-                continue
-            
-            # 检查是否符合正文开始模式
-            for pattern in body_start_patterns:
-                if re.match(pattern, para_text, re.IGNORECASE):
-                    body_start_idx = idx
-                    break
-            
-            if body_start_idx is not None:
-                break
-        
-        # 如果没找到，使用原来的方法
+        # 如果没有找到正文范围，使用原来的方法查找
         if body_start_idx is None:
             body_start_idx = self._find_body_start_index(document)
-        
-        # 确保正文开始位置不在摘要、Abstract、目录等部分
-        if body_start_idx is not None:
-            for idx in range(0, body_start_idx):
-                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-                for keyword in excluded_keywords:
-                    if re.search(rf'^{re.escape(keyword)}', para_text, re.IGNORECASE):
-                        # 如果正文开始位置在排除部分内，继续向后查找
-                        body_start_idx = None
-                        break
-                if body_start_idx is None:
-                    break
-            
-            # 如果重新查找后还是没找到，使用原来的方法
-            if body_start_idx is None:
-                body_start_idx = self._find_body_start_index(document)
+            body_end_idx = len(document.paragraphs)
         
         # 2. 找到参考文献开始位置（作为检测结束位置）
         reference_start_idx = None
@@ -2051,14 +2050,14 @@ class DocumentService:
                 acknowledgement_start_idx = idx
                 break
         
-        # 确定检测范围：从正文开始到参考文献开始（或致谢开始，取较早的）
+        # 确定检测范围：只在正文范围内检测空白行
         check_start_idx = body_start_idx
         if check_start_idx is None:
             return issues
         
-        # 检测结束位置：参考文献开始或致谢开始，取较早的
-        check_end_idx = len(document.paragraphs)
-        if reference_start_idx is not None:
+        # 检测结束位置：正文结束位置、参考文献开始或致谢开始，取较早的
+        check_end_idx = body_end_idx
+        if reference_start_idx is not None and reference_start_idx < check_end_idx:
             check_end_idx = reference_start_idx
         if acknowledgement_start_idx is not None and acknowledgement_start_idx < check_end_idx:
             check_end_idx = acknowledgement_start_idx
@@ -2479,6 +2478,8 @@ class DocumentService:
         检测并删除整页空白页
         
         规则：
+        - 只在正文部分检测整页空白
+        - 封面、诚信承诺、摘要、目录等部分不检测整页空白
         - 检测连续的空白段落，如果这些空白段落导致整页空白，则删除
         - 不允许整页空白页存在
         
@@ -2486,6 +2487,20 @@ class DocumentService:
             问题列表
         """
         issues = []
+        
+        # 1. 使用 _find_section_ranges 获取正文范围
+        # 明确排除封面、诚信承诺、摘要、Abstract、目录等部分，这些部分完全不检测整页空白
+        section_ranges = self._find_section_ranges(document)
+        body_start_idx = None
+        body_end_idx = len(document.paragraphs)
+        
+        # 获取正文范围
+        if "body" in section_ranges:
+            body_start_idx, body_end_idx = section_ranges["body"]
+        
+        # 如果没有找到正文范围，直接返回（不检测整页空白）
+        if body_start_idx is None:
+            return issues
         
         # 检测整页空白页的方法：
         # 1. 查找连续的大量空白段落（可能是整页空白）
@@ -2498,7 +2513,9 @@ class DocumentService:
         consecutive_blanks = 0
         blank_start_idx = None
         
-        for idx, paragraph in enumerate(document.paragraphs):
+        # 只在正文范围内检测
+        for idx in range(body_start_idx, body_end_idx):
+            paragraph = document.paragraphs[idx]
             para_text = paragraph.text.strip() if paragraph.text else ""
             
             # 检查是否是空白段落
