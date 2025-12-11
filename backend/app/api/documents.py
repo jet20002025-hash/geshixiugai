@@ -703,16 +703,51 @@ async def convert_word_to_pdf(file: UploadFile):
     temp_dir = Path(tempfile.mkdtemp(prefix="word_to_pdf_"))
     # 确保临时目录权限正确（可读写执行）
     os.chmod(temp_dir, 0o755)
-    temp_input = temp_dir / file.filename
-    temp_pdf = temp_dir / f"{Path(file.filename).stem}.pdf"
+    
+    # 使用安全的文件名（避免中文文件名问题）
+    import uuid
+    safe_input_name = f"input_{uuid.uuid4().hex[:8]}{Path(file.filename).suffix}"
+    temp_input = temp_dir / safe_input_name
+    temp_pdf = temp_dir / f"output_{uuid.uuid4().hex[:8]}.pdf"
     
     try:
         # 保存上传的文件
+        log_msg = f"[Word转PDF] 保存上传文件到: {temp_input}"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        
+        # 重置文件指针到开头（确保读取完整内容）
+        file.file.seek(0)
+        uploaded_size = 0
         with open(temp_input, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+            uploaded_size = shutil.copyfileobj(file.file, f)
+        
+        # 验证文件大小
+        saved_size = temp_input.stat().st_size
+        log_msg = f"[Word转PDF] 文件保存完成: 上传大小={uploaded_size}, 保存大小={saved_size} bytes"
+        print(log_msg, file=sys.stderr, flush=True)
+        logger.info(log_msg)
+        
+        if saved_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="上传的文件为空"
+            )
         
         # 确保文件权限正确（可读）
         os.chmod(temp_input, 0o644)
+        
+        # 记录文件的前几个字节（用于验证文件内容）
+        try:
+            with open(temp_input, "rb") as f:
+                first_bytes = f.read(20)
+                log_msg = f"[Word转PDF] 文件前20字节（十六进制）: {first_bytes.hex()}"
+                print(log_msg, file=sys.stderr, flush=True)
+                logger.info(log_msg)
+        except Exception as e:
+            log_msg = f"[Word转PDF] 无法读取文件前20字节: {e}"
+            print(log_msg, file=sys.stderr, flush=True)
+            logger.warning(log_msg)
         
         # 使用多种方式记录日志，确保能被看到
         import sys
