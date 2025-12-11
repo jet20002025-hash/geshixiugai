@@ -1020,8 +1020,8 @@
         }
         
         // 加载预览内容
-        // 将函数同时赋值给局部变量和window对象，确保全局可访问
-        async function loadPreview() {
+        // 直接定义到window对象，确保全局可访问
+        window.loadPreview = async function loadPreview() {
             console.log('========== 开始加载预览 ==========');
             console.log('文档ID:', docId);
             console.log('当前URL:', window.location.href);
@@ -1373,12 +1373,10 @@
             }
             
             console.log('========== loadPreview函数执行完成 ==========');
-        }
+        };
         
-        // 将函数暴露到window对象，确保全局可访问
-        // 必须在函数定义之后立即暴露
-        window.loadPreview = loadPreview;
-        console.log('✅ loadPreview函数已暴露到window对象');
+        // 函数已经直接定义到window对象，无需再次暴露
+        console.log('✅ loadPreview函数已定义到window对象:', typeof window.loadPreview);
         
         // 使用PDF.js加载PDF并生成缩略图
         async function loadPdfWithThumbnails(blobUrl, pdfjsLibParam = null) {
@@ -1661,16 +1659,16 @@
         // 延迟一点时间，确保所有元素都已创建
         const startLoad = () => {
             console.log('✅ 开始执行loadPreview');
-            // 使用局部或全局函数
-            const fn = loadPreview || window.loadPreview;
-            if (typeof fn !== 'function') {
+            // 使用window对象上的函数
+            if (typeof window.loadPreview !== 'function') {
                 console.error('❌ loadPreview函数仍然不存在！');
+                console.error('window.loadPreview:', typeof window.loadPreview);
                 showError('加载预览失败', '预览功能未正确初始化');
                 return;
             }
             
             try {
-                fn().catch(error => {
+                window.loadPreview().catch(error => {
                     console.error('❌ loadPreview执行失败:', error);
                     console.error('错误堆栈:', error.stack);
                     showError('加载预览失败', error.message || '未知错误，请查看控制台');
