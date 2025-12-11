@@ -9,39 +9,92 @@ echo "=========================================="
 echo ""
 
 FONT_DIR="/usr/share/fonts/chinese"
-mkdir -p "$FONT_DIR"
+sudo mkdir -p "$FONT_DIR"
 
-# 1. 安装思源字体（开源，支持中文）
-echo "1. 检查并安装思源字体..."
+# 检测操作系统
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+else
+    OS="unknown"
+fi
+
+echo "检测到操作系统: $OS"
+echo ""
+
+# 1. 尝试从系统包管理器安装字体
+echo "1. 尝试从系统包管理器安装字体..."
+echo "----------------------------------------"
+
+if [ "$OS" = "centos" ] || [ "$OS" = "rhel" ] || [ "$OS" = "alinux" ]; then
+    # CentOS/RHEL/阿里云Linux
+    echo "使用yum安装字体包..."
+    
+    # 安装文泉驿字体（通常已安装，但确保完整）
+    sudo yum install -y wqy-microhei-fonts wqy-zenhei-fonts 2>/dev/null || {
+        echo "⚠️  无法通过yum安装文泉驿字体，将尝试手动安装"
+    }
+    
+    # 安装Liberation字体（Times New Roman替代）
+    sudo yum install -y liberation-serif-fonts liberation-sans-fonts 2>/dev/null || {
+        echo "⚠️  无法通过yum安装Liberation字体"
+    }
+    
+    echo "✅ 系统字体包安装完成"
+elif [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+    # Ubuntu/Debian
+    echo "使用apt安装字体包..."
+    sudo apt-get update
+    sudo apt-get install -y fonts-wqy-microhei fonts-wqy-zenhei fonts-liberation 2>/dev/null || {
+        echo "⚠️  无法通过apt安装字体包"
+    }
+    echo "✅ 系统字体包安装完成"
+else
+    echo "⚠️  不支持的操作系统，将尝试手动安装字体"
+fi
+
+echo ""
+
+# 2. 手动安装思源字体（如果系统包管理器没有）
+echo "2. 检查并安装思源字体（开源，支持中文）..."
 echo "----------------------------------------"
 
 # 思源宋体
-if [ ! -f "$FONT_DIR/SourceHanSerifSC-Regular.otf" ]; then
+if ! fc-list | grep -i "Source Han Serif" > /dev/null 2>&1; then
     echo "下载思源宋体..."
     cd /tmp
-    wget -q https://github.com/adobe-fonts/source-han-serif/raw/release/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf -O SourceHanSerifSC-Regular.otf 2>/dev/null || {
-        echo "⚠️  无法从GitHub下载思源宋体，请手动下载并安装"
-        echo "   下载地址: https://github.com/adobe-fonts/source-han-serif/releases"
+    # 使用GitHub Releases API获取最新版本
+    wget -q --timeout=10 https://github.com/adobe-fonts/source-han-serif/raw/release/OTF/SimplifiedChinese/SourceHanSerifSC-Regular.otf -O SourceHanSerifSC-Regular.otf 2>/dev/null || {
+        echo "⚠️  无法从GitHub下载思源宋体"
+        echo "   请手动下载并安装:"
+        echo "   1. 访问: https://github.com/adobe-fonts/source-han-serif/releases"
+        echo "   2. 下载 SimplifiedChinese 版本的 OTF 文件"
+        echo "   3. 复制到: $FONT_DIR/"
     }
     if [ -f "SourceHanSerifSC-Regular.otf" ]; then
         sudo cp SourceHanSerifSC-Regular.otf "$FONT_DIR/"
         echo "✅ 思源宋体安装完成"
+        rm -f SourceHanSerifSC-Regular.otf
     fi
 else
     echo "✅ 思源宋体已安装"
 fi
 
 # 思源黑体
-if [ ! -f "$FONT_DIR/SourceHanSansSC-Regular.otf" ]; then
+if ! fc-list | grep -i "Source Han Sans" > /dev/null 2>&1; then
     echo "下载思源黑体..."
     cd /tmp
-    wget -q https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf -O SourceHanSansSC-Regular.otf 2>/dev/null || {
-        echo "⚠️  无法从GitHub下载思源黑体，请手动下载并安装"
-        echo "   下载地址: https://github.com/adobe-fonts/source-han-sans/releases"
+    wget -q --timeout=10 https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf -O SourceHanSansSC-Regular.otf 2>/dev/null || {
+        echo "⚠️  无法从GitHub下载思源黑体"
+        echo "   请手动下载并安装:"
+        echo "   1. 访问: https://github.com/adobe-fonts/source-han-sans/releases"
+        echo "   2. 下载 SimplifiedChinese 版本的 OTF 文件"
+        echo "   3. 复制到: $FONT_DIR/"
     }
     if [ -f "SourceHanSansSC-Regular.otf" ]; then
         sudo cp SourceHanSansSC-Regular.otf "$FONT_DIR/"
         echo "✅ 思源黑体安装完成"
+        rm -f SourceHanSansSC-Regular.otf
     fi
 else
     echo "✅ 思源黑体已安装"
