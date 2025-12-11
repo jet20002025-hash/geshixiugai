@@ -1334,13 +1334,6 @@
                     // 静默处理，不影响预览显示
                 });
                 
-                // 添加全局未捕获的 Promise 错误处理
-                window.addEventListener('unhandledrejection', (event) => {
-                    console.error('未捕获的 Promise 错误:', event.reason);
-                    // 防止错误显示在控制台
-                    event.preventDefault();
-                });
-                
             } catch (error) {
                 console.error('========== 捕获到错误 ==========');
                 console.error('错误对象:', error);
