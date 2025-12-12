@@ -905,22 +905,44 @@ class DocumentService:
             if cheng_idx is None and '诚' in para_text:
                 cheng_idx = idx
                 self._log_to_file(f"[修复] 步骤1: 找到'诚'，段落索引: {idx}, 文本: {para_text[:80]}")
+                # 如果四个字都在同一个段落，一次性检查
+                if '信' in para_text and '承' in para_text and '诺' in para_text:
+                    xin_idx = idx
+                    cheng2_idx = idx
+                    nuo_idx = idx
+                    integrity_start = idx
+                    self._log_to_file(f"[修复] ✅ 在同一段落找到完整的'诚信承诺'，段落索引: {idx}")
+                    break
+                # 否则继续查找其他字
                 continue
             
-            # 第二步：找到"诚"后，找"信"（必须在"诚"之后）
-            if cheng_idx is not None and xin_idx is None and idx > cheng_idx and '信' in para_text:
+            # 第二步：找到"诚"后，找"信"（可以在同一段落或之后）
+            if cheng_idx is not None and xin_idx is None and idx >= cheng_idx and '信' in para_text:
                 xin_idx = idx
                 self._log_to_file(f"[修复] 步骤2: 找到'信'，段落索引: {idx}, 文本: {para_text[:80]}")
+                # 如果"承"和"诺"也在同一段落，一次性检查
+                if '承' in para_text and '诺' in para_text:
+                    cheng2_idx = idx
+                    nuo_idx = idx
+                    integrity_start = cheng_idx
+                    self._log_to_file(f"[修复] ✅ 找到完整的'诚信承诺'，起始段落索引: {integrity_start}")
+                    break
                 continue
             
-            # 第三步：找到"信"后，找"承"（必须在"信"之后）
-            if xin_idx is not None and cheng2_idx is None and idx > xin_idx and '承' in para_text:
+            # 第三步：找到"信"后，找"承"（可以在同一段落或之后）
+            if xin_idx is not None and cheng2_idx is None and idx >= xin_idx and '承' in para_text:
                 cheng2_idx = idx
                 self._log_to_file(f"[修复] 步骤3: 找到'承'，段落索引: {idx}, 文本: {para_text[:80]}")
+                # 如果"诺"也在同一段落，一次性检查
+                if '诺' in para_text:
+                    nuo_idx = idx
+                    integrity_start = cheng_idx
+                    self._log_to_file(f"[修复] ✅ 找到完整的'诚信承诺'，起始段落索引: {integrity_start}")
+                    break
                 continue
             
-            # 第四步：找到"承"后，找"诺"（必须在"承"之后）
-            if cheng2_idx is not None and nuo_idx is None and idx > cheng2_idx and '诺' in para_text:
+            # 第四步：找到"承"后，找"诺"（可以在同一段落或之后）
+            if cheng2_idx is not None and nuo_idx is None and idx >= cheng2_idx and '诺' in para_text:
                 nuo_idx = idx
                 self._log_to_file(f"[修复] 步骤4: 找到'诺'，段落索引: {idx}, 文本: {para_text[:80]}")
                 # 找到所有四个字，设置诚信承诺的起始位置为"诚"所在的段落
