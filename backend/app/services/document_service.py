@@ -124,6 +124,21 @@ class DocumentService:
             print(f"[修复] ✅ 已确保诚信承诺和摘要分开在不同页")
             stats["integrity_abstract_separation_fixed"] = True
         
+        # 修复后再次检测，确认分页结果
+        print(f"[检测] ========== 修复后检测：诚信承诺和摘要分页结果 ==========")
+        post_fix_diagnosis = self._diagnose_integrity_abstract_separation(final_doc)
+        if post_fix_diagnosis["has_page_break_between"]:
+            print(f"[检测] ✅ 修复成功：诚信承诺和摘要已分开在不同页")
+            print(f"[检测] 分页符位置: {len(post_fix_diagnosis['page_break_locations'])} 个")
+            for loc in post_fix_diagnosis['page_break_locations']:
+                print(f"[检测]   - 段落 {loc['index']}: {loc['type']}")
+            stats["post_fix_separation_status"] = "已分开"
+        else:
+            print(f"[检测] ❌ 修复失败：诚信承诺和摘要仍然没有分页符")
+            print(f"[检测] 问题: {post_fix_diagnosis.get('issue', '未知')}")
+            stats["post_fix_separation_status"] = "未分开"
+        stats["post_fix_diagnosis"] = post_fix_diagnosis
+        
         # 检测大段空白
         blank_issues = self._check_excessive_blanks(final_doc)
         if blank_issues:
