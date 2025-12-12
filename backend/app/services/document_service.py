@@ -2917,30 +2917,49 @@ class DocumentService:
                 watermark_pdf = io.BytesIO()
                 c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
                 
-                # 设置水印样式 - 红色、大字体、清晰可见
-                from reportlab.lib.colors import red
-                c.setFillColor(red)  # 红色
-                # 根据页面大小计算字体大小，确保水印覆盖至少三分之二的页面
-                # 字体大小约为页面宽度的1/15到1/20，确保水印足够大
-                font_size = max(40, int(page_width / 15))
+                # 设置水印样式 - 浅红色、半透明、均匀分布
+                # 使用浅红色（RGB: 255, 200, 200）并设置透明度
+                from reportlab.lib.colors import Color
+                light_red = Color(1.0, 0.78, 0.78, alpha=0.3)  # 浅红色，30%透明度
+                c.setFillColor(light_red)
+                
+                # 根据页面大小计算字体大小，适中即可
+                font_size = max(30, int(page_width / 20))
                 c.setFont("Helvetica-Bold", font_size)
                 
-                # 计算水印位置（覆盖页面至少三分之二的面积）
-                # 使用网格布局：3列4行或类似布局
+                # 计算文本宽度和高度（用于避免重叠）
+                text_width = c.stringWidth(watermark_text, "Helvetica-Bold", font_size)
+                text_height = font_size * 1.2  # 估算文本高度
+                
+                # 计算水印位置（均匀分布，避免重叠）
+                # 使用网格布局，确保水印之间有足够间距
+                # 计算合适的列数和行数
                 cols = 3
                 rows = math.ceil(watermarks_per_page / cols)
                 
-                # 计算每个水印的位置（覆盖页面中心区域，至少三分之二）
-                # 边距设置为页面尺寸的1/6，这样中心区域占2/3
-                margin_x = page_width / 6
-                margin_y = page_height / 6
+                # 计算每个水印的位置（覆盖页面，但留出边距）
+                # 边距设置为页面尺寸的1/8
+                margin_x = page_width / 8
+                margin_y = page_height / 8
                 usable_width = page_width - 2 * margin_x
                 usable_height = page_height - 2 * margin_y
                 
-                x_step = usable_width / (cols + 1) if cols > 1 else usable_width / 2
-                y_step = usable_height / (rows + 1) if rows > 1 else usable_height / 2
+                # 计算步长，确保水印之间有足够间距（至少是文本宽度的1.5倍）
+                min_spacing = max(text_width * 1.5, text_height * 1.5)
+                x_step = max(usable_width / (cols + 1), min_spacing)
+                y_step = max(usable_height / (rows + 1), min_spacing)
                 
-                # 添加水印
+                # 如果计算出的步长太小，调整列数和行数
+                if x_step < min_spacing or y_step < min_spacing:
+                    # 重新计算合适的列数和行数
+                    cols = max(2, int(usable_width / min_spacing))
+                    rows = max(2, int(usable_height / min_spacing))
+                    x_step = usable_width / (cols + 1)
+                    y_step = usable_height / (rows + 1)
+                    # 限制总水印数量，避免过多
+                    watermarks_per_page = min(watermarks_per_page, cols * rows)
+                
+                # 添加水印（均匀分布，避免重叠）
                 watermark_count = 0
                 for row in range(rows):
                     for col in range(cols):
@@ -2951,37 +2970,21 @@ class DocumentService:
                         x = margin_x + (col + 1) * x_step
                         y = margin_y + (row + 1) * y_step
                         
-                        # 绘制水印文本（旋转45度，更大更清晰）
+                        # 绘制水印文本（旋转45度）
                         c.saveState()
                         c.translate(x, y)
                         c.rotate(45)  # 旋转45度
-                        # 使用红色填充和描边，确保水印清晰可见
-                        c.setFillColor(red)
-                        c.setStrokeColor(red)
-                        c.setLineWidth(0.5)
-                        # 绘制文本（红色，清晰可见）
-                        c.drawString(0, 0, watermark_text)
+                        # 使用浅红色，半透明
+                        c.setFillColor(light_red)
+                        # 绘制文本
+                        text_width_at_angle = c.stringWidth(watermark_text, "Helvetica-Bold", font_size)
+                        c.drawString(-text_width_at_angle / 2, 0, watermark_text)
                         c.restoreState()
                         
                         watermark_count += 1
                     
                     if watermark_count >= watermarks_per_page:
                         break
-                
-                # 确保水印覆盖足够大的面积 - 在页面中心添加一个大的水印
-                center_x = page_width / 2
-                center_y = page_height / 2
-                c.saveState()
-                c.translate(center_x, center_y)
-                c.rotate(45)
-                # 中心水印使用更大的字体
-                center_font_size = max(60, int(page_width / 10))
-                c.setFont("Helvetica-Bold", center_font_size)
-                c.setFillColor(red)
-                # 获取文本宽度，居中显示
-                text_width = c.stringWidth(watermark_text, "Helvetica-Bold", center_font_size)
-                c.drawString(-text_width / 2, 0, watermark_text)
-                c.restoreState()
                 
                 c.save()
                 watermark_pdf.seek(0)
