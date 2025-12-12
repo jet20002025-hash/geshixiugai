@@ -39,6 +39,10 @@ class DocumentService:
     def __init__(self, document_dir: Path, template_dir: Path) -> None:
         self.document_dir = document_dir
         self.template_dir = template_dir
+        self.document_dir.mkdir(parents=True, exist_ok=True)
+        # 获取存储实例（如果可用）
+        self.storage = get_storage()
+        self.use_storage = self.storage is not None
     
     def _log_to_file(self, message: str) -> None:
         """将日志消息同时输出到 stderr 和日志文件（双重保险）"""
@@ -48,12 +52,6 @@ class DocumentService:
                 f.write(f"{message}\n")
         except Exception:
             pass
-        self.document_dir = document_dir
-        self.template_dir = template_dir
-        self.document_dir.mkdir(parents=True, exist_ok=True)
-        # 获取存储实例（如果可用）
-        self.storage = get_storage()
-        self.use_storage = self.storage is not None
 
     async def process_document(
         self, 
