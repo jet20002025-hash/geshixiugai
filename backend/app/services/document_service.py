@@ -3994,9 +3994,13 @@ class DocumentService:
                         print(f"[HTML预览] 检测到run中的分页符（段落 {idx}）")
                         break
             
-            # 如果检测到分页符，添加分页标记（使用CSS分页，不添加可见分隔线）
+            # 如果检测到分页符，添加分页标记
+            # 注意：在浏览器预览中，page-break-before: always 会显示为空白页
+            # 因此只在打印或PDF生成时使用分页符，浏览器预览中不添加空白页
+            # 如果需要，可以添加一个轻微的分隔线来标识分页位置（但不占用空间）
             if page_break_before:
-                html_content += '<div class="page-break"></div>\n'
+                # 使用CSS类，在浏览器中不显示空白，只在打印/PDF时生效
+                html_content += '<div class="page-break" style="display: none;"></div>\n'
             
             # 检查段落是否包含图片
             has_image = self._paragraph_has_image_or_equation(paragraph)
@@ -4915,9 +4919,22 @@ read_file
                 margin: 10px auto;
                 page-break-inside: avoid;
             }}
-            /* 分页控制 - 使用CSS分页，不添加可见分隔线 */
+            /* 分页控制 - 只在打印或PDF生成时生效，浏览器预览中不显示空白页 */
             .page-break {{
+                /* 在浏览器中隐藏，不占用空间 */
+                display: none;
+                /* 只在打印或PDF生成时生效 */
                 page-break-before: always;
+            }}
+            /* 打印时显示分页符 */
+            @media print {{
+                .page-break {{
+                    display: block;
+                    page-break-before: always;
+                    height: 0;
+                    margin: 0;
+                    padding: 0;
+                }}
             }}
             /* 在每个段落后添加轻微的分隔（帮助识别分页） */
             p {{
