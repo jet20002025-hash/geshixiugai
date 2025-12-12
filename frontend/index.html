@@ -1156,8 +1156,8 @@
               this.style.transform = "translateY(0)";
             };
           } else {
-            // 未支付，显示预览链接（仅查看，不可下载）
-            previewLink.textContent = "👁️ 预览文档（仅查看，不可下载）";
+            // 未支付，显示预览链接（付费后可下载 word文档）
+            previewLink.textContent = "👁️ 预览文档（付费后可下载 word文档）";
             previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
             previewLink.target = "_blank";
             previewLink.className = "preview-btn";
