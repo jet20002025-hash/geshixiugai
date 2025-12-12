@@ -78,6 +78,12 @@ class DocumentService:
         # 加载文档
         document = Document(original_path)
         
+        # 诊断1：检查原始文档中诚信承诺和摘要的分页情况
+        print(f"[诊断] ========== 开始诊断：原始文档 ==========")
+        original_diagnosis = self._diagnose_integrity_abstract_separation(document)
+        print(f"[诊断] 原始文档诊断结果: {original_diagnosis['issue'] if original_diagnosis['issue'] else '有分页符'}")
+        print(f"[诊断] 分页符位置: {len(original_diagnosis['page_break_locations'])} 个")
+        
         # 应用页面设置（优先使用标准）
         self._apply_page_settings(document)
         
@@ -129,6 +135,23 @@ class DocumentService:
 
         final_path = task_dir / "final.docx"
         final_doc.save(final_path)
+
+        # 诊断2：检查格式修改后的文档中诚信承诺和摘要的分页情况
+        print(f"[诊断] ========== 开始诊断：格式修改后的文档 ==========")
+        final_diagnosis = self._diagnose_integrity_abstract_separation(final_doc)
+        print(f"[诊断] 格式修改后诊断结果: {final_diagnosis['issue'] if final_diagnosis['issue'] else '有分页符'}")
+        print(f"[诊断] 分页符位置: {len(final_diagnosis['page_break_locations'])} 个")
+        
+        # 对比诊断结果
+        if original_diagnosis["has_page_break_between"] and not final_diagnosis["has_page_break_between"]:
+            print(f"[诊断] ⚠️ 警告：格式修改过程中丢失了分页符！")
+            stats["diagnosis_warning"] = "格式修改过程中丢失了诚信承诺和摘要之间的分页符"
+        elif not original_diagnosis["has_page_break_between"]:
+            print(f"[诊断] ⚠️ 警告：原始文档中就没有分页符！")
+            stats["diagnosis_warning"] = "原始文档中诚信承诺和摘要之间没有分页符"
+        
+        stats["original_diagnosis"] = original_diagnosis
+        stats["final_diagnosis"] = final_diagnosis
 
         # 验证格式修改是否正确：对比原始文档和修改后的文档
         print(f"[格式验证] 开始验证格式修改是否正确...")
@@ -2603,6 +2626,150 @@ class DocumentService:
         
         # 空白段落已直接删除，不需要标记
         return issues
+
+    def _diagnose_integrity_abstract_separation(self, document: Document) -> Dict:
+        """
+        诊断诚信承诺和摘要之间的分页情况
+        
+        Returns:
+            诊断信息字典
+        """
+        diagnosis = {
+            "integrity_found": False,
+            "abstract_found": False,
+            "integrity_start_idx": None,
+            "abstract_start_idx": None,
+            "has_page_break_between": False,
+            "page_break_locations": [],
+            "paragraphs_between": [],
+            "issue": None
+        }
+        
+        # 查找诚信承诺
+        integrity_pattern = re.compile(r'诚\s*信\s*承\s*诺', re.IGNORECASE)
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if integrity_pattern.search(para_text) and not diagnosis["integrity_found"]:
+                diagnosis["integrity_found"] = True
+                diagnosis["integrity_start_idx"] = idx
+                print(f"[诊断] 找到诚信承诺，段落索引: {idx}, 文本: {para_text[:50]}")
+                break
+        
+        # 查找摘要
+        abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
+        for idx, paragraph in enumerate(document.paragraphs):
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            if abstract_pattern.match(para_text) and not diagnosis["abstract_found"]:
+                diagnosis["abstract_found"] = True
+                diagnosis["abstract_start_idx"] = idx
+                print(f"[诊断] 找到摘要，段落索引: {idx}, 文本: {para_text[:50]}")
+                break
+        
+        if not diagnosis["integrity_found"] or not diagnosis["abstract_found"]:
+            diagnosis["issue"] = "未找到诚信承诺或摘要"
+            return diagnosis
+        
+        if diagnosis["abstract_start_idx"] <= diagnosis["integrity_start_idx"]:
+            diagnosis["issue"] = "摘要在诚信承诺之前，顺序异常"
+            return diagnosis
+        
+        # 检查诚信承诺和摘要之间的段落
+        start_idx = diagnosis["integrity_start_idx"]
+        end_idx = diagnosis["abstract_start_idx"]
+        
+        print(f"[诊断] 诚信承诺和摘要之间的段落索引: {start_idx} 到 {end_idx}")
+        
+        # 检查每个段落是否有分页符
+        for idx in range(start_idx, end_idx):
+            paragraph = document.paragraphs[idx]
+            para_text = paragraph.text.strip() if paragraph.text else ""
+            
+            # 检查段落格式中的分页符
+            has_page_break = False
+            if paragraph.paragraph_format.page_break_before:
+                has_page_break = True
+                diagnosis["page_break_locations"].append({
+                    "index": idx,
+                    "type": "paragraph_format.page_break_before",
+                    "text": para_text[:50]
+                })
+                print(f"[诊断] 段落 {idx} 有分页符 (paragraph_format.page_break_before): {para_text[:50]}")
+            
+            # 检查runs中的分页符
+            for run_idx, run in enumerate(paragraph.runs):
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        has_page_break = True
+                        diagnosis["page_break_locations"].append({
+                            "index": idx,
+                            "type": f"run_{run_idx}_page_break",
+                            "text": para_text[:50]
+                        })
+                        print(f"[诊断] 段落 {idx}, Run {run_idx} 有分页符: {para_text[:50]}")
+            
+            # 记录段落信息
+            diagnosis["paragraphs_between"].append({
+                "index": idx,
+                "text": para_text[:100],
+                "has_page_break": has_page_break,
+                "is_blank": len(para_text) == 0
+            })
+        
+        # 检查摘要标题本身是否有分页符
+        abstract_para = document.paragraphs[diagnosis["abstract_start_idx"]]
+        if abstract_para.paragraph_format.page_break_before:
+            diagnosis["has_page_break_between"] = True
+            diagnosis["page_break_locations"].append({
+                "index": diagnosis["abstract_start_idx"],
+                "type": "abstract_title_page_break_before",
+                "text": abstract_para.text.strip()[:50]
+            })
+            print(f"[诊断] 摘要标题本身有分页符 (page_break_before)")
+        
+        # 检查摘要标题的runs中是否有分页符
+        for run_idx, run in enumerate(abstract_para.runs):
+            if hasattr(run, 'element'):
+                run_xml = str(run.element.xml)
+                if 'w:br' in run_xml and 'type="page"' in run_xml:
+                    diagnosis["has_page_break_between"] = True
+                    diagnosis["page_break_locations"].append({
+                        "index": diagnosis["abstract_start_idx"],
+                        "type": f"abstract_title_run_{run_idx}_page_break",
+                        "text": abstract_para.text.strip()[:50]
+                    })
+                    print(f"[诊断] 摘要标题的Run {run_idx} 有分页符")
+        
+        # 检查前一个段落是否有分页符
+        if diagnosis["abstract_start_idx"] > 0:
+            prev_para = document.paragraphs[diagnosis["abstract_start_idx"] - 1]
+            if prev_para.paragraph_format.page_break_before:
+                diagnosis["has_page_break_between"] = True
+                diagnosis["page_break_locations"].append({
+                    "index": diagnosis["abstract_start_idx"] - 1,
+                    "type": "prev_paragraph_page_break_before",
+                    "text": prev_para.text.strip()[:50]
+                })
+                print(f"[诊断] 摘要前一个段落有分页符 (page_break_before)")
+            
+            for run_idx, run in enumerate(prev_para.runs):
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        diagnosis["has_page_break_between"] = True
+                        diagnosis["page_break_locations"].append({
+                            "index": diagnosis["abstract_start_idx"] - 1,
+                            "type": f"prev_paragraph_run_{run_idx}_page_break",
+                            "text": prev_para.text.strip()[:50]
+                        })
+                        print(f"[诊断] 摘要前一个段落的Run {run_idx} 有分页符")
+        
+        if not diagnosis["has_page_break_between"]:
+            diagnosis["issue"] = "诚信承诺和摘要之间没有分页符"
+        else:
+            diagnosis["issue"] = None
+        
+        return diagnosis
 
     def _check_and_remove_blank_pages(self, document: Document) -> list:
         """
