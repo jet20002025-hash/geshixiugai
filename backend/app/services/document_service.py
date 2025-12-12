@@ -880,6 +880,7 @@ class DocumentService:
         integrity_pattern = re.compile(r'诚\s*信\s*承\s*诺', re.IGNORECASE)
         integrity_keywords = ["学术诚信", "原创性声明", "原创声明"]
         
+        self._log_to_file(f"[修复] 开始查找诚信承诺，从段落 {cover_end} 开始")
         for idx in range(cover_end, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if not para_text:
@@ -888,6 +889,7 @@ class DocumentService:
             # 检查是否匹配"诚信承诺"（允许中间有空格）
             if integrity_pattern.search(para_text) and integrity_start is None:
                 integrity_start = idx
+                self._log_to_file(f"[修复] ✅ 找到诚信承诺，段落索引: {idx}, 文本: {para_text[:50]}")
                 continue
             
             # 也检查其他诚信承诺相关关键词
@@ -920,11 +922,12 @@ class DocumentService:
                         if integrity_end is not None:
                             break
                     # 如果摘要标题本身有分页符，也认为已经分开
-                    if paragraph.paragraph_format.page_break_before:
+                    abstract_para = document.paragraphs[idx]
+                    if abstract_para.paragraph_format.page_break_before:
                         integrity_end = idx
                         break
                     # 检查摘要标题的runs中是否有分页符
-                    for run in paragraph.runs:
+                    for run in abstract_para.runs:
                         if hasattr(run, 'element'):
                             run_xml = str(run.element.xml)
                             if 'w:br' in run_xml and 'type="page"' in run_xml:
@@ -950,10 +953,12 @@ class DocumentService:
         
         # 查找中文摘要（支持"摘要"中间有空格）
         abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
+        self._log_to_file(f"[修复] 开始查找中文摘要，从段落 {search_start} 开始")
         for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if abstract_pattern.match(para_text) and abstract_zh_start is None:
                 abstract_zh_start = idx
+                self._log_to_file(f"[修复] ✅ 找到中文摘要，段落索引: {idx}, 文本: {para_text[:50]}")
             elif abstract_zh_start is not None and (para_text.startswith("关键词") or para_text.startswith("ABSTRACT") or para_text.startswith("目录")):
                 abstract_zh_end = idx
                 break
@@ -995,8 +1000,14 @@ class DocumentService:
         
         if integrity_start is not None:
             ranges["integrity"] = (integrity_start, integrity_end if integrity_end else (abstract_zh_start if abstract_zh_start else len(document.paragraphs)))
+            self._log_to_file(f"[修复] 设置 integrity 范围: {ranges['integrity']}")
+        else:
+            self._log_to_file(f"[修复] ⚠️ 未找到诚信承诺（integrity_start is None）")
         if abstract_zh_start is not None:
             ranges["abstract_zh"] = (abstract_zh_start, abstract_zh_end if abstract_zh_end else (abstract_en_start if abstract_en_start else (toc_start if toc_start else len(document.paragraphs))))
+            self._log_to_file(f"[修复] 设置 abstract_zh 范围: {ranges['abstract_zh']}")
+        else:
+            self._log_to_file(f"[修复] ⚠️ 未找到中文摘要（abstract_zh_start is None）")
         if abstract_en_start is not None:
             ranges["abstract_en"] = (abstract_en_start, abstract_en_end if abstract_en_end else (toc_start if toc_start else (body_start if body_start else len(document.paragraphs))))
         if toc_start is not None:
@@ -2923,8 +2934,14 @@ class DocumentService:
         # 1. 查找诚信承诺和摘要的位置
         section_ranges = self._find_section_ranges(document)
         
+        self._log_to_file(f"[修复] 查找结果: {list(section_ranges.keys())}")
+        
         if "integrity" not in section_ranges or "abstract_zh" not in section_ranges:
-            self._log_to_file(f"[修复] 未找到诚信承诺或摘要，跳过分页修复")
+            self._log_to_file(f"[修复] ❌ 未找到诚信承诺或摘要，跳过分页修复")
+            if "integrity" not in section_ranges:
+                self._log_to_file(f"[修复]   缺少: integrity")
+            if "abstract_zh" not in section_ranges:
+                self._log_to_file(f"[修复]   缺少: abstract_zh")
             return False
         
         integrity_start, integrity_end = section_ranges["integrity"]
