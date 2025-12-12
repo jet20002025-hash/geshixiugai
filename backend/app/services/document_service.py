@@ -5010,12 +5010,14 @@ read_file
             
             # 使用LibreOffice转换
             # --headless: 无界面模式
-            # --convert-to pdf: 转换为PDF
+            # --convert-to pdf: 转换为PDF，并嵌入字体以确保跨平台一致性
             # --outdir: 输出目录
+            # 添加PDF导出过滤器参数，确保字体嵌入和跨平台一致性
+            pdf_export_filter = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
             cmd = [
                 libreoffice_cmd,
                 '--headless',
-                '--convert-to', 'pdf',
+                '--convert-to', pdf_export_filter,
                 '--outdir', str(output_dir),
                 str(docx_path)
             ]
@@ -5237,10 +5239,12 @@ read_file
                         break
                 
                 if soffice_cmd:
+                    # 使用相同的PDF导出过滤器，确保字体嵌入和跨平台一致性
+                    pdf_export_filter2 = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
                     cmd_abs2 = [
                         soffice_cmd,
                         '--headless',
-                        '--convert-to', 'pdf',
+                        '--convert-to', pdf_export_filter2,
                         '--outdir', str(abs_output_dir),
                         str(input_file)
                     ]
