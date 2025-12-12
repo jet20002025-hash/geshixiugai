@@ -60,3 +60,5 @@ echo "如果缺少字体，请安装相应的字体文件到 /usr/share/fonts/"
 echo "安装后运行: sudo fc-cache -fv"
 echo ""
 
+
+

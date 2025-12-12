@@ -73,3 +73,5 @@ sudo chown nginx:nginx /var/www/geshixiugai/.env
 
 
 
+
+

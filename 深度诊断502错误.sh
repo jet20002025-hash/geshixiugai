@@ -70,3 +70,5 @@ echo "如果后端服务响应正常但Nginx仍然502，请重启Nginx："
 echo "  sudo systemctl restart nginx"
 echo ""
 
+
+

@@ -80,3 +80,5 @@ ls -lh /var/www/geshixiugai/storage/documents/01a4656f3b5046bb9c45a53d322034bc/p
 - 可能需要配置 sudo 规则，允许 nginx 用户执行 libreoffice
 
 
+
+

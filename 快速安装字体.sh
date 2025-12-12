@@ -55,3 +55,5 @@ echo "  3. 复制到: /usr/share/fonts/chinese/"
 echo "  4. 运行: sudo fc-cache -fv"
 echo ""
 
+
+

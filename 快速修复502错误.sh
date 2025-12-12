@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 快速修复502 Bad Gateway错误（最新版）
+# 快速修复502 Bad Gateway错误
 
 echo "=========================================="
 echo "快速修复502 Bad Gateway错误"
@@ -12,40 +12,24 @@ echo "1. 检查服务状态..."
 sudo systemctl status geshixiugai --no-pager | head -n 15
 echo ""
 
-# 2. 检查代码是否有语法错误
+# 2. 检查是否有语法错误
 echo "2. 检查代码是否有语法错误..."
 cd /var/www/geshixiugai
 source venv/bin/activate
-
-# 检查Python代码导入
-echo "测试应用导入..."
 python -c "from backend.app.main import app; print('✅ 代码导入成功')" 2>&1
 IMPORT_RESULT=$?
+deactivate
 
 if [ $IMPORT_RESULT -ne 0 ]; then
     echo ""
-    echo "❌ 代码导入失败！"
-    echo ""
-    echo "正在拉取最新代码..."
-    git pull origin main
-    
-    echo ""
-    echo "重新测试应用导入..."
-    python -c "from backend.app.main import app; print('✅ 代码导入成功')" 2>&1
-    IMPORT_RESULT=$?
-    
-    if [ $IMPORT_RESULT -ne 0 ]; then
-        echo ""
-        echo "❌ 代码仍有问题，请查看上面的错误信息"
-        echo "   可能需要回退到上一个版本："
-        echo "   git log --oneline -5"
-        echo "   git reset --hard HEAD~1  # 回退一个版本"
-        deactivate
-        exit 1
-    fi
+    echo "❌ 代码导入失败！请查看上面的错误信息。"
+    echo "   可能需要回退到上一个版本："
+    echo "   cd /var/www/geshixiugai"
+    echo "   git log --oneline -5"
+    echo "   git reset --hard HEAD~1  # 回退一个版本"
+    echo "   sudo systemctl restart geshixiugai"
+    exit 1
 fi
-
-deactivate
 echo ""
 
 # 3. 查看最近的错误日志
@@ -65,12 +49,7 @@ echo ""
 
 # 6. 测试本地连接
 echo "6. 测试本地连接..."
-curl -s http://127.0.0.1:8000/docs 2>&1 | head -n 5
-echo ""
-
-# 7. 检查端口监听
-echo "7. 检查端口8000监听..."
-sudo netstat -tlnp | grep 8000 || ss -tlnp | grep 8000
+curl -v http://127.0.0.1:8000/docs 2>&1 | head -n 10
 echo ""
 
 echo "=========================================="
@@ -80,6 +59,5 @@ echo ""
 echo "如果服务仍然无法启动，请执行："
 echo "  sudo journalctl -u geshixiugai -n 100 --no-pager"
 echo "  查看详细错误信息"
-echo ""
 
 

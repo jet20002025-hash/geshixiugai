@@ -107,3 +107,5 @@ echo "1. 安装完整的 LibreOffice: sudo yum install -y libreoffice-writer lib
 echo "2. 或者检查是否有其他 PDF 导出相关的包"
 echo ""
 
+
+

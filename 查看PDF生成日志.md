@@ -57,3 +57,5 @@ sudo journalctl -u geshixiugai --since "30 minutes ago" --no-pager | grep -E "$D
 ```
 
 
+
+

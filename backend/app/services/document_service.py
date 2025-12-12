@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import uuid
 import xml.sax.saxutils
 from datetime import datetime
@@ -79,10 +80,10 @@ class DocumentService:
         document = Document(original_path)
         
         # 诊断1：检查原始文档中诚信承诺和摘要的分页情况
-        print(f"[诊断] ========== 开始诊断：原始文档 ==========")
+        print(f"[诊断] ========== 开始诊断：原始文档 ==========", file=sys.stderr, flush=True)
         original_diagnosis = self._diagnose_integrity_abstract_separation(document)
-        print(f"[诊断] 原始文档诊断结果: {original_diagnosis['issue'] if original_diagnosis['issue'] else '有分页符'}")
-        print(f"[诊断] 分页符位置: {len(original_diagnosis['page_break_locations'])} 个")
+        print(f"[诊断] 原始文档诊断结果: {original_diagnosis['issue'] if original_diagnosis['issue'] else '有分页符'}", file=sys.stderr, flush=True)
+        print(f"[诊断] 分页符位置: {len(original_diagnosis['page_break_locations'])} 个", file=sys.stderr, flush=True)
         
         # 应用页面设置（优先使用标准）
         self._apply_page_settings(document)
@@ -121,21 +122,21 @@ class DocumentService:
         # 确保诚信承诺和摘要分开在不同页（在空白行删除之前）
         separation_fixed = self._ensure_integrity_abstract_separation(final_doc)
         if separation_fixed:
-            print(f"[修复] ✅ 已确保诚信承诺和摘要分开在不同页")
+            print(f"[修复] ✅ 已确保诚信承诺和摘要分开在不同页", file=sys.stderr, flush=True)
             stats["integrity_abstract_separation_fixed"] = True
         
         # 修复后再次检测，确认分页结果
-        print(f"[检测] ========== 修复后检测：诚信承诺和摘要分页结果 ==========")
+        print(f"[检测] ========== 修复后检测：诚信承诺和摘要分页结果 ==========", file=sys.stderr, flush=True)
         post_fix_diagnosis = self._diagnose_integrity_abstract_separation(final_doc)
         if post_fix_diagnosis["has_page_break_between"]:
-            print(f"[检测] ✅ 修复成功：诚信承诺和摘要已分开在不同页")
-            print(f"[检测] 分页符位置: {len(post_fix_diagnosis['page_break_locations'])} 个")
+            print(f"[检测] ✅ 修复成功：诚信承诺和摘要已分开在不同页", file=sys.stderr, flush=True)
+            print(f"[检测] 分页符位置: {len(post_fix_diagnosis['page_break_locations'])} 个", file=sys.stderr, flush=True)
             for loc in post_fix_diagnosis['page_break_locations']:
-                print(f"[检测]   - 段落 {loc['index']}: {loc['type']}")
+                print(f"[检测]   - 段落 {loc['index']}: {loc['type']}", file=sys.stderr, flush=True)
             stats["post_fix_separation_status"] = "已分开"
         else:
-            print(f"[检测] ❌ 修复失败：诚信承诺和摘要仍然没有分页符")
-            print(f"[检测] 问题: {post_fix_diagnosis.get('issue', '未知')}")
+            print(f"[检测] ❌ 修复失败：诚信承诺和摘要仍然没有分页符", file=sys.stderr, flush=True)
+            print(f"[检测] 问题: {post_fix_diagnosis.get('issue', '未知')}", file=sys.stderr, flush=True)
             stats["post_fix_separation_status"] = "未分开"
         stats["post_fix_diagnosis"] = post_fix_diagnosis
         
@@ -158,17 +159,17 @@ class DocumentService:
         final_doc.save(final_path)
 
         # 诊断2：检查格式修改后的文档中诚信承诺和摘要的分页情况
-        print(f"[诊断] ========== 开始诊断：格式修改后的文档 ==========")
+        print(f"[诊断] ========== 开始诊断：格式修改后的文档 ==========", file=sys.stderr, flush=True)
         final_diagnosis = self._diagnose_integrity_abstract_separation(final_doc)
-        print(f"[诊断] 格式修改后诊断结果: {final_diagnosis['issue'] if final_diagnosis['issue'] else '有分页符'}")
-        print(f"[诊断] 分页符位置: {len(final_diagnosis['page_break_locations'])} 个")
+        print(f"[诊断] 格式修改后诊断结果: {final_diagnosis['issue'] if final_diagnosis['issue'] else '有分页符'}", file=sys.stderr, flush=True)
+        print(f"[诊断] 分页符位置: {len(final_diagnosis['page_break_locations'])} 个", file=sys.stderr, flush=True)
         
         # 对比诊断结果
         if original_diagnosis["has_page_break_between"] and not final_diagnosis["has_page_break_between"]:
-            print(f"[诊断] ⚠️ 警告：格式修改过程中丢失了分页符！")
+            print(f"[诊断] ⚠️ 警告：格式修改过程中丢失了分页符！", file=sys.stderr, flush=True)
             stats["diagnosis_warning"] = "格式修改过程中丢失了诚信承诺和摘要之间的分页符"
         elif not original_diagnosis["has_page_break_between"]:
-            print(f"[诊断] ⚠️ 警告：原始文档中就没有分页符！")
+            print(f"[诊断] ⚠️ 警告：原始文档中就没有分页符！", file=sys.stderr, flush=True)
             stats["diagnosis_warning"] = "原始文档中诚信承诺和摘要之间没有分页符"
         
         stats["original_diagnosis"] = original_diagnosis
@@ -196,15 +197,15 @@ class DocumentService:
         self._generate_watermarked_preview(final_path, preview_path)
         
         # 诊断3：检查预览文档（带水印的Word文档）中诚信承诺和摘要的分页情况
-        print(f"[诊断] ========== 开始诊断：预览文档（带水印） ==========")
+        print(f"[诊断] ========== 开始诊断：预览文档（带水印） ==========", file=sys.stderr, flush=True)
         preview_doc = Document(preview_path)
         preview_diagnosis = self._diagnose_integrity_abstract_separation(preview_doc)
-        print(f"[诊断] 预览文档诊断结果: {preview_diagnosis['issue'] if preview_diagnosis['issue'] else '有分页符'}")
-        print(f"[诊断] 分页符位置: {len(preview_diagnosis['page_break_locations'])} 个")
+        print(f"[诊断] 预览文档诊断结果: {preview_diagnosis['issue'] if preview_diagnosis['issue'] else '有分页符'}", file=sys.stderr, flush=True)
+        print(f"[诊断] 分页符位置: {len(preview_diagnosis['page_break_locations'])} 个", file=sys.stderr, flush=True)
         
         # 对比诊断结果
         if final_diagnosis["has_page_break_between"] and not preview_diagnosis["has_page_break_between"]:
-            print(f"[诊断] ⚠️ 警告：生成预览文档过程中丢失了分页符！")
+            print(f"[诊断] ⚠️ 警告：生成预览文档过程中丢失了分页符！", file=sys.stderr, flush=True)
             stats["diagnosis_warning"] = "生成预览文档过程中丢失了诚信承诺和摘要之间的分页符"
         stats["preview_diagnosis"] = preview_diagnosis
         
@@ -227,8 +228,8 @@ class DocumentService:
                 from pypdf import PdfReader
                 pdf_reader = PdfReader(str(temp_pdf_path))
                 pdf_page_count = len(pdf_reader.pages)
-                print(f"[检测] ========== PDF生成后检测：诚信承诺和摘要分页结果 ==========")
-                print(f"[检测] PDF总页数: {pdf_page_count}")
+                print(f"[检测] ========== PDF生成后检测：诚信承诺和摘要分页结果 ==========", file=sys.stderr, flush=True)
+                print(f"[检测] PDF总页数: {pdf_page_count}", file=sys.stderr, flush=True)
                 
                 # 检查每一页，找到诚信承诺和摘要所在的页面
                 integrity_page = None
@@ -246,39 +247,39 @@ class DocumentService:
                         
                         if has_integrity:
                             integrity_page = page_num + 1
-                            print(f"[检测] 第 {page_num + 1} 页包含诚信承诺")
+                            print(f"[检测] 第 {page_num + 1} 页包含诚信承诺", file=sys.stderr, flush=True)
                         if has_abstract:
                             abstract_page = page_num + 1
-                            print(f"[检测] 第 {page_num + 1} 页包含摘要")
+                            print(f"[检测] 第 {page_num + 1} 页包含摘要", file=sys.stderr, flush=True)
                     except Exception as e:
-                        print(f"[检测] 无法提取第 {page_num + 1} 页文本: {e}")
+                        print(f"[检测] 无法提取第 {page_num + 1} 页文本: {e}", file=sys.stderr, flush=True)
                 
                 # 判断结果并输出
-                print(f"[检测] ========== PDF分页结果 ==========")
+                print(f"[检测] ========== PDF分页结果 ==========", file=sys.stderr, flush=True)
                 if integrity_page is not None and abstract_page is not None:
                     if integrity_page == abstract_page:
-                        print(f"[检测] ❌ PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页）")
-                        print(f"[检测] ⚠️ 警告：Word转PDF过程中分页符可能失效")
+                        print(f"[检测] ❌ PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页）", file=sys.stderr, flush=True)
+                        print(f"[检测] ⚠️ 警告：Word转PDF过程中分页符可能失效", file=sys.stderr, flush=True)
                         stats["pdf_separation_status"] = "合并在同一页"
                         stats["pdf_separation_warning"] = f"PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页），Word转PDF过程中分页符可能失效"
                     else:
-                        print(f"[检测] ✅ PDF中诚信承诺和摘要分开在不同页")
-                        print(f"[检测] 诚信承诺在第 {integrity_page} 页，摘要在第 {abstract_page} 页")
+                        print(f"[检测] ✅ PDF中诚信承诺和摘要分开在不同页", file=sys.stderr, flush=True)
+                        print(f"[检测] 诚信承诺在第 {integrity_page} 页，摘要在第 {abstract_page} 页", file=sys.stderr, flush=True)
                         stats["pdf_separation_status"] = "已分开"
                         stats["pdf_separation_pages"] = {"integrity": integrity_page, "abstract": abstract_page}
                 elif integrity_page is not None:
-                    print(f"[检测] ⚠️ 找到诚信承诺（第 {integrity_page} 页），但未找到摘要")
+                    print(f"[检测] ⚠️ 找到诚信承诺（第 {integrity_page} 页），但未找到摘要", file=sys.stderr, flush=True)
                     stats["pdf_separation_status"] = "未找到摘要"
                 elif abstract_page is not None:
-                    print(f"[检测] ⚠️ 找到摘要（第 {abstract_page} 页），但未找到诚信承诺")
+                    print(f"[检测] ⚠️ 找到摘要（第 {abstract_page} 页），但未找到诚信承诺", file=sys.stderr, flush=True)
                     stats["pdf_separation_status"] = "未找到诚信承诺"
                 else:
-                    print(f"[检测] ⚠️ 未找到诚信承诺和摘要")
+                    print(f"[检测] ⚠️ 未找到诚信承诺和摘要", file=sys.stderr, flush=True)
                     stats["pdf_separation_status"] = "未找到"
-                print(f"[检测] ========================================")
+                print(f"[检测] ========================================", file=sys.stderr, flush=True)
                     
             except Exception as e:
-                print(f"[检测] ❌ 无法读取PDF: {e}")
+                print(f"[检测] ❌ 无法读取PDF: {e}", file=sys.stderr, flush=True)
                 stats["pdf_separation_status"] = "检测失败"
         
         # 如果LibreOffice转换失败，回退到HTML转PDF（不推荐，格式会有变化）

@@ -85,3 +85,5 @@ echo "1. 安装完整的 LibreOffice: sudo yum install -y libreoffice"
 echo "2. 或者安装 PDF 导出组件: sudo yum install -y libreoffice-pdfimport"
 echo ""
 
+
+

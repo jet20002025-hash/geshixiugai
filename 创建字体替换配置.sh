@@ -73,3 +73,5 @@ echo "当前系统字体："
 fc-list :lang=zh | head -n 5
 echo ""
 
+
+

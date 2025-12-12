@@ -69,3 +69,5 @@ sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/s
 sudo systemctl restart sshd
 ```
 
+
+

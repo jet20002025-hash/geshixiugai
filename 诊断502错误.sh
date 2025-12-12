@@ -60,3 +60,5 @@ echo "如果服务启动失败，请检查日志："
 echo "  sudo journalctl -u geshixiugai -n 100 --no-pager"
 echo ""
 
+
+

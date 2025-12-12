@@ -80,3 +80,5 @@ echo "  sudo journalctl -u geshixiugai -f"
 echo "  （不筛选，查看所有日志）"
 echo ""
 
+
+

@@ -69,3 +69,5 @@ echo "2. 检查防火墙设置"
 echo "3. 重启Nginx: sudo systemctl restart nginx"
 echo ""
 
+
+

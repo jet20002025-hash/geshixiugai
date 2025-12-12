@@ -86,3 +86,5 @@ echo "4. 然后重新运行此脚本或查看日志："
 echo "   sudo journalctl -u geshixiugai -f | grep -E '\[Word转PDF\]|\[PDF预览\]'"
 echo ""
 
+
+

@@ -204,3 +204,5 @@ sudo apt remove -y libreoffice
 - 服务日志：`sudo journalctl -u geshixiugai -f`
 - 安装日志：`/tmp/libreoffice_install.log`（如果使用脚本安装）
 
+
+

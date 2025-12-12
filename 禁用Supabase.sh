@@ -76,3 +76,5 @@ echo "如果需要恢复 Supabase 配置，可以从备份文件恢复："
 echo "  sudo cp $BACKUP_FILE $ENV_FILE"
 echo ""
 
+
+
