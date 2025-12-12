@@ -210,7 +210,7 @@ async def preview_document(document_id: str) -> Response:
             path=str(pdf_file),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": "inline; filename=preview.pdf",
+                "Content-Disposition": "attachment; filename=预览版_带水印.pdf",
                 "Cache-Control": "no-cache"
             }
         )

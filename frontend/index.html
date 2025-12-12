@@ -1044,8 +1044,9 @@
         if (previewLinks) {
           const previewLink = previewLinks.querySelector('.preview-btn');
           if (previewLink) {
-            previewLink.textContent = "📄 查看带水印PDF";
-            previewLink.href = `/web/preview.html?id=${encodeURIComponent(documentId)}`;
+            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.href = `/documents/${documentId}/preview`;
+            previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
           }
           
@@ -1141,9 +1142,10 @@
           // 预览链接（根据支付状态显示不同文本和链接）
           const previewLink = document.createElement("a");
           if (data.paid) {
-            // 已支付，显示正式版查看链接
-            previewLink.textContent = "📄 查看带水印PDF";
-            previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
+            // 已支付，直接下载带水印的PDF（不再在网页预览）
+            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.href = `/documents/${data.document_id}/preview`;
+            previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
             previewLink.className = "preview-btn";
             previewLink.style.cssText = "display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; margin-right: 10px; transition: all 0.3s;";
@@ -1156,9 +1158,10 @@
               this.style.transform = "translateY(0)";
             };
           } else {
-            // 未支付，显示预览链接（付费后可下载 word文档）
-            previewLink.textContent = "👁️ 预览文档（付费后可下载 word文档）";
-            previewLink.href = `/web/preview.html?id=${encodeURIComponent(data.document_id)}`;
+            // 未支付，直接下载带水印的PDF（不再在网页预览）
+            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.href = `/documents/${data.document_id}/preview`;
+            previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
             previewLink.className = "preview-btn";
             previewLink.style.cssText = "display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; margin-right: 10px; transition: all 0.3s;";
