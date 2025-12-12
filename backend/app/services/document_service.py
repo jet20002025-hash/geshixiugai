@@ -5012,12 +5012,12 @@ read_file
             # --headless: 无界面模式
             # --convert-to pdf: 转换为PDF，并嵌入字体以确保跨平台一致性
             # --outdir: 输出目录
-            # 添加PDF导出过滤器参数，确保字体嵌入和跨平台一致性
-            pdf_export_filter = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
+            # 使用标准PDF转换命令
+            # 注意：LibreOffice默认会嵌入可用字体，确保跨平台一致性
             cmd = [
                 libreoffice_cmd,
                 '--headless',
-                '--convert-to', pdf_export_filter,
+                '--convert-to', 'pdf',
                 '--outdir', str(output_dir),
                 str(docx_path)
             ]
@@ -5117,16 +5117,13 @@ read_file
             # 但首先尝试直接执行
             # 注意：使用PDF导出过滤器，确保保留原始字体
             # LibreOffice默认会保留字体，但如果系统缺少字体，可能会替换
-            # 尝试方法1：使用标准PDF转换命令，并嵌入字体以确保跨平台一致性
-            # 添加PDF导出过滤器参数，确保字体嵌入和跨平台一致性
-            # EmbedStandardFonts: 嵌入标准字体
-            # UseTaggedPDF: 使用标签PDF（更好的兼容性）
-            # Quality: 100（最高质量）
-            pdf_export_filter = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
+            # 尝试方法1：使用标准PDF转换命令
+            # 注意：LibreOffice 7.1.8.1版本可能不支持复杂的JSON格式参数
+            # 先使用简单的PDF转换，LibreOffice默认会嵌入可用字体
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
-                '--convert-to', pdf_export_filter,
+                '--convert-to', 'pdf',
                 '--outdir', str(abs_output_dir),
                 str(input_file)
             ]
@@ -5239,12 +5236,11 @@ read_file
                         break
                 
                 if soffice_cmd:
-                    # 使用相同的PDF导出过滤器，确保字体嵌入和跨平台一致性
-                    pdf_export_filter2 = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
+                    # 使用标准PDF转换命令
                     cmd_abs2 = [
                         soffice_cmd,
                         '--headless',
-                        '--convert-to', pdf_export_filter2,
+                        '--convert-to', 'pdf',
                         '--outdir', str(abs_output_dir),
                         str(input_file)
                     ]
