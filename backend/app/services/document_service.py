@@ -160,6 +160,13 @@ class DocumentService:
             stats["post_fix_separation_status"] = "未分开"
         stats["post_fix_diagnosis"] = post_fix_diagnosis
         
+        # 确保中文摘要和英文摘要分开在不同页
+        self._log_to_file(f"[修复] ========== 开始修复：确保中文摘要和英文摘要分开在不同页 ==========")
+        abstract_separation_fixed = self._ensure_abstract_separation(final_doc)
+        if abstract_separation_fixed:
+            self._log_to_file(f"[修复] ✅ 已确保中文摘要和英文摘要分开在不同页")
+            stats["abstract_separation_fixed"] = True
+        
         # 检测大段空白
         blank_issues = self._check_excessive_blanks(final_doc)
         if blank_issues:
@@ -3063,24 +3070,7 @@ class DocumentService:
         
         # 方法1：在摘要标题段落设置分页符
         abstract_para.paragraph_format.page_break_before = True
-        
-        # 方法2：在摘要标题前插入一个空白段落，并设置分页符（更可靠）
-        # 这样可以确保分页符生效
-        if abstract_zh_start > 0:
-            # 检查前一个段落是否是空白段落
-            prev_para = document.paragraphs[abstract_zh_start - 1]
-            prev_text = prev_para.text.strip() if prev_para.text else ""
-            
-            # 如果前一个段落不是空白段落，在其后插入一个空白段落并设置分页符
-            if prev_text:
-                # 在摘要标题前插入一个空白段落（使用XML方式，更可靠）
-                new_para_xml = parse_xml('<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:pPr><w:pageBreakBefore/></w:pPr></w:p>')
-                abstract_para._element.getparent().insert(abstract_para._element, new_para_xml)
-                self._log_to_file(f"[修复] 方法2：已在摘要标题前插入空白段落并设置分页符")
-            else:
-                # 前一个段落是空白段落，直接设置分页符
-                prev_para.paragraph_format.page_break_before = True
-                self._log_to_file(f"[修复] 方法2：已在摘要前一个空白段落设置分页符")
+        self._log_to_file(f"[修复] 方法1：已在摘要标题段落设置分页符 (page_break_before)")
         
         # 方法3：在摘要标题的runs中添加分页符（最可靠的方法）
         # 如果摘要标题有runs，在第一个run前添加分页符
@@ -3101,6 +3091,86 @@ class DocumentService:
             self._log_to_file(f"[修复] ✅ 已创建run并添加分页符")
         
         self._log_to_file(f"[修复] ✅ 已使用多种方法强制添加分页符，确保诚信承诺和摘要分开")
+        return True
+
+    def _ensure_abstract_separation(self, document: Document) -> bool:
+        """
+        确保中文摘要和英文摘要分开在不同页
+        
+        Returns:
+            bool: 是否进行了修复
+        """
+        # 1. 查找中文摘要和英文摘要的位置
+        section_ranges = self._find_section_ranges(document)
+        
+        if "abstract_zh" not in section_ranges or "abstract_en" not in section_ranges:
+            self._log_to_file(f"[修复] 未找到中文摘要或英文摘要，跳过分页修复")
+            return False
+        
+        abstract_zh_start, abstract_zh_end = section_ranges["abstract_zh"]
+        abstract_en_start, _ = section_ranges["abstract_en"]
+        
+        self._log_to_file(f"[修复] 中文摘要范围: {abstract_zh_start} 到 {abstract_zh_end}")
+        self._log_to_file(f"[修复] 英文摘要起始位置: {abstract_en_start}")
+        
+        # 2. 检查英文摘要标题前是否有分页符
+        if abstract_en_start >= len(document.paragraphs):
+            self._log_to_file(f"[修复] ⚠️ 英文摘要位置超出文档范围")
+            return False
+        
+        abstract_en_para = document.paragraphs[abstract_en_start]
+        
+        # 检查英文摘要标题本身是否有分页符
+        if abstract_en_para.paragraph_format.page_break_before:
+            self._log_to_file(f"[修复] ✅ 英文摘要标题已有分页符 (page_break_before)")
+            return False  # 已经有分页符
+        
+        # 检查英文摘要标题的runs中是否有分页符
+        for run in abstract_en_para.runs:
+            if hasattr(run, 'element'):
+                run_xml = str(run.element.xml)
+                if 'w:br' in run_xml and 'type="page"' in run_xml:
+                    self._log_to_file(f"[修复] ✅ 英文摘要标题的runs中已有分页符")
+                    return False  # 已经有分页符
+        
+        # 检查前一个段落是否有分页符
+        if abstract_en_start > 0:
+            prev_para = document.paragraphs[abstract_en_start - 1]
+            if prev_para.paragraph_format.page_break_before:
+                self._log_to_file(f"[修复] ✅ 英文摘要前一个段落已有分页符 (page_break_before)")
+                return False  # 已经有分页符
+            
+            for run in prev_para.runs:
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        self._log_to_file(f"[修复] ✅ 英文摘要前一个段落的runs中已有分页符")
+                        return False  # 已经有分页符
+        
+        # 3. 没有分页符，强制添加分页符
+        self._log_to_file(f"[修复] ⚠️ 中文摘要和英文摘要之间没有分页符，强制添加分页符")
+        
+        # 方法1：在英文摘要标题段落设置分页符
+        abstract_en_para.paragraph_format.page_break_before = True
+        
+        # 方法2：在英文摘要标题的runs中添加分页符（最可靠的方法）
+        if abstract_en_para.runs:
+            # 获取第一个run
+            first_run = abstract_en_para.runs[0]
+            # 在第一个run前插入分页符
+            br_xml = '<w:br xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:type="page"/>'
+            br = parse_xml(br_xml)
+            first_run._element.getparent().insert(0, br)
+            self._log_to_file(f"[修复] ✅ 已在英文摘要标题的第一个run前添加分页符")
+        else:
+            # 如果没有runs，创建一个run并添加分页符
+            run = abstract_en_para.add_run()
+            br_xml = '<w:br xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:type="page"/>'
+            br = parse_xml(br_xml)
+            run._element.getparent().insert(0, br)
+            self._log_to_file(f"[修复] ✅ 已创建run并添加分页符")
+        
+        self._log_to_file(f"[修复] ✅ 已使用多种方法强制添加分页符，确保中文摘要和英文摘要分开")
         return True
 
     def _check_and_remove_blank_pages(self, document: Document) -> list:
@@ -3162,16 +3232,64 @@ class DocumentService:
             paragraph = document.paragraphs[idx]
             para_text = paragraph.text.strip() if paragraph.text else ""
             
-            # 检查是否在诚信承诺和摘要之间，如果是，则不删除任何内容
+            # 检查是否在诚信承诺和摘要之间
+            # 允许删除空白段落，但不删除包含分页符的段落
             is_between_integrity_and_abstract = False
             if integrity_end is not None and abstract_zh_start is not None:
                 if integrity_end <= idx < abstract_zh_start:
                     is_between_integrity_and_abstract = True
             
             if is_between_integrity_and_abstract:
-                # 在诚信承诺和摘要之间，不删除任何内容，跳过
-                consecutive_blanks = 0
-                blank_start_idx = None
+                # 在诚信承诺和摘要之间，只删除空白段落（不包含分页符的）
+                # 这样可以删除多余的空白页，但保留分页符
+                if is_blank and not has_page_break(paragraph):
+                    # 空白段落且不包含分页符，可以删除
+                    if consecutive_blanks == 0:
+                        blank_start_idx = idx
+                    consecutive_blanks += 1
+                    # 如果连续空白段落较多，可能是空白页，标记为可删除
+                    if consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD:
+                        # 检查前后是否有分页符
+                        has_break_before = False
+                        if blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
+                            prev_para = document.paragraphs[blank_start_idx - 1]
+                            if prev_para.paragraph_format.page_break_before or any('w:br' in str(run.element.xml) and 'type="page"' in str(run.element.xml) for run in prev_para.runs if hasattr(run, 'element')):
+                                has_break_before = True
+                        
+                        has_break_after = False
+                        if idx + 1 < len(document.paragraphs):
+                            next_para = document.paragraphs[idx + 1]
+                            if next_para.paragraph_format.page_break_before or any('w:br' in str(run.element.xml) and 'type="page"' in str(run.element.xml) for run in next_para.runs if hasattr(run, 'element')):
+                                has_break_after = True
+                        
+                        # 如果前后有分页符，说明是空白页，删除这些空白段落
+                        if has_break_before or has_break_after:
+                            delete_end = min(blank_start_idx + consecutive_blanks - 1, len(document.paragraphs) - 1)
+                            deleted_count = 0
+                            for delete_idx in range(delete_end, blank_start_idx - 1, -1):
+                                if delete_idx >= 0 and delete_idx < len(document.paragraphs):
+                                    para_to_delete = document.paragraphs[delete_idx]
+                                    if len(para_to_delete.text.strip()) == 0 and not has_page_break(para_to_delete):
+                                        para_to_delete._element.getparent().remove(para_to_delete._element)
+                                        deleted_count += 1
+                                        if delete_idx < idx:
+                                            idx -= 1
+                            
+                            if deleted_count > 0:
+                                issues.append({
+                                    "type": "blank_page_removed",
+                                    "message": f"已删除诚信承诺和摘要之间的 {deleted_count} 个空白段落（空白页）",
+                                    "suggestion": "已自动删除空白页",
+                                    "blank_start": blank_start_idx,
+                                    "blank_count": deleted_count,
+                                })
+                                consecutive_blanks = 0
+                                blank_start_idx = None
+                                continue
+                else:
+                    # 非空白段落或包含分页符，重置计数
+                    consecutive_blanks = 0
+                    blank_start_idx = None
                 idx += 1
                 continue
             
