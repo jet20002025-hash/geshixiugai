@@ -2819,6 +2819,68 @@ class DocumentService:
         
         return diagnosis
 
+    def _ensure_integrity_abstract_separation(self, document: Document) -> bool:
+        """
+        确保诚信承诺和摘要分开在不同页
+        
+        如果它们之间没有分页符，在摘要标题前添加分页符
+        
+        Returns:
+            bool: 是否进行了修复
+        """
+        # 1. 查找诚信承诺和摘要的位置
+        section_ranges = self._find_section_ranges(document)
+        
+        if "integrity" not in section_ranges or "abstract_zh" not in section_ranges:
+            print(f"[修复] 未找到诚信承诺或摘要，跳过分页修复")
+            return False
+        
+        integrity_start, integrity_end = section_ranges["integrity"]
+        abstract_zh_start, _ = section_ranges["abstract_zh"]
+        
+        print(f"[修复] 诚信承诺范围: {integrity_start} 到 {integrity_end}")
+        print(f"[修复] 摘要起始位置: {abstract_zh_start}")
+        
+        # 2. 检查摘要标题前是否有分页符
+        if abstract_zh_start >= len(document.paragraphs):
+            print(f"[修复] ⚠️ 摘要位置超出文档范围")
+            return False
+        
+        abstract_para = document.paragraphs[abstract_zh_start]
+        
+        # 检查摘要标题本身是否有分页符
+        if abstract_para.paragraph_format.page_break_before:
+            print(f"[修复] ✅ 摘要标题已有分页符 (page_break_before)")
+            return False  # 已经有分页符
+        
+        # 检查摘要标题的runs中是否有分页符
+        for run in abstract_para.runs:
+            if hasattr(run, 'element'):
+                run_xml = str(run.element.xml)
+                if 'w:br' in run_xml and 'type="page"' in run_xml:
+                    print(f"[修复] ✅ 摘要标题的runs中已有分页符")
+                    return False  # 已经有分页符
+        
+        # 检查前一个段落是否有分页符
+        if abstract_zh_start > 0:
+            prev_para = document.paragraphs[abstract_zh_start - 1]
+            if prev_para.paragraph_format.page_break_before:
+                print(f"[修复] ✅ 摘要前一个段落已有分页符 (page_break_before)")
+                return False  # 已经有分页符
+            
+            for run in prev_para.runs:
+                if hasattr(run, 'element'):
+                    run_xml = str(run.element.xml)
+                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                        print(f"[修复] ✅ 摘要前一个段落的runs中已有分页符")
+                        return False  # 已经有分页符
+        
+        # 3. 没有分页符，添加分页符
+        print(f"[修复] ⚠️ 诚信承诺和摘要之间没有分页符，在摘要标题前添加分页符")
+        abstract_para.paragraph_format.page_break_before = True
+        print(f"[修复] ✅ 已添加分页符到摘要标题段落")
+        return True
+
     def _check_and_remove_blank_pages(self, document: Document) -> list:
         """
         检测并删除整页空白页
