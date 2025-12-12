@@ -128,11 +128,22 @@ class DocumentService:
         if reference_issues:
             stats["reference_issues"] = reference_issues
         
+        # 修复前先诊断一次，记录初始状态
+        self._log_to_file(f"[检测] ========== 修复前检测：诚信承诺和摘要分页结果 ==========")
+        pre_fix_diagnosis = self._diagnose_integrity_abstract_separation(final_doc)
+        if pre_fix_diagnosis["has_page_break_between"]:
+            self._log_to_file(f"[检测] ✅ 修复前已有分页符，无需修复")
+        else:
+            self._log_to_file(f"[检测] ❌ 修复前没有分页符，需要修复")
+        
         # 确保诚信承诺和摘要分开在不同页（在空白行删除之前）
+        self._log_to_file(f"[修复] ========== 开始修复：确保诚信承诺和摘要分开在不同页 ==========")
         separation_fixed = self._ensure_integrity_abstract_separation(final_doc)
         if separation_fixed:
             self._log_to_file(f"[修复] ✅ 已确保诚信承诺和摘要分开在不同页")
             stats["integrity_abstract_separation_fixed"] = True
+        else:
+            self._log_to_file(f"[修复] ⚠️ 未进行修复（可能已有分页符或未找到诚信承诺/摘要）")
         
         # 修复后再次检测，确认分页结果
         self._log_to_file(f"[检测] ========== 修复后检测：诚信承诺和摘要分页结果 ==========")
@@ -2781,7 +2792,7 @@ class DocumentService:
             if integrity_pattern.search(para_text) and not diagnosis["integrity_found"]:
                 diagnosis["integrity_found"] = True
                 diagnosis["integrity_start_idx"] = idx
-                print(f"[诊断] 找到诚信承诺，段落索引: {idx}, 文本: {para_text[:50]}")
+                self._log_to_file(f"[诊断] 找到诚信承诺，段落索引: {idx}, 文本: {para_text[:50]}")
                 break
         
         # 查找摘要
@@ -2791,7 +2802,7 @@ class DocumentService:
             if abstract_pattern.match(para_text) and not diagnosis["abstract_found"]:
                 diagnosis["abstract_found"] = True
                 diagnosis["abstract_start_idx"] = idx
-                print(f"[诊断] 找到摘要，段落索引: {idx}, 文本: {para_text[:50]}")
+                self._log_to_file(f"[诊断] 找到摘要，段落索引: {idx}, 文本: {para_text[:50]}")
                 break
         
         if not diagnosis["integrity_found"] or not diagnosis["abstract_found"]:
@@ -2806,7 +2817,7 @@ class DocumentService:
         start_idx = diagnosis["integrity_start_idx"]
         end_idx = diagnosis["abstract_start_idx"]
         
-        print(f"[诊断] 诚信承诺和摘要之间的段落索引: {start_idx} 到 {end_idx}")
+        self._log_to_file(f"[诊断] 诚信承诺和摘要之间的段落索引: {start_idx} 到 {end_idx}")
         
         # 检查每个段落是否有分页符
         for idx in range(start_idx, end_idx):
@@ -2822,7 +2833,7 @@ class DocumentService:
                     "type": "paragraph_format.page_break_before",
                     "text": para_text[:50]
                 })
-                print(f"[诊断] 段落 {idx} 有分页符 (paragraph_format.page_break_before): {para_text[:50]}")
+                self._log_to_file(f"[诊断] 段落 {idx} 有分页符 (paragraph_format.page_break_before): {para_text[:50]}")
             
             # 检查runs中的分页符
             for run_idx, run in enumerate(paragraph.runs):
@@ -2835,7 +2846,7 @@ class DocumentService:
                             "type": f"run_{run_idx}_page_break",
                             "text": para_text[:50]
                         })
-                        print(f"[诊断] 段落 {idx}, Run {run_idx} 有分页符: {para_text[:50]}")
+                        self._log_to_file(f"[诊断] 段落 {idx}, Run {run_idx} 有分页符: {para_text[:50]}")
             
             # 记录段落信息
             diagnosis["paragraphs_between"].append({
@@ -2854,7 +2865,7 @@ class DocumentService:
                 "type": "abstract_title_page_break_before",
                 "text": abstract_para.text.strip()[:50]
             })
-            print(f"[诊断] 摘要标题本身有分页符 (page_break_before)")
+            self._log_to_file(f"[诊断] 摘要标题本身有分页符 (page_break_before)")
         
         # 检查摘要标题的runs中是否有分页符
         for run_idx, run in enumerate(abstract_para.runs):
@@ -2867,7 +2878,7 @@ class DocumentService:
                         "type": f"abstract_title_run_{run_idx}_page_break",
                         "text": abstract_para.text.strip()[:50]
                     })
-                    print(f"[诊断] 摘要标题的Run {run_idx} 有分页符")
+                    self._log_to_file(f"[诊断] 摘要标题的Run {run_idx} 有分页符")
         
         # 检查前一个段落是否有分页符
         if diagnosis["abstract_start_idx"] > 0:
@@ -2879,7 +2890,7 @@ class DocumentService:
                     "type": "prev_paragraph_page_break_before",
                     "text": prev_para.text.strip()[:50]
                 })
-                print(f"[诊断] 摘要前一个段落有分页符 (page_break_before)")
+                self._log_to_file(f"[诊断] 摘要前一个段落有分页符 (page_break_before)")
             
             for run_idx, run in enumerate(prev_para.runs):
                 if hasattr(run, 'element'):
@@ -2891,7 +2902,7 @@ class DocumentService:
                             "type": f"prev_paragraph_run_{run_idx}_page_break",
                             "text": prev_para.text.strip()[:50]
                         })
-                        print(f"[诊断] 摘要前一个段落的Run {run_idx} 有分页符")
+                        self._log_to_file(f"[诊断] 摘要前一个段落的Run {run_idx} 有分页符")
         
         if not diagnosis["has_page_break_between"]:
             diagnosis["issue"] = "诚信承诺和摘要之间没有分页符"
