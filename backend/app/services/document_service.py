@@ -2940,24 +2940,27 @@ class DocumentService:
                 usable_width = page_width - 2 * margin_x
                 usable_height = page_height - 2 * margin_y
                 
-                # 计算水平间距（3个水印，4个间隔）
+                # 计算水平间距（3个水印，4个间隔，水平方向均匀分布）
                 x_spacing = usable_width / (num_watermarks + 1)
                 
-                # 垂直位置：在页面中间区域均匀分布（3个水印，4个间隔）
-                y_spacing = usable_height / (num_watermarks + 1)
+                # 垂直位置：在页面的上、中、下三个位置均匀分布
+                y_positions = [
+                    margin_y + usable_height * 0.25,  # 上1/4位置
+                    margin_y + usable_height * 0.5,   # 中间位置
+                    margin_y + usable_height * 0.75    # 下3/4位置
+                ]
                 
                 # 添加3个水印，水平放置，均匀分布
                 for i in range(num_watermarks):
                     # 计算水平位置（均匀分布）
                     x = margin_x + (i + 1) * x_spacing
-                    # 计算垂直位置（均匀分布）
-                    y = margin_y + (i + 1) * y_spacing
+                    # 计算垂直位置（上、中、下均匀分布）
+                    y = y_positions[i]
                     
-                    # 绘制水印文本（水平放置，不旋转或小角度旋转）
+                    # 绘制水印文本（水平放置，不旋转）
                     c.saveState()
                     c.translate(x, y)
-                    # 可选：轻微旋转（5度），使水印更自然
-                    c.rotate(5)  # 轻微旋转5度
+                    # 不旋转，保持水平
                     # 使用浅红色，半透明
                     c.setFillColor(light_red)
                     # 居中显示文本
