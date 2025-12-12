@@ -206,11 +206,23 @@ async def preview_document(document_id: str) -> Response:
     if pdf_file and pdf_file.exists():
         pdf_size = pdf_file.stat().st_size
         print(f"[Preview] ✅ 返回PDF预览: {pdf_file}, 大小: {pdf_size / 1024:.2f} KB")
+        
+        # 处理中文文件名编码（使用 RFC 5987 格式）
+        download_filename = "预览版_带水印.pdf"
+        ascii_filename = "preview_watermarked.pdf"  # ASCII 备用文件名
+        
+        # 使用 RFC 5987 格式编码 UTF-8 文件名
+        try:
+            encoded_filename = quote(download_filename.encode('utf-8'))
+            content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+        except Exception:
+            content_disposition = f'attachment; filename="{ascii_filename}"'
+        
         return FileResponse(
             path=str(pdf_file),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": "attachment; filename=预览版_带水印.pdf",
+                "Content-Disposition": content_disposition,
                 "Cache-Control": "no-cache"
             }
         )

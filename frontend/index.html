@@ -200,9 +200,19 @@
         const errorMessage = String(reason || '');
         
         // 过滤掉第三方脚本的错误（腾讯广告、浏览器扩展等）
+        const errorStr = errorMessage.toLowerCase();
         if (errorMessage.includes('NATIVE') || 
             errorMessage.includes('Cannot set properties of undefined') ||
             errorMessage.includes('tencent') ||
+            errorMessage.includes('qzs.qq.com') ||
+            errorMessage.includes('i.js') ||
+            errorMessage.includes('installHook') ||
+            errorMessage === 'Script error.' ||
+            errorMessage === 'Script error' ||
+            errorStr.includes('native') ||
+            errorStr.includes('installhook') ||
+            errorStr.includes('tencent') ||
+            errorStr.includes('qzs.qq.com') ||
             errorMessage.includes('ad') ||
             errorMessage.includes('extension')) {
           // 静默处理第三方脚本错误
@@ -255,17 +265,29 @@
         // 过滤掉第三方脚本的错误（腾讯广告、浏览器扩展等）
         const errorSource = event.filename || '';
         const errorMessage = event.message || '';
+        const errorStr = (errorSource + ' ' + errorMessage).toLowerCase();
         
-        // 忽略第三方脚本的错误
+        // 忽略第三方脚本的错误（更全面的过滤）
         if (errorSource.includes('tencent') || 
+            errorSource.includes('qzs.qq.com') ||
+            errorSource.includes('i.js') ||
             errorSource.includes('ad') || 
             errorSource.includes('extension') ||
             errorSource.includes('chrome-extension') ||
             errorSource.includes('moz-extension') ||
+            errorSource.includes('safari-extension') ||
+            errorSource.includes('installHook') ||
             errorMessage.includes('NATIVE') ||
-            errorMessage.includes('Cannot set properties of undefined')) {
+            errorMessage.includes('Cannot set properties of undefined') ||
+            errorMessage === 'Script error.' ||
+            errorMessage === 'Script error' ||
+            errorStr.includes('native') ||
+            errorStr.includes('installhook') ||
+            errorStr.includes('tencent') ||
+            errorStr.includes('qzs.qq.com')) {
           // 静默处理第三方脚本错误，不影响用户体验
-          return;
+          event.preventDefault();
+          return true; // 返回true表示已处理，阻止默认行为
         }
         
         // 只记录应用本身的错误
@@ -279,6 +301,7 @@
           console.error('错误堆栈:', event.error.stack);
         }
         console.error('================');
+        return false; // 返回false表示未处理，允许默认行为
       });
       
       // 确保横幅立即显示（使用最简单的代码）
@@ -1044,7 +1067,7 @@
         if (previewLinks) {
           const previewLink = previewLinks.querySelector('.preview-btn');
           if (previewLink) {
-            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.textContent = "预览pdf（付费后可查看修改后的word版本）";
             previewLink.href = `/documents/${documentId}/preview`;
             previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
@@ -1143,7 +1166,7 @@
           const previewLink = document.createElement("a");
           if (data.paid) {
             // 已支付，直接下载带水印的PDF（不再在网页预览）
-            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.textContent = "预览pdf（付费后可查看修改后的word版本）";
             previewLink.href = `/documents/${data.document_id}/preview`;
             previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
@@ -1159,7 +1182,7 @@
             };
           } else {
             // 未支付，直接下载带水印的PDF（不再在网页预览）
-            previewLink.textContent = "⬇️ 下载带水印PDF预览版";
+            previewLink.textContent = "预览pdf（付费后可查看修改后的word版本）";
             previewLink.href = `/documents/${data.document_id}/preview`;
             previewLink.download = "预览版_带水印.pdf";
             previewLink.target = "_blank";
