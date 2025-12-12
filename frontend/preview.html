@@ -1083,42 +1083,9 @@
             }
             
             try {
-                console.log('--- 步骤1: 尝试Word文档预览 ---');
-                if (loadingStep) loadingStep.textContent = '尝试Word文档预览...';
-                
-                // 优先尝试Word文档预览（避免PDF转换误差）
-                // 添加超时控制，避免一直等待
-                console.log('创建Word预览Promise...');
-                const docxPreviewPromise = loadDocxPreview();
-                console.log('创建超时Promise（15秒）...');
-                const timeoutPromise = new Promise((resolve) => {
-                    setTimeout(() => {
-                        console.log('⏰ Word预览超时（15秒）');
-                        resolve(false);
-                    }, 15000); // 15秒超时
-                });
-                
-                console.log('等待Word预览或超时...');
-                const docxSuccess = await Promise.race([docxPreviewPromise, timeoutPromise]);
-                console.log('Word预览结果:', docxSuccess);
-                
-                if (docxSuccess) {
-                    console.log('✅ 使用Word文档预览（无转换误差）');
-                    if (loadingStep) loadingStep.textContent = 'Word预览成功';
-                    return;
-                }
-                
-                console.log('⚠️ Word文档预览失败或超时，回退到PDF/HTML预览');
-                if (loadingStep) loadingStep.textContent = 'Word预览失败，尝试PDF预览...';
-            } catch (error) {
-                console.error('❌ Word预览尝试出错:', error);
-                console.error('错误堆栈:', error.stack);
-                if (loadingStep) loadingStep.textContent = 'Word预览出错，尝试PDF预览...';
-                console.log('回退到PDF/HTML预览');
-            }
-            
-            try {
-                console.log('--- 步骤2: 请求PDF/HTML预览 ---');
+                // 直接使用PDF预览，确保和下载的PDF完全一致
+                // 不再使用Word预览，避免格式不一致
+                console.log('--- 步骤1: 请求PDF预览（确保和下载的PDF一致） ---');
                 if (loadingStep) loadingStep.textContent = '请求预览接口...';
                 
                 logStep('请求前', '准备发送预览请求');
@@ -1167,7 +1134,7 @@
                 
                 const requestTime = performance.now() - requestStart;
                 
-                console.log('--- 步骤3: 处理响应 ---');
+                console.log('--- 步骤2: 处理响应 ---');
                 logStep('响应收到', `收到响应 (${requestTime.toFixed(2)}ms)`);
                 console.log('响应状态:', response.status, response.statusText);
                 console.log('响应Content-Type:', response.headers.get('content-type'));
