@@ -265,6 +265,15 @@ class DocumentService:
                 
                 # 判断结果并输出
                 self._log_to_file(f"[检测] ========== PDF分页结果 ==========")
+                # 始终输出页码信息（如果找到）
+                if integrity_page is not None:
+                    self._log_to_file(f"[检测] 📄 诚信承诺所在页码: 第 {integrity_page} 页")
+                    stats["pdf_integrity_page"] = integrity_page
+                if abstract_page is not None:
+                    self._log_to_file(f"[检测] 📄 摘要所在页码: 第 {abstract_page} 页")
+                    stats["pdf_abstract_page"] = abstract_page
+                
+                # 判断分页情况
                 if integrity_page is not None and abstract_page is not None:
                     if integrity_page == abstract_page:
                         self._log_to_file(f"[检测] ❌ PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页）")
@@ -273,7 +282,7 @@ class DocumentService:
                         stats["pdf_separation_warning"] = f"PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页），Word转PDF过程中分页符可能失效"
                     else:
                         self._log_to_file(f"[检测] ✅ PDF中诚信承诺和摘要分开在不同页")
-                        self._log_to_file(f"[检测] 诚信承诺在第 {integrity_page} 页，摘要在第 {abstract_page} 页")
+                        self._log_to_file(f"[检测] 📊 页码对比: 诚信承诺(第 {integrity_page} 页) vs 摘要(第 {abstract_page} 页)")
                         stats["pdf_separation_status"] = "已分开"
                         stats["pdf_separation_pages"] = {"integrity": integrity_page, "abstract": abstract_page}
                 elif integrity_page is not None:
