@@ -1168,15 +1168,19 @@ class DocumentService:
             # 根据当前部分应用特定格式规则
             # 处理中文摘要部分
             if current_section == "abstract_zh":
-                # 摘要标题
-                if paragraph_text.startswith("摘要"):
+                # 摘要标题（支持"摘"和"要"中间有空格，如"摘 要"、"摘  要"等）
+                abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
+                if abstract_pattern.match(paragraph_text):
                     if "abstract_title" in rules:
                         rule = rules["abstract_title"].copy()
                         applied_rule_name = "abstract_title"
                     else:
                         rule = FONT_STANDARDS.get("abstract_title", {}).copy()
                         applied_rule_name = "abstract_title"
-                    # 强制确保摘要标题居中对齐
+                    # 强制确保摘要标题：黑体三号（16pt）、加粗、居中
+                    rule["font_name"] = "黑体"
+                    rule["font_size"] = 16  # 三号字
+                    rule["bold"] = True
                     rule["alignment"] = "center"
                 # 关键词标签
                 elif paragraph_text.startswith("关键词"):
@@ -1201,15 +1205,19 @@ class DocumentService:
             
             # 处理英文摘要部分
             elif current_section == "abstract_en":
-                # 英文摘要标题
-                if paragraph_text.startswith("ABSTRACT"):
+                # 英文摘要标题（支持大小写不敏感，如"Abstract"、"ABSTRACT"、"abstract"）
+                abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
+                if abstract_en_pattern.match(paragraph_text):
                     if "abstract_title_en" in rules:
                         rule = rules["abstract_title_en"].copy()
                         applied_rule_name = "abstract_title_en"
                     else:
                         rule = FONT_STANDARDS.get("abstract_title_en", {}).copy()
                         applied_rule_name = "abstract_title_en"
-                    # 强制确保ABSTRACT标题居中对齐
+                    # 强制确保ABSTRACT标题：黑体三号（16pt）、加粗、居中
+                    rule["font_name"] = "黑体"
+                    rule["font_size"] = 16  # 三号字
+                    rule["bold"] = True
                     rule["alignment"] = "center"
                 # 关键词标签
                 elif paragraph_text.startswith("Keywords") or paragraph_text.startswith("Key words"):
@@ -1262,7 +1270,10 @@ class DocumentService:
                     else:
                         rule = FONT_STANDARDS.get("toc_title", {}).copy()
                         applied_rule_name = "toc_title"
-                    # 强制确保目录标题居中对齐
+                    # 强制确保目录标题：黑体三号（16pt）、加粗、居中
+                    rule["font_name"] = "黑体"
+                    rule["font_size"] = 16  # 三号字
+                    rule["bold"] = True
                     rule["alignment"] = "center"
                 # 目录内容
                 else:
@@ -1523,7 +1534,19 @@ class DocumentService:
                                 is_toc_title_check = True
                     
                     if is_abstract_title_check or is_toc_title_check:
+                        # 确保标题格式：黑体三号（16pt）、加粗、居中
                         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                        # 设置字体和字号
+                        for run in paragraph.runs:
+                            run.font.name = "黑体"
+                            run.font.size = Pt(16)  # 三号字
+                            run.font.bold = True
+                        # 如果段落没有runs，创建一个run并设置格式
+                        if not paragraph.runs:
+                            run = paragraph.add_run()
+                            run.font.name = "黑体"
+                            run.font.size = Pt(16)
+                            run.font.bold = True
                 
                 # 记录修改后的格式
                 after_format = docx_format_utils.extract_paragraph_format(paragraph)
