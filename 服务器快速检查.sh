@@ -50,9 +50,10 @@ echo ""
 
 # 4. 检查检测日志
 echo "4. 检查检测日志..."
-DETECT_COUNT=$(sudo grep -c "\[检测\]" /var/log/geshixiugai/error.log 2>/dev/null || echo "0")
+DETECT_COUNT=$(sudo grep -c "\[检测\]" /var/log/geshixiugai/error.log 2>/dev/null | tr -d '\n' || echo "0")
+DETECT_COUNT=${DETECT_COUNT:-0}
 echo "   找到 $DETECT_COUNT 条检测日志"
-if [ "$DETECT_COUNT" -eq "0" ]; then
+if [ "$DETECT_COUNT" = "0" ] || [ "$DETECT_COUNT" -eq 0 ] 2>/dev/null; then
     echo "   ⚠️  没有检测日志"
     echo "   可能的原因："
     echo "     1. 代码还没有更新（检查步骤1）"
@@ -68,13 +69,15 @@ echo ""
 
 # 5. 检查诊断日志
 echo "5. 检查诊断日志..."
-DIAGNOSE_COUNT=$(sudo grep -c "\[诊断\]" /var/log/geshixiugai/error.log 2>/dev/null || echo "0")
+DIAGNOSE_COUNT=$(sudo grep -c "\[诊断\]" /var/log/geshixiugai/error.log 2>/dev/null | tr -d '\n' || echo "0")
+DIAGNOSE_COUNT=${DIAGNOSE_COUNT:-0}
 echo "   找到 $DIAGNOSE_COUNT 条诊断日志"
 echo ""
 
 # 6. 检查修复日志
 echo "6. 检查修复日志..."
-FIX_COUNT=$(sudo grep -c "\[修复\]" /var/log/geshixiugai/error.log 2>/dev/null || echo "0")
+FIX_COUNT=$(sudo grep -c "\[修复\]" /var/log/geshixiugai/error.log 2>/dev/null | tr -d '\n' || echo "0")
+FIX_COUNT=${FIX_COUNT:-0}
 echo "   找到 $FIX_COUNT 条修复日志"
 echo ""
 
@@ -91,7 +94,7 @@ if [ "$SYS_STDERR_COUNT" -eq "0" ]; then
     echo ""
 fi
 
-if [ "$DETECT_COUNT" -eq "0" ] && [ "$SYS_STDERR_COUNT" -gt "0" ]; then
+if ([ "$DETECT_COUNT" = "0" ] || [ "$DETECT_COUNT" -eq 0 ] 2>/dev/null) && [ "$SYS_STDERR_COUNT" -gt "0" ]; then
     echo "⚠️  代码已更新，但没有检测日志"
     echo "   可能的原因："
     echo "   1. 服务还没有重启 → sudo systemctl restart geshixiugai"
@@ -99,7 +102,7 @@ if [ "$DETECT_COUNT" -eq "0" ] && [ "$SYS_STDERR_COUNT" -gt "0" ]; then
     echo ""
 fi
 
-if [ "$DETECT_COUNT" -gt "0" ]; then
+if [ "$DETECT_COUNT" != "0" ] && [ "$DETECT_COUNT" -gt 0 ] 2>/dev/null; then
     echo "✅ 检测日志正常输出"
     echo "   查看完整日志: sudo grep '\[检测\]' /var/log/geshixiugai/error.log | tail -n 50"
     echo ""
