@@ -1367,16 +1367,42 @@ class DocumentService:
                 has_image_or_equation = self._paragraph_has_image_or_equation(paragraph)
                 has_flowchart = self._paragraph_has_flowchart(paragraph)
                 
+                # 判断是否是图题（图片说明）
+                is_figure_caption = False
+                if paragraph_text and len(paragraph_text) < 100:
+                    # 检查是否以"图"开头，且包含数字（如"图1-1"、"图2.1"等）
+                    if (paragraph_text.startswith("图") and 
+                        (re.search(r'图\s*\d+[\.\-]\d+', paragraph_text) or re.search(r'图\s*\d+', paragraph_text))):
+                        is_figure_caption = True
+                    # 检查是否是流程图标题（流程图X-X、流程图X.X等）
+                    elif (paragraph_text.startswith("流程图") and 
+                          (re.search(r'流程图\s*\d+[\.\-]\d+', paragraph_text) or re.search(r'流程图\s*\d+', paragraph_text))):
+                        is_figure_caption = True
+                
                 # 对于标题，移除行距设置，保持标题的原始行距
                 if is_heading:
                     rule.pop("line_spacing", None)
                 
-                # 对于包含图片、公式或流程图的段落，移除行距设置，避免被压缩看不见
+                # 对于包含图片、公式或流程图的段落，移除行距设置，避免被压缩看不见，并强制居中
                 if has_image_or_equation or has_flowchart:
                     # 移除行距设置，保持图片/流程图段落的原始行距
                     rule.pop("line_spacing", None)
                     # 也移除首行缩进，图片/流程图段落通常不需要缩进
                     rule.pop("first_line_indent", None)
+                    # 强制设置图片段落居中对齐
+                    rule["alignment"] = "center"
+                
+                # 对于图题（图片说明），强制居中并应用图题格式
+                if is_figure_caption:
+                    # 使用图题格式标准
+                    if "figure_caption" in rules:
+                        rule = rules["figure_caption"].copy()
+                        applied_rule_name = "figure_caption"
+                    else:
+                        rule = FONT_STANDARDS.get("figure_caption", {}).copy()
+                        applied_rule_name = "figure_caption"
+                    # 强制确保图题居中对齐
+                    rule["alignment"] = "center"
                 
                 # 对于正文段落（非标题、非图片、非公式、非流程图），保留原有字体，不强制统一
                 if not is_heading and not has_image_or_equation and not has_flowchart:
@@ -1798,6 +1824,11 @@ class DocumentService:
                     # 如果检查的段落已经有大量文字，说明图题不太可能在更后面了
                     if offset > 0 and len(check_text) > 50 and not check_text.startswith("图"):
                         break
+                
+                # 如果找到图题，强制设置图题段落居中对齐
+                if is_caption and caption_paragraph_idx is not None:
+                    caption_para = document.paragraphs[caption_paragraph_idx]
+                    caption_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
                 
                 # 如果没有找到图题，记录问题
                 if not is_caption:
