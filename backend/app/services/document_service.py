@@ -244,24 +244,40 @@ class DocumentService:
                 integrity_page = None
                 abstract_page = None
                 
-                # 检查前5页（通常诚信承诺和摘要在前几页）
-                for page_num in range(min(5, pdf_page_count)):
+                # 检查前10页（通常诚信承诺和摘要在前几页，但可能因为格式问题延后）
+                check_pages = min(10, pdf_page_count)
+                self._log_to_file(f"[检测] 检查前 {check_pages} 页以查找诚信承诺和摘要")
+                
+                for page_num in range(check_pages):
                     try:
                         page_text = pdf_reader.pages[page_num].extract_text()
-                        # 检查是否包含诚信承诺
-                        has_integrity = ('诚信承诺' in page_text or 
-                                       ('诚' in page_text and '信' in page_text and '承' in page_text and '诺' in page_text))
-                        # 检查是否包含摘要
-                        has_abstract = '摘要' in page_text
+                        # 调试：输出每页的前100个字符（用于排查）
+                        if page_num < 5:  # 只输出前5页的调试信息
+                            preview_text = page_text[:100].replace('\n', ' ').strip()
+                            self._log_to_file(f"[检测] 第 {page_num + 1} 页文本预览: {preview_text}...")
                         
-                        if has_integrity:
+                        # 检查是否包含诚信承诺（支持多种变体）
+                        has_integrity = (
+                            '诚信承诺' in page_text or 
+                            ('诚' in page_text and '信' in page_text and '承' in page_text and '诺' in page_text) or
+                            '诚信' in page_text and '承诺' in page_text
+                        )
+                        
+                        # 检查是否包含摘要（支持多种变体）
+                        has_abstract = (
+                            '摘要' in page_text or
+                            'ABSTRACT' in page_text.upper() or
+                            ('摘' in page_text and '要' in page_text)
+                        )
+                        
+                        if has_integrity and integrity_page is None:
                             integrity_page = page_num + 1
-                            self._log_to_file(f"[检测] 第 {page_num + 1} 页包含诚信承诺")
-                        if has_abstract:
+                            self._log_to_file(f"[检测] ✅ 第 {page_num + 1} 页包含诚信承诺")
+                        if has_abstract and abstract_page is None:
                             abstract_page = page_num + 1
-                            self._log_to_file(f"[检测] 第 {page_num + 1} 页包含摘要")
+                            self._log_to_file(f"[检测] ✅ 第 {page_num + 1} 页包含摘要")
                     except Exception as e:
-                        self._log_to_file(f"[检测] 无法提取第 {page_num + 1} 页文本: {e}")
+                        self._log_to_file(f"[检测] ❌ 无法提取第 {page_num + 1} 页文本: {e}")
                 
                 # 判断结果并输出
                 self._log_to_file(f"[检测] ========== PDF分页结果 ==========")
@@ -2897,25 +2913,25 @@ class DocumentService:
         section_ranges = self._find_section_ranges(document)
         
         if "integrity" not in section_ranges or "abstract_zh" not in section_ranges:
-            print(f"[修复] 未找到诚信承诺或摘要，跳过分页修复")
+            self._log_to_file(f"[修复] 未找到诚信承诺或摘要，跳过分页修复")
             return False
         
         integrity_start, integrity_end = section_ranges["integrity"]
         abstract_zh_start, _ = section_ranges["abstract_zh"]
         
-        print(f"[修复] 诚信承诺范围: {integrity_start} 到 {integrity_end}")
-        print(f"[修复] 摘要起始位置: {abstract_zh_start}")
+        self._log_to_file(f"[修复] 诚信承诺范围: {integrity_start} 到 {integrity_end}")
+        self._log_to_file(f"[修复] 摘要起始位置: {abstract_zh_start}")
         
         # 2. 检查摘要标题前是否有分页符
         if abstract_zh_start >= len(document.paragraphs):
-            print(f"[修复] ⚠️ 摘要位置超出文档范围")
+            self._log_to_file(f"[修复] ⚠️ 摘要位置超出文档范围")
             return False
         
         abstract_para = document.paragraphs[abstract_zh_start]
         
         # 检查摘要标题本身是否有分页符
         if abstract_para.paragraph_format.page_break_before:
-            print(f"[修复] ✅ 摘要标题已有分页符 (page_break_before)")
+            self._log_to_file(f"[修复] ✅ 摘要标题已有分页符 (page_break_before)")
             return False  # 已经有分页符
         
         # 检查摘要标题的runs中是否有分页符
@@ -2923,25 +2939,25 @@ class DocumentService:
             if hasattr(run, 'element'):
                 run_xml = str(run.element.xml)
                 if 'w:br' in run_xml and 'type="page"' in run_xml:
-                    print(f"[修复] ✅ 摘要标题的runs中已有分页符")
+                    self._log_to_file(f"[修复] ✅ 摘要标题的runs中已有分页符")
                     return False  # 已经有分页符
         
         # 检查前一个段落是否有分页符
         if abstract_zh_start > 0:
             prev_para = document.paragraphs[abstract_zh_start - 1]
             if prev_para.paragraph_format.page_break_before:
-                print(f"[修复] ✅ 摘要前一个段落已有分页符 (page_break_before)")
+                self._log_to_file(f"[修复] ✅ 摘要前一个段落已有分页符 (page_break_before)")
                 return False  # 已经有分页符
             
             for run in prev_para.runs:
                 if hasattr(run, 'element'):
                     run_xml = str(run.element.xml)
                     if 'w:br' in run_xml and 'type="page"' in run_xml:
-                        print(f"[修复] ✅ 摘要前一个段落的runs中已有分页符")
+                        self._log_to_file(f"[修复] ✅ 摘要前一个段落的runs中已有分页符")
                         return False  # 已经有分页符
         
         # 3. 没有分页符，强制添加分页符
-        print(f"[修复] ⚠️ 诚信承诺和摘要之间没有分页符，强制添加分页符")
+        self._log_to_file(f"[修复] ⚠️ 诚信承诺和摘要之间没有分页符，强制添加分页符")
         
         # 方法1：在摘要标题段落设置分页符
         abstract_para.paragraph_format.page_break_before = True
@@ -2958,11 +2974,11 @@ class DocumentService:
                 # 在摘要标题前插入一个空白段落（使用XML方式，更可靠）
                 new_para_xml = parse_xml('<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:pPr><w:pageBreakBefore/></w:pPr></w:p>')
                 abstract_para._element.getparent().insert(abstract_para._element, new_para_xml)
-                print(f"[修复] 方法2：已在摘要标题前插入空白段落并设置分页符")
+                self._log_to_file(f"[修复] 方法2：已在摘要标题前插入空白段落并设置分页符")
             else:
                 # 前一个段落是空白段落，直接设置分页符
                 prev_para.paragraph_format.page_break_before = True
-                print(f"[修复] 方法2：已在摘要前一个空白段落设置分页符")
+                self._log_to_file(f"[修复] 方法2：已在摘要前一个空白段落设置分页符")
         
         # 方法3：在摘要标题的runs中添加分页符（最可靠的方法）
         # 如果摘要标题有runs，在第一个run前添加分页符
@@ -2975,7 +2991,7 @@ class DocumentService:
             # 在第一个run前插入分页符
             br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
             first_run._element.getparent().insert(0, br)
-            print(f"[修复] ✅ 已在摘要标题的第一个run前添加分页符")
+            self._log_to_file(f"[修复] ✅ 已在摘要标题的第一个run前添加分页符")
         else:
             # 如果没有runs，创建一个run并添加分页符
             run = abstract_para.add_run()
@@ -2983,9 +2999,9 @@ class DocumentService:
             from docx.oxml.ns import qn
             br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
             run._element.getparent().insert(0, br)
-            print(f"[修复] ✅ 已创建run并添加分页符")
+            self._log_to_file(f"[修复] ✅ 已创建run并添加分页符")
         
-        print(f"[修复] ✅ 已使用多种方法强制添加分页符，确保诚信承诺和摘要分开")
+        self._log_to_file(f"[修复] ✅ 已使用多种方法强制添加分页符，确保诚信承诺和摘要分开")
         return True
 
     def _check_and_remove_blank_pages(self, document: Document) -> list:
