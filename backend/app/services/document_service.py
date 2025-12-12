@@ -2132,6 +2132,15 @@ class DocumentService:
         if check_start_idx >= check_end_idx:
             return issues
         
+        # 获取诚信承诺和摘要的范围，确保不删除它们之间的内容
+        integrity_start = None
+        integrity_end = None
+        abstract_zh_start = None
+        if "integrity" in section_ranges:
+            integrity_start, integrity_end = section_ranges["integrity"]
+        if "abstract_zh" in section_ranges:
+            abstract_zh_start, _ = section_ranges["abstract_zh"]
+        
         # 2. 识别大章节标题
         # 大章节特征：数字（1、2、3、4、5、6、7、8等）或中文一、二、三开头，字体三号（约16磅）
         def is_major_chapter_title(paragraph) -> bool:
@@ -2259,6 +2268,21 @@ class DocumentService:
                     blank_start_idx = None
                     continue
                 
+                # 检查是否在诚信承诺和摘要之间，如果是，则不删除任何内容
+                is_between_integrity_and_abstract = False
+                if integrity_end is not None and abstract_zh_start is not None:
+                    if blank_start_idx is not None:
+                        if integrity_end <= blank_start_idx < abstract_zh_start:
+                            is_between_integrity_and_abstract = True
+                    elif integrity_end <= idx < abstract_zh_start:
+                        is_between_integrity_and_abstract = True
+                
+                if is_between_integrity_and_abstract:
+                    # 在诚信承诺和摘要之间，不删除任何内容，重置计数
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+                    continue
+                
                 if is_blank_paragraph(paragraph):
                     if consecutive_blanks == 0:
                         blank_start_idx = idx
@@ -2348,6 +2372,21 @@ class DocumentService:
                 
                 if is_excluded:
                     # 如果在排除部分内，重置空白计数，不检测
+                    consecutive_blanks = 0
+                    blank_start_idx = None
+                    continue
+                
+                # 检查是否在诚信承诺和摘要之间，如果是，则不删除任何内容
+                is_between_integrity_and_abstract = False
+                if integrity_end is not None and abstract_zh_start is not None:
+                    if blank_start_idx is not None:
+                        if integrity_end <= blank_start_idx < abstract_zh_start:
+                            is_between_integrity_and_abstract = True
+                    elif integrity_end <= idx < abstract_zh_start:
+                        is_between_integrity_and_abstract = True
+                
+                if is_between_integrity_and_abstract:
+                    # 在诚信承诺和摘要之间，不删除任何内容，重置计数
                     consecutive_blanks = 0
                     blank_start_idx = None
                     continue
@@ -2607,12 +2646,35 @@ class DocumentService:
         consecutive_blanks = 0
         blank_start_idx = None
         
+        # 获取诚信承诺和摘要的范围，确保不删除它们之间的内容
+        section_ranges = self._find_section_ranges(document)
+        integrity_start = None
+        integrity_end = None
+        abstract_zh_start = None
+        if "integrity" in section_ranges:
+            integrity_start, integrity_end = section_ranges["integrity"]
+        if "abstract_zh" in section_ranges:
+            abstract_zh_start, _ = section_ranges["abstract_zh"]
+        
         # 在整个文档中检测整页空白
         # 使用while循环，因为删除段落后索引会变化
         idx = 0
         while idx < len(document.paragraphs):
             paragraph = document.paragraphs[idx]
             para_text = paragraph.text.strip() if paragraph.text else ""
+            
+            # 检查是否在诚信承诺和摘要之间，如果是，则不删除任何内容
+            is_between_integrity_and_abstract = False
+            if integrity_end is not None and abstract_zh_start is not None:
+                if integrity_end <= idx < abstract_zh_start:
+                    is_between_integrity_and_abstract = True
+            
+            if is_between_integrity_and_abstract:
+                # 在诚信承诺和摘要之间，不删除任何内容，跳过
+                consecutive_blanks = 0
+                blank_start_idx = None
+                idx += 1
+                continue
             
             # 检查是否是空白段落
             is_blank = len(para_text) == 0
@@ -2902,7 +2964,8 @@ class DocumentService:
             num_pages = len(reader.pages)
             print(f"[PDF水印] PDF总页数: {num_pages}")
             
-            # 为每一页添加水印
+            # 为每一页添加水印，同时检查并删除空白页
+            pages_to_keep = []
             for page_num in range(num_pages):
                 page = reader.pages[page_num]
                 
@@ -2911,82 +2974,113 @@ class DocumentService:
                 page_width = float(page_box.width)
                 page_height = float(page_box.height)
                 
-                print(f"[PDF水印] 处理第 {page_num + 1} 页, 尺寸: {page_width}x{page_height}")
+                # 检查页面是否是空白页
+                # 提取页面文本内容
+                try:
+                    page_text = page.extract_text()
+                    # 如果页面文本为空或只有空白字符，可能是空白页
+                    # 但也要考虑页眉页脚，所以如果文本长度小于10个字符，认为是空白页
+                    if page_text and len(page_text.strip()) > 10:
+                        # 页面有内容，保留
+                        pages_to_keep.append(page_num)
+                        print(f"[PDF水印] 第 {page_num + 1} 页有内容，保留")
+                    else:
+                        # 页面可能是空白页，检查是否有图像或其他内容
+                        # 如果页面有图像或其他对象，也保留
+                        if '/XObject' in page.get('/Resources', {}):
+                            pages_to_keep.append(page_num)
+                            print(f"[PDF水印] 第 {page_num + 1} 页有图像，保留")
+                        else:
+                            print(f"[PDF水印] 第 {page_num + 1} 页是空白页，将删除")
+                except Exception as e:
+                    # 如果提取文本失败，保留页面（可能是扫描件或特殊格式）
+                    pages_to_keep.append(page_num)
+                    print(f"[PDF水印] 第 {page_num + 1} 页提取文本失败，保留: {e}")
                 
-                # 创建水印PDF（使用reportlab）
-                watermark_pdf = io.BytesIO()
-                c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
-                
-                # 设置水印样式 - 浅红色、半透明、水平放置
-                # 使用浅红色（RGB: 255, 200, 200）并设置透明度
-                from reportlab.lib.colors import Color
-                light_red = Color(1.0, 0.78, 0.78, alpha=0.3)  # 浅红色，30%透明度
-                c.setFillColor(light_red)
-                
-                # 根据页面大小计算字体大小，适中即可
-                font_size = max(30, int(page_width / 20))
-                c.setFont("Helvetica-Bold", font_size)
-                
-                # 计算文本宽度（用于居中显示）
-                text_width = c.stringWidth(watermark_text, "Helvetica-Bold", font_size)
-                
-                # 每页水平放置3个水印，均匀分布在A4纸上
-                num_watermarks = 3
-                
-                # 计算每个水印的位置（水平均匀分布）
-                # 留出边距，确保水印不会太靠近边缘
-                margin_x = page_width / 10
-                margin_y = page_height / 10
-                usable_width = page_width - 2 * margin_x
-                usable_height = page_height - 2 * margin_y
-                
-                # 计算水平间距（3个水印，4个间隔，水平方向均匀分布）
-                x_spacing = usable_width / (num_watermarks + 1)
-                
-                # 垂直位置：在页面的上、中、下三个位置均匀分布
-                y_positions = [
-                    margin_y + usable_height * 0.25,  # 上1/4位置
-                    margin_y + usable_height * 0.5,   # 中间位置
-                    margin_y + usable_height * 0.75    # 下3/4位置
-                ]
-                
-                # 添加3个水印，水平放置，均匀分布
-                for i in range(num_watermarks):
-                    # 计算水平位置（均匀分布）
-                    x = margin_x + (i + 1) * x_spacing
-                    # 计算垂直位置（上、中、下均匀分布）
-                    y = y_positions[i]
+                # 如果页面需要保留，添加水印
+                if page_num in pages_to_keep:
+                    print(f"[PDF水印] 处理第 {page_num + 1} 页, 尺寸: {page_width}x{page_height}")
                     
-                    # 绘制水印文本（水平放置，不旋转）
-                    c.saveState()
-                    c.translate(x, y)
-                    # 不旋转，保持水平
-                    # 使用浅红色，半透明
+                    # 创建水印PDF（使用reportlab）
+                    watermark_pdf = io.BytesIO()
+                    c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
+                    
+                    # 设置水印样式 - 浅红色、半透明、水平放置
+                    # 使用浅红色（RGB: 255, 200, 200）并设置透明度
+                    from reportlab.lib.colors import Color
+                    light_red = Color(1.0, 0.78, 0.78, alpha=0.3)  # 浅红色，30%透明度
                     c.setFillColor(light_red)
-                    # 居中显示文本
-                    c.drawString(-text_width / 2, 0, watermark_text)
-                    c.restoreState()
-                
-                watermark_count = num_watermarks
-                
-                c.save()
-                watermark_pdf.seek(0)
-                
-                # 读取水印PDF
-                watermark_reader = PdfReader(watermark_pdf)
-                watermark_page = watermark_reader.pages[0]
-                
-                # 合并水印到原页面
-                page.merge_page(watermark_page)
-                
-                # 添加到输出PDF
-                writer.add_page(page)
-                
-                print(f"[PDF水印] 第 {page_num + 1} 页水印添加完成（共 {watermark_count} 个水印）")
+                    
+                    # 根据页面大小计算字体大小，适中即可
+                    font_size = max(30, int(page_width / 20))
+                    c.setFont("Helvetica-Bold", font_size)
+                    
+                    # 计算文本宽度（用于居中显示）
+                    text_width = c.stringWidth(watermark_text, "Helvetica-Bold", font_size)
+                    
+                    # 每页水平放置3个水印，均匀分布在A4纸上
+                    num_watermarks = 3
+                    
+                    # 计算每个水印的位置（水平均匀分布）
+                    # 留出边距，确保水印不会太靠近边缘
+                    margin_x = page_width / 10
+                    margin_y = page_height / 10
+                    usable_width = page_width - 2 * margin_x
+                    usable_height = page_height - 2 * margin_y
+                    
+                    # 计算水平间距（3个水印，4个间隔，水平方向均匀分布）
+                    x_spacing = usable_width / (num_watermarks + 1)
+                    
+                    # 垂直位置：在页面的上、中、下三个位置均匀分布
+                    y_positions = [
+                        margin_y + usable_height * 0.25,  # 上1/4位置
+                        margin_y + usable_height * 0.5,   # 中间位置
+                        margin_y + usable_height * 0.75    # 下3/4位置
+                    ]
+                    
+                    # 添加3个水印，水平放置，均匀分布
+                    for i in range(num_watermarks):
+                        # 计算水平位置（均匀分布）
+                        x = margin_x + (i + 1) * x_spacing
+                        # 计算垂直位置（上、中、下均匀分布）
+                        y = y_positions[i]
+                        
+                        # 绘制水印文本（水平放置，不旋转）
+                        c.saveState()
+                        c.translate(x, y)
+                        # 不旋转，保持水平
+                        # 使用浅红色，半透明
+                        c.setFillColor(light_red)
+                        # 居中显示文本
+                        c.drawString(-text_width / 2, 0, watermark_text)
+                        c.restoreState()
+                    
+                    watermark_count = num_watermarks
+                    
+                    c.save()
+                    watermark_pdf.seek(0)
+                    
+                    # 读取水印PDF
+                    watermark_reader = PdfReader(watermark_pdf)
+                    watermark_page = watermark_reader.pages[0]
+                    
+                    # 合并水印到原页面
+                    page.merge_page(watermark_page)
+                    
+                    # 添加到输出PDF
+                    writer.add_page(page)
+                    
+                    print(f"[PDF水印] 第 {page_num + 1} 页水印添加完成（共 {watermark_count} 个水印）")
             
             # 保存输出PDF
             with open(output_path, 'wb') as output_file:
                 writer.write(output_file)
+            
+            # 统计删除的空白页
+            deleted_pages = num_pages - len(pages_to_keep)
+            if deleted_pages > 0:
+                print(f"[PDF水印] ✅ 已删除 {deleted_pages} 个空白页")
+            print(f"[PDF水印] ✅ 最终PDF页数: {len(pages_to_keep)} (原始: {num_pages})")
             
             output_size = output_path.stat().st_size
             print(f"[PDF水印] ✅ PDF水印添加成功: {output_path}, 大小: {output_size / 1024:.2f} KB")
