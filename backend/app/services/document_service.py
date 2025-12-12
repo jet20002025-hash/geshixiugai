@@ -174,6 +174,19 @@ class DocumentService:
         preview_path = task_dir / "preview.docx"
         self._generate_watermarked_preview(final_path, preview_path)
         
+        # 诊断3：检查预览文档（带水印的Word文档）中诚信承诺和摘要的分页情况
+        print(f"[诊断] ========== 开始诊断：预览文档（带水印） ==========")
+        preview_doc = Document(preview_path)
+        preview_diagnosis = self._diagnose_integrity_abstract_separation(preview_doc)
+        print(f"[诊断] 预览文档诊断结果: {preview_diagnosis['issue'] if preview_diagnosis['issue'] else '有分页符'}")
+        print(f"[诊断] 分页符位置: {len(preview_diagnosis['page_break_locations'])} 个")
+        
+        # 对比诊断结果
+        if final_diagnosis["has_page_break_between"] and not preview_diagnosis["has_page_break_between"]:
+            print(f"[诊断] ⚠️ 警告：生成预览文档过程中丢失了分页符！")
+            stats["diagnosis_warning"] = "生成预览文档过程中丢失了诚信承诺和摘要之间的分页符"
+        stats["preview_diagnosis"] = preview_diagnosis
+        
         # 生成PDF预览（优先使用LibreOffice直接转换，保持格式完全一致）
         # 预览PDF = 修改后的文档 + 水印，格式与最终文档完全一致，仅格式为PDF
         pdf_path = preview_path.with_suffix('.pdf')
