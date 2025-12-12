@@ -221,34 +221,65 @@ class DocumentService:
         temp_pdf_path = pdf_path.with_suffix('.temp.pdf')
         pdf_success = self._try_libreoffice_pdf_conversion(preview_path, temp_pdf_path)
         
-        # 诊断4：PDF生成后，检查PDF页数（如果PDF生成成功）
+        # 检测5：PDF生成后，检查PDF中诚信承诺和摘要的分页结果
         if pdf_success and temp_pdf_path.exists():
             try:
                 from pypdf import PdfReader
                 pdf_reader = PdfReader(str(temp_pdf_path))
                 pdf_page_count = len(pdf_reader.pages)
-                print(f"[诊断] ========== PDF生成后诊断 ==========")
-                print(f"[诊断] PDF总页数: {pdf_page_count}")
-                # 检查第2页和第3页的内容，判断诚信承诺和摘要是否在同一页
-                if pdf_page_count >= 2:
+                print(f"[检测] ========== PDF生成后检测：诚信承诺和摘要分页结果 ==========")
+                print(f"[检测] PDF总页数: {pdf_page_count}")
+                
+                # 检查每一页，找到诚信承诺和摘要所在的页面
+                integrity_page = None
+                abstract_page = None
+                
+                # 检查前5页（通常诚信承诺和摘要在前几页）
+                for page_num in range(min(5, pdf_page_count)):
                     try:
-                        page2_text = pdf_reader.pages[1].extract_text()  # 第2页（索引1）
-                        has_integrity = '诚信承诺' in page2_text or ('诚' in page2_text and '信' in page2_text and '承' in page2_text and '诺' in page2_text)
-                        has_abstract = '摘要' in page2_text
-                        print(f"[诊断] 第2页包含诚信承诺: {has_integrity}, 包含摘要: {has_abstract}")
-                        if has_integrity and has_abstract:
-                            print(f"[诊断] ⚠️ 警告：PDF中诚信承诺和摘要在同一页！问题出现在Word转PDF过程中")
-                            stats["diagnosis_warning"] = "PDF中诚信承诺和摘要在同一页，问题出现在Word转PDF过程中"
-                        elif pdf_page_count >= 3:
-                            page3_text = pdf_reader.pages[2].extract_text()  # 第3页（索引2）
-                            has_abstract_page3 = '摘要' in page3_text
-                            print(f"[诊断] 第3页包含摘要: {has_abstract_page3}")
-                            if has_integrity and has_abstract_page3:
-                                print(f"[诊断] ✅ PDF中诚信承诺和摘要分开在不同页")
+                        page_text = pdf_reader.pages[page_num].extract_text()
+                        # 检查是否包含诚信承诺
+                        has_integrity = ('诚信承诺' in page_text or 
+                                       ('诚' in page_text and '信' in page_text and '承' in page_text and '诺' in page_text))
+                        # 检查是否包含摘要
+                        has_abstract = '摘要' in page_text
+                        
+                        if has_integrity:
+                            integrity_page = page_num + 1
+                            print(f"[检测] 第 {page_num + 1} 页包含诚信承诺")
+                        if has_abstract:
+                            abstract_page = page_num + 1
+                            print(f"[检测] 第 {page_num + 1} 页包含摘要")
                     except Exception as e:
-                        print(f"[诊断] 无法提取PDF页面文本: {e}")
+                        print(f"[检测] 无法提取第 {page_num + 1} 页文本: {e}")
+                
+                # 判断结果并输出
+                print(f"[检测] ========== PDF分页结果 ==========")
+                if integrity_page is not None and abstract_page is not None:
+                    if integrity_page == abstract_page:
+                        print(f"[检测] ❌ PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页）")
+                        print(f"[检测] ⚠️ 警告：Word转PDF过程中分页符可能失效")
+                        stats["pdf_separation_status"] = "合并在同一页"
+                        stats["pdf_separation_warning"] = f"PDF中诚信承诺和摘要在同一页（第 {integrity_page} 页），Word转PDF过程中分页符可能失效"
+                    else:
+                        print(f"[检测] ✅ PDF中诚信承诺和摘要分开在不同页")
+                        print(f"[检测] 诚信承诺在第 {integrity_page} 页，摘要在第 {abstract_page} 页")
+                        stats["pdf_separation_status"] = "已分开"
+                        stats["pdf_separation_pages"] = {"integrity": integrity_page, "abstract": abstract_page}
+                elif integrity_page is not None:
+                    print(f"[检测] ⚠️ 找到诚信承诺（第 {integrity_page} 页），但未找到摘要")
+                    stats["pdf_separation_status"] = "未找到摘要"
+                elif abstract_page is not None:
+                    print(f"[检测] ⚠️ 找到摘要（第 {abstract_page} 页），但未找到诚信承诺")
+                    stats["pdf_separation_status"] = "未找到诚信承诺"
+                else:
+                    print(f"[检测] ⚠️ 未找到诚信承诺和摘要")
+                    stats["pdf_separation_status"] = "未找到"
+                print(f"[检测] ========================================")
+                    
             except Exception as e:
-                print(f"[诊断] 无法读取PDF: {e}")
+                print(f"[检测] ❌ 无法读取PDF: {e}")
+                stats["pdf_separation_status"] = "检测失败"
         
         # 如果LibreOffice转换失败，回退到HTML转PDF（不推荐，格式会有变化）
         if not pdf_success:
