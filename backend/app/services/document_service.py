@@ -5115,11 +5115,16 @@ read_file
             # 但首先尝试直接执行
             # 注意：使用PDF导出过滤器，确保保留原始字体
             # LibreOffice默认会保留字体，但如果系统缺少字体，可能会替换
-            # 尝试方法1：使用标准PDF转换命令（LibreOffice会自动嵌入可用字体）
+            # 尝试方法1：使用标准PDF转换命令，并嵌入字体以确保跨平台一致性
+            # 添加PDF导出过滤器参数，确保字体嵌入和跨平台一致性
+            # EmbedStandardFonts: 嵌入标准字体
+            # UseTaggedPDF: 使用标签PDF（更好的兼容性）
+            # Quality: 100（最高质量）
+            pdf_export_filter = 'pdf:"writer_pdf_Export:{\\"EmbedStandardFonts\\":true,\\"UseTaggedPDF\\":true,\\"Quality\\":100}"'
             cmd_abs = [
                 libreoffice_cmd,
                 '--headless',
-                '--convert-to', 'pdf',
+                '--convert-to', pdf_export_filter,
                 '--outdir', str(abs_output_dir),
                 str(input_file)
             ]
