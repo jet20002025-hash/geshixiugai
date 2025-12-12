@@ -984,8 +984,9 @@ class DocumentService:
                 if not para_text:
                     continue
                 
-                # 检查是否是摘要开始（支持"摘要"中间有空格）
-                if abstract_pattern.match(para_text) or para_text.startswith("ABSTRACT"):
+                # 检查是否是摘要开始（支持"摘要"中间有空格，或"ABSTRACT"大小写不敏感）
+                abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
+                if abstract_pattern.match(para_text) or abstract_en_pattern.match(para_text):
                     # 检查摘要前是否有分页符，如果有，说明诚信承诺和摘要已经分开
                     # 如果没有分页符，但摘要标题前有分页符，也认为已经分开
                     if idx > 0:
@@ -1025,7 +1026,8 @@ class DocumentService:
             abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
             for idx in range(integrity_start + 1, len(document.paragraphs)):
                 para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-                if abstract_pattern.match(para_text) or para_text.startswith("ABSTRACT"):
+                abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
+                if abstract_pattern.match(para_text) or abstract_en_pattern.match(para_text):
                     integrity_end = idx
                     break
         
@@ -1040,25 +1042,34 @@ class DocumentService:
             if abstract_pattern.match(para_text) and abstract_zh_start is None:
                 abstract_zh_start = idx
                 self._log_to_file(f"[修复] ✅ 找到中文摘要，段落索引: {idx}, 文本: {para_text[:50]}")
-            elif abstract_zh_start is not None and (para_text.startswith("关键词") or para_text.startswith("ABSTRACT") or para_text.startswith("目录")):
-                abstract_zh_end = idx
-                break
-        
-        # 如果没找到结束标志，假设摘要到"ABSTRACT"或"目录"之前
-        if abstract_zh_start is not None and abstract_zh_end is None:
-            for idx in range(abstract_zh_start + 1, len(document.paragraphs)):
-                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-                if para_text.startswith("ABSTRACT") or para_text.startswith("目录"):
+            elif abstract_zh_start is not None:
+                # 检查是否是关键词、ABSTRACT（大小写不敏感）或目录
+                abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
+                if para_text.startswith("关键词") or abstract_en_pattern.match(para_text) or para_text.startswith("目录"):
                     abstract_zh_end = idx
                     break
         
-        # 查找英文摘要
+        # 如果没找到结束标志，假设摘要到"ABSTRACT"（大小写不敏感）或"目录"之前
+        if abstract_zh_start is not None and abstract_zh_end is None:
+            abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
+            for idx in range(abstract_zh_start + 1, len(document.paragraphs)):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                if abstract_en_pattern.match(para_text) or para_text.startswith("目录"):
+                    abstract_zh_end = idx
+                    break
+        
+        # 查找英文摘要（支持大小写不敏感，如 "Abstract", "ABSTRACT", "abstract"）
+        self._log_to_file(f"[修复] 开始查找英文摘要，从段落 {search_start} 开始")
+        abstract_en_pattern = re.compile(r'^abstract', re.IGNORECASE)
         for idx in range(search_start, len(document.paragraphs)):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
-            if para_text.startswith("ABSTRACT") and abstract_en_start is None:
+            # 检查是否是英文摘要标题（大小写不敏感）
+            if abstract_en_pattern.match(para_text) and abstract_en_start is None:
                 abstract_en_start = idx
+                self._log_to_file(f"[修复] ✅ 找到英文摘要，段落索引: {idx}, 文本: {para_text[:50]}")
             elif abstract_en_start is not None and (para_text.startswith("Keywords") or para_text.startswith("目录") or para_text.startswith("Contents") or para_text.startswith("第一章") or para_text.startswith("第1章")):
                 abstract_en_end = idx
+                self._log_to_file(f"[修复] 英文摘要结束位置: {idx}, 文本: {para_text[:50]}")
                 break
         
         # 查找目录
@@ -3103,9 +3114,23 @@ class DocumentService:
         # 1. 查找中文摘要和英文摘要的位置
         section_ranges = self._find_section_ranges(document)
         
-        if "abstract_zh" not in section_ranges or "abstract_en" not in section_ranges:
-            self._log_to_file(f"[修复] 未找到中文摘要或英文摘要，跳过分页修复")
+        if "abstract_zh" not in section_ranges:
+            self._log_to_file(f"[修复] ❌ 未找到中文摘要，跳过分页修复")
             return False
+        
+        if "abstract_en" not in section_ranges:
+            self._log_to_file(f"[修复] ❌ 未找到英文摘要，跳过分页修复")
+            self._log_to_file(f"[修复] 已找到的section: {list(section_ranges.keys())}")
+            # 尝试重新查找英文摘要（可能是大小写问题）
+            for idx in range(0, len(document.paragraphs)):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                if re.match(r'^abstract', para_text, re.IGNORECASE):
+                    self._log_to_file(f"[修复] 重新找到英文摘要，段落索引: {idx}, 文本: {para_text[:50]}")
+                    # 手动设置英文摘要范围
+                    section_ranges["abstract_en"] = (idx, len(document.paragraphs))
+                    break
+            if "abstract_en" not in section_ranges:
+                return False
         
         abstract_zh_start, abstract_zh_end = section_ranges["abstract_zh"]
         abstract_en_start, _ = section_ranges["abstract_en"]
