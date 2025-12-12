@@ -2921,10 +2921,53 @@ class DocumentService:
                         print(f"[修复] ✅ 摘要前一个段落的runs中已有分页符")
                         return False  # 已经有分页符
         
-        # 3. 没有分页符，添加分页符
-        print(f"[修复] ⚠️ 诚信承诺和摘要之间没有分页符，在摘要标题前添加分页符")
+        # 3. 没有分页符，强制添加分页符
+        print(f"[修复] ⚠️ 诚信承诺和摘要之间没有分页符，强制添加分页符")
+        
+        # 方法1：在摘要标题段落设置分页符
         abstract_para.paragraph_format.page_break_before = True
-        print(f"[修复] ✅ 已添加分页符到摘要标题段落")
+        
+        # 方法2：在摘要标题前插入一个空白段落，并设置分页符（更可靠）
+        # 这样可以确保分页符生效
+        if abstract_zh_start > 0:
+            # 检查前一个段落是否是空白段落
+            prev_para = document.paragraphs[abstract_zh_start - 1]
+            prev_text = prev_para.text.strip() if prev_para.text else ""
+            
+            # 如果前一个段落不是空白段落，插入一个空白段落
+            if prev_text:
+                # 在摘要标题前插入一个空白段落
+                new_para = abstract_para._element.getparent().insert(abstract_para._element, abstract_para._element.__class__())
+                new_para_p = document.paragraphs[abstract_zh_start]  # 新插入的段落
+                new_para_p.paragraph_format.page_break_before = True
+                print(f"[修复] ✅ 已在摘要标题前插入空白段落并设置分页符")
+            else:
+                # 前一个段落是空白段落，直接设置分页符
+                prev_para.paragraph_format.page_break_before = True
+                print(f"[修复] ✅ 已在摘要前一个空白段落设置分页符")
+        
+        # 方法3：在摘要标题的runs中添加分页符（最可靠的方法）
+        # 如果摘要标题有runs，在第一个run前添加分页符
+        if abstract_para.runs:
+            from docx.oxml import parse_xml
+            from docx.oxml.ns import qn
+            
+            # 获取第一个run
+            first_run = abstract_para.runs[0]
+            # 在第一个run前插入分页符
+            br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
+            first_run._element.getparent().insert(0, br)
+            print(f"[修复] ✅ 已在摘要标题的第一个run前添加分页符")
+        else:
+            # 如果没有runs，创建一个run并添加分页符
+            run = abstract_para.add_run()
+            from docx.oxml import parse_xml
+            from docx.oxml.ns import qn
+            br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
+            run._element.getparent().insert(0, br)
+            print(f"[修复] ✅ 已创建run并添加分页符")
+        
+        print(f"[修复] ✅ 已使用多种方法强制添加分页符，确保诚信承诺和摘要分开")
         return True
 
     def _check_and_remove_blank_pages(self, document: Document) -> list:
