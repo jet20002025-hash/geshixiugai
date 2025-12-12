@@ -2934,17 +2934,16 @@ class DocumentService:
             prev_para = document.paragraphs[abstract_zh_start - 1]
             prev_text = prev_para.text.strip() if prev_para.text else ""
             
-            # 如果前一个段落不是空白段落，插入一个空白段落
+            # 如果前一个段落不是空白段落，在其后插入一个空白段落并设置分页符
             if prev_text:
-                # 在摘要标题前插入一个空白段落
-                new_para = abstract_para._element.getparent().insert(abstract_para._element, abstract_para._element.__class__())
-                new_para_p = document.paragraphs[abstract_zh_start]  # 新插入的段落
-                new_para_p.paragraph_format.page_break_before = True
-                print(f"[修复] ✅ 已在摘要标题前插入空白段落并设置分页符")
+                # 在摘要标题前插入一个空白段落（使用XML方式，更可靠）
+                new_para_xml = parse_xml('<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:pPr><w:pageBreakBefore/></w:pPr></w:p>')
+                abstract_para._element.getparent().insert(abstract_para._element, new_para_xml)
+                print(f"[修复] 方法2：已在摘要标题前插入空白段落并设置分页符")
             else:
                 # 前一个段落是空白段落，直接设置分页符
                 prev_para.paragraph_format.page_break_before = True
-                print(f"[修复] ✅ 已在摘要前一个空白段落设置分页符")
+                print(f"[修复] 方法2：已在摘要前一个空白段落设置分页符")
         
         # 方法3：在摘要标题的runs中添加分页符（最可靠的方法）
         # 如果摘要标题有runs，在第一个run前添加分页符
