@@ -200,6 +200,35 @@ class DocumentService:
         temp_pdf_path = pdf_path.with_suffix('.temp.pdf')
         pdf_success = self._try_libreoffice_pdf_conversion(preview_path, temp_pdf_path)
         
+        # 诊断4：PDF生成后，检查PDF页数（如果PDF生成成功）
+        if pdf_success and temp_pdf_path.exists():
+            try:
+                from pypdf import PdfReader
+                pdf_reader = PdfReader(str(temp_pdf_path))
+                pdf_page_count = len(pdf_reader.pages)
+                print(f"[诊断] ========== PDF生成后诊断 ==========")
+                print(f"[诊断] PDF总页数: {pdf_page_count}")
+                # 检查第2页和第3页的内容，判断诚信承诺和摘要是否在同一页
+                if pdf_page_count >= 2:
+                    try:
+                        page2_text = pdf_reader.pages[1].extract_text()  # 第2页（索引1）
+                        has_integrity = '诚信承诺' in page2_text or ('诚' in page2_text and '信' in page2_text and '承' in page2_text and '诺' in page2_text)
+                        has_abstract = '摘要' in page2_text
+                        print(f"[诊断] 第2页包含诚信承诺: {has_integrity}, 包含摘要: {has_abstract}")
+                        if has_integrity and has_abstract:
+                            print(f"[诊断] ⚠️ 警告：PDF中诚信承诺和摘要在同一页！问题出现在Word转PDF过程中")
+                            stats["diagnosis_warning"] = "PDF中诚信承诺和摘要在同一页，问题出现在Word转PDF过程中"
+                        elif pdf_page_count >= 3:
+                            page3_text = pdf_reader.pages[2].extract_text()  # 第3页（索引2）
+                            has_abstract_page3 = '摘要' in page3_text
+                            print(f"[诊断] 第3页包含摘要: {has_abstract_page3}")
+                            if has_integrity and has_abstract_page3:
+                                print(f"[诊断] ✅ PDF中诚信承诺和摘要分开在不同页")
+                    except Exception as e:
+                        print(f"[诊断] 无法提取PDF页面文本: {e}")
+            except Exception as e:
+                print(f"[诊断] 无法读取PDF: {e}")
+        
         # 如果LibreOffice转换失败，回退到HTML转PDF（不推荐，格式会有变化）
         if not pdf_success:
             print(f"[预览] ⚠️ LibreOffice转换失败，回退到HTML转PDF（格式可能有变化，不推荐）")
