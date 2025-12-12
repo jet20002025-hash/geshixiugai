@@ -3085,21 +3085,18 @@ class DocumentService:
         # 方法3：在摘要标题的runs中添加分页符（最可靠的方法）
         # 如果摘要标题有runs，在第一个run前添加分页符
         if abstract_para.runs:
-            from docx.oxml import parse_xml
-            from docx.oxml.ns import qn
-            
             # 获取第一个run
             first_run = abstract_para.runs[0]
-            # 在第一个run前插入分页符
-            br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
+            # 在第一个run前插入分页符（使用正确的XML格式）
+            br_xml = '<w:br xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:type="page"/>'
+            br = parse_xml(br_xml)
             first_run._element.getparent().insert(0, br)
             self._log_to_file(f"[修复] ✅ 已在摘要标题的第一个run前添加分页符")
         else:
             # 如果没有runs，创建一个run并添加分页符
             run = abstract_para.add_run()
-            from docx.oxml import parse_xml
-            from docx.oxml.ns import qn
-            br = parse_xml(f'<w:br {qn("w:type")}="page"/>')
+            br_xml = '<w:br xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:type="page"/>'
+            br = parse_xml(br_xml)
             run._element.getparent().insert(0, br)
             self._log_to_file(f"[修复] ✅ 已创建run并添加分页符")
         
