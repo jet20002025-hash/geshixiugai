@@ -877,33 +877,85 @@ class DocumentService:
         
         # 查找诚信承诺（通常在封面之后，摘要之前，第二页）
         # 支持"诚信承诺"中间有空格的情况，如"诚信 承诺"、"诚 信 承 诺"等
+        # 注意：诚信承诺可能在封面范围内，所以从段落0开始查找
         integrity_pattern = re.compile(r'诚\s*信\s*承\s*诺', re.IGNORECASE)
         integrity_keywords = ["学术诚信", "原创性声明", "原创声明"]
         
-        self._log_to_file(f"[修复] 开始查找诚信承诺，从段落 {cover_end} 开始")
-        for idx in range(cover_end, len(document.paragraphs)):
+        self._log_to_file(f"[修复] 开始查找诚信承诺，从段落 0 开始（cover_end={cover_end}）")
+        # 先在前50个段落中查找（通常诚信承诺在前几页）
+        search_range = min(50, len(document.paragraphs))
+        
+        # 改进的查找逻辑：四个字可以分散在不同段落，中间可以有任意空格
+        # 先找"诚"，再找"信"，再找"承"，再找"诺"，按顺序出现即可
+        cheng_idx = None  # 诚
+        xin_idx = None    # 信
+        cheng2_idx = None # 承
+        nuo_idx = None    # 诺
+        
+        for idx in range(0, search_range):
             para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
             if not para_text:
                 continue
             
-            # 检查是否匹配"诚信承诺"（允许中间有空格）
-            if integrity_pattern.search(para_text) and integrity_start is None:
-                integrity_start = idx
-                self._log_to_file(f"[修复] ✅ 找到诚信承诺，段落索引: {idx}, 文本: {para_text[:50]}")
+            # 调试：输出前20个段落的文本（用于排查）
+            if idx < 20 and integrity_start is None:
+                self._log_to_file(f"[修复] 段落 {idx} 文本预览: {para_text[:80]}")
+            
+            # 第一步：找"诚"
+            if cheng_idx is None and '诚' in para_text:
+                cheng_idx = idx
+                self._log_to_file(f"[修复] 步骤1: 找到'诚'，段落索引: {idx}, 文本: {para_text[:80]}")
                 continue
             
-            # 也检查其他诚信承诺相关关键词
+            # 第二步：找到"诚"后，找"信"（必须在"诚"之后）
+            if cheng_idx is not None and xin_idx is None and idx > cheng_idx and '信' in para_text:
+                xin_idx = idx
+                self._log_to_file(f"[修复] 步骤2: 找到'信'，段落索引: {idx}, 文本: {para_text[:80]}")
+                continue
+            
+            # 第三步：找到"信"后，找"承"（必须在"信"之后）
+            if xin_idx is not None and cheng2_idx is None and idx > xin_idx and '承' in para_text:
+                cheng2_idx = idx
+                self._log_to_file(f"[修复] 步骤3: 找到'承'，段落索引: {idx}, 文本: {para_text[:80]}")
+                continue
+            
+            # 第四步：找到"承"后，找"诺"（必须在"承"之后）
+            if cheng2_idx is not None and nuo_idx is None and idx > cheng2_idx and '诺' in para_text:
+                nuo_idx = idx
+                self._log_to_file(f"[修复] 步骤4: 找到'诺'，段落索引: {idx}, 文本: {para_text[:80]}")
+                # 找到所有四个字，设置诚信承诺的起始位置为"诚"所在的段落
+                integrity_start = cheng_idx
+                self._log_to_file(f"[修复] ✅ 找到完整的'诚信承诺'，起始段落索引: {integrity_start}")
+                break
+            
+            # 也检查其他诚信承诺相关关键词（作为备选方案）
             if integrity_start is None:
+                found_keyword = False
                 for keyword in integrity_keywords:
                     if keyword in para_text:
                         integrity_start = idx
+                        self._log_to_file(f"[修复] ✅ 找到诚信承诺（关键词匹配：{keyword}），段落索引: {idx}, 文本: {para_text[:80]}")
+                        found_keyword = True
                         break
-            
-            # 诚信承诺的结束标志：遇到"摘要"或"ABSTRACT"时结束
-            # 注意：诚信承诺应该在独立的一页，所以遇到"摘要"就应该结束
-            if integrity_start is not None:
+                if found_keyword:
+                    break
+        
+        # 如果通过四个字分别查找的方式找到了，但还没有设置 integrity_start
+        if cheng_idx is not None and xin_idx is not None and cheng2_idx is not None and nuo_idx is not None and integrity_start is None:
+            integrity_start = cheng_idx
+            self._log_to_file(f"[修复] ✅ 通过分步查找找到完整的'诚信承诺'，起始段落索引: {integrity_start}")
+        
+        # 诚信承诺的结束标志：遇到"摘要"或"ABSTRACT"时结束
+        # 注意：诚信承诺应该在独立的一页，所以遇到"摘要"就应该结束
+        if integrity_start is not None:
+            # 从诚信承诺开始位置之后查找摘要
+            abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
+            for idx in range(integrity_start + 1, min(integrity_start + 30, len(document.paragraphs))):
+                para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                if not para_text:
+                    continue
+                
                 # 检查是否是摘要开始（支持"摘要"中间有空格）
-                abstract_pattern = re.compile(r'^摘\s*要', re.IGNORECASE)
                 if abstract_pattern.match(para_text) or para_text.startswith("ABSTRACT"):
                     # 检查摘要前是否有分页符，如果有，说明诚信承诺和摘要已经分开
                     # 如果没有分页符，但摘要标题前有分页符，也认为已经分开
