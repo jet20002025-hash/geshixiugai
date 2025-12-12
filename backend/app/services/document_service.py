@@ -118,6 +118,12 @@ class DocumentService:
         if reference_issues:
             stats["reference_issues"] = reference_issues
         
+        # 确保诚信承诺和摘要分开在不同页（在空白行删除之前）
+        separation_fixed = self._ensure_integrity_abstract_separation(final_doc)
+        if separation_fixed:
+            print(f"[修复] ✅ 已确保诚信承诺和摘要分开在不同页")
+            stats["integrity_abstract_separation_fixed"] = True
+        
         # 检测大段空白
         blank_issues = self._check_excessive_blanks(final_doc)
         if blank_issues:
