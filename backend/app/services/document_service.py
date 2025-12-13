@@ -814,6 +814,11 @@ class DocumentService:
         # - 文字部分：不超过30个字
         # - 总长度：数字(1-6) + 空格(1) + 文字(30) ≈ 最多38个字符
         # - 通常在新页开头（检查 page_break_before）
+        # 添加调试日志：记录所有可能的一级标题候选
+        if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+            # 这是一个可能的候选，先记录
+            self._log_to_file(f"[标题检测] 🔍 一级标题候选: 段落索引={para_idx}, 内容=\"{text}\", 长度={len(text)}")
+        
         number_title_match = re.match(r"^(\d{1,6})\s+([^\.]+)$", text)
         if number_title_match:
             number_part = number_title_match.group(1)
@@ -835,6 +840,14 @@ class DocumentService:
                     para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
                     self._log_to_file(f"[标题检测] ✅ 检测到一级标题（数字+文字格式）{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 完整内容=\"{text}\"")
                     return "title_level_1"
+                else:
+                    # 记录为什么没有匹配
+                    para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                    self._log_to_file(f"[标题检测] ⚠️ 一级标题候选但未匹配{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 条件检查: is_new_page={is_new_page}, text_part长度={len(text_part)}")
+            else:
+                # 记录为什么没有匹配（长度限制）
+                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                self._log_to_file(f"[标题检测] ⚠️ 一级标题候选但长度不符合{para_info}: 数字部分=\"{number_part}\" (长度={len(number_part)}), 文字部分=\"{text_part}\" (长度={len(text_part)}), 总长度={len(text)}, 限制: 数字<=6, 文字<=30, 总长度<=40")
         
         # 二级标题检测：格式为 数字.数字 或 数字.数字 后跟文字内容
         # 规则：
@@ -1387,10 +1400,22 @@ class DocumentService:
             # 处理正文部分（使用原有逻辑）
             else:
                 # 优先使用标准格式检测
+                paragraph_text = paragraph.text.strip() if paragraph.text else ""
+                # 对于可能是一级标题的段落，添加调试日志
+                if re.match(r"^\d{1,6}\s+", paragraph_text) and len(paragraph_text) <= 50:
+                    self._log_to_file(f"[标题检测] 🔍 开始检测段落 {idx}: 内容=\"{paragraph_text}\"")
                 detected_style = self._detect_paragraph_style(paragraph, para_idx=idx)
+                # 记录检测结果
+                if detected_style == "title_level_1":
+                    self._log_to_file(f"[标题检测] ✅ 段落 {idx} 被检测为一级标题: 内容=\"{paragraph_text[:50]}\", 检测样式={detected_style}")
                 if detected_style in rules:
                     rule = rules[detected_style].copy()
                     applied_rule_name = detected_style
+                    if detected_style == "title_level_1":
+                        self._log_to_file(f"[标题检测] ✅ 段落 {idx} 应用一级标题规则: 内容=\"{paragraph_text[:50]}\"")
+                elif detected_style == "title_level_1":
+                    # 检测到了一级标题，但rules中没有，记录警告
+                    self._log_to_file(f"[标题检测] ⚠️ 段落 {idx} 检测为一级标题，但rules中未找到title_level_1规则: 内容=\"{paragraph_text[:50]}\"")
                 # 如果标准格式中没有，尝试使用模板中的样式名
                 elif style_name and style_name in rules:
                     rule = rules[style_name].copy()
