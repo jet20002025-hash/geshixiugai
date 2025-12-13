@@ -804,15 +804,23 @@ class DocumentService:
             if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
                 return "title_level_1"
         
-        # 二级标题检测：必须是独立的、较短的段落
-        # 标题格式：数字.数字 或 数字.数字 后跟标点符号，且后面没有其他文字内容
-        # 标题一般不会超过一行，字数不会超过30个
-        section_match = re.match(r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
+        # 二级标题检测：格式为 数字.数字 或 数字.数字 后跟文字内容
+        # 例如：2.1、3.1、4.1 或 2.1 系统设计、3.1 需求分析 等
+        # 标题一般不会超过一行，字数不会超过50个
+        section_match = re.match(r"^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$", text)
         if section_match:
-            remaining_text = text[len(section_match.group(0)):].strip()
-            # 只有当剩余文本为空或只有标点符号时，且总长度不超过30个字符，才认为是标题
-            # 如果后面还有文字内容，则不是标题（是正文中的编号引用）
-            # 换行以后就是新的内容了，标题一般不会超过一行
+            # 匹配到 数字.数字 格式
+            # 如果后面有文字内容（如"2.1 系统设计"），也是标题
+            # 如果后面只有标点符号或为空，也是标题
+            remaining_text = section_match.group(3).strip() if section_match.group(3) else ""
+            # 标题通常不会超过50个字符，且段落较短
+            if len(text) <= 50:
+                return "title_level_2"
+        
+        # 也支持"第X节"格式的二级标题
+        section_chinese_match = re.match(r"^(第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
+        if section_chinese_match:
+            remaining_text = text[len(section_chinese_match.group(0)):].strip()
             if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
                 return "title_level_2"
         
@@ -1385,11 +1393,15 @@ class DocumentService:
                             is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（绪论/概述: {paragraph_text}）")
-                    # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过30个）
-                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 20:  # 更严格：<=20字符
-                        # 更严格的判断：只有纯数字编号格式（如"3.2.4"、"3.2"等）才认为是标题
-                        # 如果包含其他文字内容（如"3.2.4 12864 液晶显示屏"），则不是标题，是正文
-                        if re.match(r'^(\d+\.\d+\.\d+|\d+\.\d+|\d+)([，,。.：:；;]?)$', paragraph_text):
+                    # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过50个）
+                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 50:
+                        # 二级标题格式：数字.数字 或 数字.数字 后跟文字（如"2.1 系统设计"）
+                        if re.match(r'^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$', paragraph_text):
+                            is_heading = True
+                            if idx < 10:
+                                print(f"[格式应用] 段落 {idx} 被识别为二级标题（数字编号: {paragraph_text}）")
+                        # 三级标题格式：数字.数字.数字
+                        elif re.match(r'^(\d+\.\d+\.\d+)([，,。.：:；;]?)$', paragraph_text):
                             is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（数字编号: {paragraph_text}）")
@@ -1529,18 +1541,22 @@ class DocumentService:
                             rule["line_spacing"] = standard_body.get("line_spacing", 20)
                             rule["first_line_indent"] = standard_body.get("first_line_indent", 24)
                         print(f"[格式应用] 段落 {idx} 使用默认字体：宋体、12pt、行距20磅")
-                # 对于标题，确保使用黑体
+                # 对于标题，根据级别设置字体
                 elif is_heading:
-                    # 标题必须使用黑体，如果规则中没有指定，使用标准标题格式
-                    if rule.get("font_name") is None or "黑" not in str(rule.get("font_name", "")):
-                        # 根据标题级别设置字体
-                        if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3"]:
-                            if applied_rule_name in FONT_STANDARDS:
-                                title_style = FONT_STANDARDS[applied_rule_name]
-                                rule["font_name"] = title_style.get("font_name", "黑体")
-                        else:
+                    # 根据标题级别设置字体
+                    if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3"]:
+                        if applied_rule_name in FONT_STANDARDS:
+                            title_style = FONT_STANDARDS[applied_rule_name]
+                            # 一级标题：黑体；二级标题：宋体；三级标题：黑体
+                            rule["font_name"] = title_style.get("font_name", "黑体" if applied_rule_name != "title_level_2" else "宋体")
+                            rule["font_size"] = title_style.get("font_size", 16 if applied_rule_name == "title_level_1" else 12)
+                            rule["bold"] = title_style.get("bold", True)
+                            print(f"[格式应用] 段落 {idx} 应用标题格式：{applied_rule_name}，字体：{rule['font_name']}，字号：{rule['font_size']}pt")
+                    else:
+                        # 其他标题（如摘要、目录等）使用黑体
+                        if rule.get("font_name") is None or "黑" not in str(rule.get("font_name", "")):
                             rule["font_name"] = "黑体"
-                        print(f"[格式应用] 段落 {idx} 强制设置为标题格式：黑体")
+                            print(f"[格式应用] 段落 {idx} 强制设置为标题格式：黑体")
 
             if rule:
                 # 记录修改前的格式

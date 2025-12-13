@@ -38,8 +38,8 @@ FONT_STANDARDS = {
         "line_spacing": "single",  # 单倍行距
     },
     "title_level_2": {
-        "font_name": "黑体",
-        "font_size": 14,  # 四号字
+        "font_name": "宋体",
+        "font_size": 12,  # 小四号字
         "bold": True,
         "alignment": "left",
     },
