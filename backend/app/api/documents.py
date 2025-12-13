@@ -207,8 +207,13 @@ async def preview_document(document_id: str) -> Response:
         pdf_size = pdf_file.stat().st_size
         print(f"[Preview] ✅ 返回PDF预览: {pdf_file}, 大小: {pdf_size / 1024:.2f} KB")
         
-        # 处理中文文件名编码（使用 RFC 5987 格式）
-        download_filename = "预览版_带水印.pdf"
+        # 使用原始文件名（如果存在），否则使用默认名称
+        original_filename = metadata.get("original_filename", "")
+        if original_filename:
+            # 提取文件名（不含扩展名）并添加 .pdf 扩展名
+            download_filename = Path(original_filename).stem + ".pdf"
+        else:
+            download_filename = "预览版_带水印.pdf"
         ascii_filename = "preview_watermarked.pdf"  # ASCII 备用文件名
         
         # 使用 RFC 5987 格式编码 UTF-8 文件名
@@ -432,11 +437,10 @@ async def download_document(document_id: str, token: str) -> FileResponse:
         # 使用原始文件名（如果存在），否则使用 document_id
         original_filename = metadata.get("original_filename", "")
         if original_filename:
-            # 提取文件名（不含扩展名）并添加后缀
-            filename_stem = Path(original_filename).stem
-            download_filename = f"{filename_stem}_带水印版.pdf"
+            # 提取文件名（不含扩展名）并添加 .pdf 扩展名（与上传文件名相同）
+            download_filename = Path(original_filename).stem + ".pdf"
         else:
-            download_filename = f"{document_id}_带水印版.pdf"
+            download_filename = f"{document_id}.pdf"
         
         # 处理中文文件名编码
         ascii_filename = ''.join(c if ord(c) < 128 else '_' for c in download_filename)
