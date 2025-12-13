@@ -760,8 +760,16 @@ class DocumentService:
             return DEFAULT_STYLE
         
         # 对于可能是一级标题的段落，在函数开始时就记录
-        if para_idx is not None and re.match(r"^\d{1,6}\s+", text) and len(text) <= 50:
-            self._log_to_file(f"[标题检测] 🔍 进入检测函数: 段落索引={para_idx}, 内容=\"{text}\"")
+        if para_idx is not None:
+            # 检查多种可能的一级标题格式
+            is_possible_level1 = (
+                re.match(r"^\d{1,6}\s+", text) or  # 数字+空格+文字
+                re.match(r"^\d{1,6}\s*[^\d\.]", text) or  # 数字+可选空格+非数字非点
+                re.match(r"^第[一二三四五六七八九十\d]+章", text) or  # 第X章
+                (re.match(r"^\d+", text) and len(text) <= 50 and not re.match(r"^\d+\.\d+", text))  # 数字开头但不是二级标题格式
+            )
+            if is_possible_level1:
+                self._log_to_file(f"[标题检测] 🔍 进入检测函数: 段落索引={para_idx}, 内容=\"{text}\", 长度={len(text)}")
         
         # 优先检测特殊标题：摘要、ABSTRACT、目录、绪论、概述
         # 这些标题需要设置为黑体、三号字、加粗、居中
@@ -1424,9 +1432,17 @@ class DocumentService:
             else:
                 # 优先使用标准格式检测
                 paragraph_text = paragraph.text.strip() if paragraph.text else ""
-                # 对于可能是一级标题的段落，添加调试日志
-                if re.match(r"^\d{1,6}\s+", paragraph_text) and len(paragraph_text) <= 50:
-                    self._log_to_file(f"[标题检测] 🔍 开始检测段落 {idx}: 内容=\"{paragraph_text}\"")
+                # 记录所有正文部分的段落（用于调试）
+                if paragraph_text and len(paragraph_text) <= 60:
+                    # 检查是否可能是标题格式
+                    is_possible_title = (
+                        re.match(r"^\d{1,6}\s+", paragraph_text) or  # 数字+空格
+                        re.match(r"^\d{1,6}\s*[^\d\.]", paragraph_text) or  # 数字+可选空格+非数字非点
+                        re.match(r"^第[一二三四五六七八九十\d]+章", paragraph_text) or  # 第X章
+                        re.match(r"^\d+\.\d+", paragraph_text)  # 数字.数字
+                    )
+                    if is_possible_title:
+                        self._log_to_file(f"[标题检测] 🔍 正文段落 {idx} (可能标题): 内容=\"{paragraph_text}\", 当前部分={current_section}")
                 detected_style = self._detect_paragraph_style(paragraph, para_idx=idx)
                 # 记录检测结果
                 if detected_style == "title_level_1":
