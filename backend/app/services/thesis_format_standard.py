@@ -38,10 +38,11 @@ FONT_STANDARDS = {
         "line_spacing": "single",  # 单倍行距
     },
     "title_level_2": {
-        "font_name": "宋体",
-        "font_size": 12,  # 小四号字
+        "font_name": "黑体",
+        "font_size": 14,  # 四号字
         "bold": True,
         "alignment": "left",
+        "line_spacing": 20,  # 固定行距20磅
     },
     "title_level_3": {
         "font_name": "黑体",
@@ -218,7 +219,11 @@ STYLE_MAPPING_RULES = [
         "style": "title_level_1",
     },
     {
-        "pattern": r"^(\d+\.\d+|第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$",
+        "pattern": r"^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$",
+        "style": "title_level_2",
+    },
+    {
+        "pattern": r"^(第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$",
         "style": "title_level_2",
     },
     {

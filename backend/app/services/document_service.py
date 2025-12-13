@@ -792,16 +792,20 @@ class DocumentService:
         if text.startswith("表") and len(text) < 100:
             return "table_caption"
         
-        # 章节标题检测：必须是独立的、较短的段落
-        # 避免将正文中的"第二章的方案"等误识别为标题
-        # 标题一般不会超过一行，字数不会超过30个
+        # 一级标题检测：支持多种格式
+        # 1. "第X章"格式
         chapter_match = re.match(r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$", text)
         if chapter_match:
-            # 如果匹配到章节标题，且段落较短（标题通常是独立的短段落，不超过30个字符）
-            # 或者后面只有标点符号，则认为是标题
-            # 换行以后就是新的内容了，标题一般不会超过一行
             remaining_text = text[len(chapter_match.group(0)):].strip()
             if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                return "title_level_1"
+        
+        # 2. "数字 文字"格式（如"2 电气火灾报警系统的设计方案"）
+        # 格式：单个数字 + 空格 + 文字内容，且不包含点号（避免与二级标题混淆）
+        number_title_match = re.match(r"^(\d+)\s+([^\.]+)$", text)
+        if number_title_match:
+            # 如果段落较短（标题通常不超过50个字符），且不包含点号，则是一级标题
+            if len(text) <= 50 and "." not in text:
                 return "title_level_1"
         
         # 二级标题检测：格式为 数字.数字 或 数字.数字 后跟文字内容
