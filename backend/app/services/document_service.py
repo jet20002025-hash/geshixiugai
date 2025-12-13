@@ -759,23 +759,38 @@ class DocumentService:
         if not text:
             return DEFAULT_STYLE
         
+        # 对于可能是一级标题的段落，在函数开始时就记录
+        if para_idx is not None and re.match(r"^\d{1,6}\s+", text) and len(text) <= 50:
+            self._log_to_file(f"[标题检测] 🔍 进入检测函数: 段落索引={para_idx}, 内容=\"{text}\"")
+        
         # 优先检测特殊标题：摘要、ABSTRACT、目录、绪论、概述
         # 这些标题需要设置为黑体、三号字、加粗、居中
         if text == "摘要" or text.startswith("摘要"):
+            if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                self._log_to_file(f"[标题检测] ⚠️ 段落 {para_idx} 被识别为摘要标题，跳过一级标题检测")
             return "abstract_title"
         if text == "ABSTRACT" or text.startswith("ABSTRACT"):
+            if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                self._log_to_file(f"[标题检测] ⚠️ 段落 {para_idx} 被识别为ABSTRACT标题，跳过一级标题检测")
             return "abstract_title_en"
         if text == "目录" or text.startswith("目录") or text == "Contents" or text.startswith("Contents"):
+            if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                self._log_to_file(f"[标题检测] ⚠️ 段落 {para_idx} 被识别为目录标题，跳过一级标题检测")
             return "toc_title"
         if text == "绪论" or text == "概述" or text.startswith("1 绪论") or text.startswith("1 概述"):
             # 如果是独立的"绪论"或"概述"，且段落较短，则认为是标题
             if len(text) < 50:
+                if para_idx is not None:
+                    self._log_to_file(f"[标题检测] ✅ 段落 {para_idx} 被识别为一级标题（绪论/概述格式）")
                 return "title_level_1"
         
         # 根据样式映射规则检测
         for rule in STYLE_MAPPING_RULES:
             if re.match(rule["pattern"], text, re.IGNORECASE):
-                return rule["style"]
+                matched_style = rule["style"]
+                if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                    self._log_to_file(f"[标题检测] ⚠️ 段落 {para_idx} 被STYLE_MAPPING_RULES匹配为: {matched_style}, 内容=\"{text}\"")
+                return matched_style
         
         # 检查是否是标题
         style_name = paragraph.style.name if paragraph.style else None
@@ -784,8 +799,12 @@ class DocumentService:
             if "标题" in style_name or "heading" in style_lower:
                 # 根据标题级别判断
                 if "1" in style_name or "一" in style_name or "heading 1" in style_lower:
+                    if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                        self._log_to_file(f"[标题检测] ✅ 段落 {para_idx} 通过Word样式名称识别为一级标题: 样式={style_name}, 内容=\"{text}\"")
                     return "title_level_1"
                 elif "2" in style_name or "二" in style_name or "heading 2" in style_lower:
+                    if para_idx is not None and re.match(r"^\d{1,6}\s+", text):
+                        self._log_to_file(f"[标题检测] ⚠️ 段落 {para_idx} 通过Word样式名称识别为二级标题（可能误判）: 样式={style_name}, 内容=\"{text}\"")
                     return "title_level_2"
                 elif "3" in style_name or "三" in style_name or "heading 3" in style_lower:
                     return "title_level_3"
@@ -795,6 +814,10 @@ class DocumentService:
             return "figure_caption"
         if text.startswith("表") and len(text) < 100:
             return "table_caption"
+        
+        # 对于可能是一级标题的段落，记录是否执行到了一级标题检测部分
+        if para_idx is not None and re.match(r"^\d{1,6}\s+", text) and len(text) <= 50:
+            self._log_to_file(f"[标题检测] 🔍 执行到一级标题检测部分: 段落索引={para_idx}, 内容=\"{text}\", 已通过前面的检测")
         
         # 一级标题检测：支持多种格式
         # 特征：在新一页的开头，数字部分1-6位，文字部分不超过30个字
