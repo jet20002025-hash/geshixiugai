@@ -1067,10 +1067,32 @@ class DocumentService:
             if abstract_en_pattern.match(para_text) and abstract_en_start is None:
                 abstract_en_start = idx
                 self._log_to_file(f"[修复] ✅ 找到英文摘要，段落索引: {idx}, 文本: {para_text[:50]}")
-            elif abstract_en_start is not None and (para_text.startswith("Keywords") or para_text.startswith("目录") or para_text.startswith("Contents") or para_text.startswith("第一章") or para_text.startswith("第1章")):
-                abstract_en_end = idx
-                self._log_to_file(f"[修复] 英文摘要结束位置: {idx}, 文本: {para_text[:50]}")
-                break
+            elif abstract_en_start is not None:
+                # 检查是否是英文摘要结束标志：Keywords/Key words/目录/Contents/第一章等
+                # 支持 "Keywords"、"Key words"、"Key words:" 等多种格式
+                is_end_marker = (
+                    para_text.startswith("Keywords") or 
+                    para_text.startswith("Key words") or 
+                    para_text.startswith("Key Words") or
+                    para_text.startswith("目录") or 
+                    para_text.startswith("Contents") or 
+                    para_text.startswith("第一章") or 
+                    para_text.startswith("第1章")
+                )
+                if is_end_marker:
+                    # 找到结束标志，但需要找到"Key words"或"Keywords"之后的内容结束位置
+                    # 继续查找，直到找到目录或正文开始
+                    abstract_en_end = idx
+                    self._log_to_file(f"[修复] 找到英文摘要结束标志，段落索引: {idx}, 文本: {para_text[:50]}")
+                    # 继续查找，找到"Key words"或"Keywords"之后的内容结束位置
+                    # 如果后面是目录或正文，则英文摘要结束
+                    for next_idx in range(idx + 1, min(idx + 10, len(document.paragraphs))):
+                        next_para_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                        if next_para_text.startswith("目录") or next_para_text.startswith("Contents") or next_para_text.startswith("第一章") or next_para_text.startswith("第1章"):
+                            abstract_en_end = next_idx
+                            self._log_to_file(f"[修复] 英文摘要结束位置: {next_idx}, 文本: {next_para_text[:50]}")
+                            break
+                    break
         
         # 查找目录
         for idx in range(search_start, len(document.paragraphs)):
@@ -1101,7 +1123,26 @@ class DocumentService:
         else:
             self._log_to_file(f"[修复] ⚠️ 未找到中文摘要（abstract_zh_start is None）")
         if abstract_en_start is not None:
+            # 如果找到了英文摘要但没找到结束位置，尝试查找"Key words"或"Keywords"之后的内容
+            if abstract_en_end is None:
+                # 从英文摘要开始位置之后查找"Key words"或"Keywords"
+                for idx in range(abstract_en_start + 1, len(document.paragraphs)):
+                    para_text = document.paragraphs[idx].text.strip() if document.paragraphs[idx].text else ""
+                    if (para_text.startswith("Keywords") or para_text.startswith("Key words") or 
+                        para_text.startswith("Key Words") or para_text.startswith("目录") or 
+                        para_text.startswith("Contents") or para_text.startswith("第一章") or 
+                        para_text.startswith("第1章")):
+                        # 找到结束标志，继续查找后面的内容结束位置
+                        abstract_en_end = idx
+                        # 继续查找，直到找到目录或正文
+                        for next_idx in range(idx + 1, min(idx + 20, len(document.paragraphs))):
+                            next_para_text = document.paragraphs[next_idx].text.strip() if document.paragraphs[next_idx].text else ""
+                            if next_para_text.startswith("目录") or next_para_text.startswith("Contents") or next_para_text.startswith("第一章") or next_para_text.startswith("第1章"):
+                                abstract_en_end = next_idx
+                                break
+                        break
             ranges["abstract_en"] = (abstract_en_start, abstract_en_end if abstract_en_end else (toc_start if toc_start else (body_start if body_start else len(document.paragraphs))))
+            self._log_to_file(f"[修复] 设置 abstract_en 范围: {ranges['abstract_en']}")
         if toc_start is not None:
             ranges["toc"] = (toc_start, toc_end if toc_end else (body_start if body_start else len(document.paragraphs)))
         if body_start is not None:
@@ -3308,6 +3349,9 @@ class DocumentService:
             abstract_zh_start, abstract_zh_end = section_ranges["abstract_zh"]
         if "abstract_en" in section_ranges:
             abstract_en_start, abstract_en_end = section_ranges["abstract_en"]
+            self._log_to_file(f"[空白页检测] 英文摘要范围: {abstract_en_start} 到 {abstract_en_end}")
+        else:
+            self._log_to_file(f"[空白页检测] ⚠️ 未找到英文摘要范围")
         
         # 在整个文档中检测整页空白
         # 使用while循环，因为删除段落后索引会变化
@@ -3328,6 +3372,10 @@ class DocumentService:
             if abstract_en_end is not None:
                 if idx >= abstract_en_end:
                     is_after_abstract_en = True
+                    # 添加诊断日志（仅记录前几个段落，避免日志过多）
+                    is_blank = len(para_text) == 0
+                    if idx == abstract_en_end or (idx < abstract_en_end + 5 and is_blank):
+                        self._log_to_file(f"[空白页检测] 段落 {idx} 在英文摘要之后（abstract_en_end={abstract_en_end}），文本: '{para_text[:30]}'，是否空白: {is_blank}")
             
             if is_between_integrity_and_abstract:
                 # 在诚信承诺和摘要之间，只删除空白段落（不包含分页符的）
@@ -3389,9 +3437,11 @@ class DocumentService:
                 if is_blank:
                     if consecutive_blanks == 0:
                         blank_start_idx = idx
+                        self._log_to_file(f"[空白页检测] 在英文摘要后发现空白段落开始，段落索引: {idx}")
                     consecutive_blanks += 1
                     # 如果连续空白段落较多，可能是空白页，需要删除
                     if consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD:
+                        self._log_to_file(f"[空白页检测] 英文摘要后连续空白段落达到阈值: {consecutive_blanks}，开始检查是否为空白页")
                         # 检查前后是否有分页符
                         has_break_before = False
                         if blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
@@ -3407,6 +3457,7 @@ class DocumentService:
                         
                         # 如果前后有分页符，或者连续空白段落很多，说明是空白页，删除这些空白段落
                         if has_break_before or has_break_after or consecutive_blanks >= BLANK_PAGE_THRESHOLD:
+                            self._log_to_file(f"[空白页检测] 确认英文摘要后有空白页，has_break_before={has_break_before}, has_break_after={has_break_after}, consecutive_blanks={consecutive_blanks}")
                             delete_end = min(blank_start_idx + consecutive_blanks - 1, len(document.paragraphs) - 1)
                             deleted_count = 0
                             for delete_idx in range(delete_end, blank_start_idx - 1, -1):
@@ -3419,6 +3470,7 @@ class DocumentService:
                                             idx -= 1
                             
                             if deleted_count > 0:
+                                self._log_to_file(f"[空白页检测] ✅ 已删除英文摘要后的 {deleted_count} 个空白段落（空白页），从段落 {blank_start_idx} 到 {delete_end}")
                                 issues.append({
                                     "type": "blank_page_removed",
                                     "message": f"已删除英文摘要后的 {deleted_count} 个空白段落（空白页）",
