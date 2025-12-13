@@ -793,6 +793,7 @@ class DocumentService:
             return "table_caption"
         
         # 一级标题检测：支持多种格式
+        # 特征：在新一页的开头，数字部分1-6位，文字部分不超过30个字
         # 1. "第X章"格式
         chapter_match = re.match(r"^(第[一二三四五六七八九十\d]+章|第\d+章|Chapter\s+\d+)([，,。.：:；;]?)$", text)
         if chapter_match:
@@ -801,24 +802,54 @@ class DocumentService:
                 return "title_level_1"
         
         # 2. "数字 文字"格式（如"2 电气火灾报警系统的设计方案"）
-        # 格式：单个数字 + 空格 + 文字内容，且不包含点号（避免与二级标题混淆）
-        number_title_match = re.match(r"^(\d+)\s+([^\.]+)$", text)
+        # 规则：
+        # - 数字部分：1-6位数字（不会超过6）
+        # - 格式：数字 + 空格 + 文字内容，且不包含点号（避免与二级标题混淆）
+        # - 文字部分：不超过30个字
+        # - 总长度：数字(1-6) + 空格(1) + 文字(30) ≈ 最多38个字符
+        # - 通常在新页开头（检查 page_break_before）
+        number_title_match = re.match(r"^(\d{1,6})\s+([^\.]+)$", text)
         if number_title_match:
-            # 如果段落较短（标题通常不超过50个字符），且不包含点号，则是一级标题
-            if len(text) <= 50 and "." not in text:
-                return "title_level_1"
+            number_part = number_title_match.group(1)
+            text_part = number_title_match.group(2).strip()
+            # 数字部分不超过6位，文字部分不超过30个字，总长度不超过40个字符
+            if len(number_part) <= 6 and len(text_part) <= 30 and len(text) <= 40:
+                # 检查是否在新页开头（一级标题通常在新页开头）
+                is_new_page = paragraph.paragraph_format.page_break_before
+                # 检查runs中是否有分页符
+                if not is_new_page:
+                    for run in paragraph.runs:
+                        if hasattr(run, 'element'):
+                            run_xml = str(run.element.xml)
+                            if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                is_new_page = True
+                                break
+                # 如果在新页开头，或者即使不在新页开头但格式完全匹配，也认为是一级标题
+                if is_new_page or (len(text_part) > 0 and len(text_part) <= 30):
+                    return "title_level_1"
         
         # 二级标题检测：格式为 数字.数字 或 数字.数字 后跟文字内容
-        # 例如：2.1、3.1、4.1 或 2.1 系统设计、3.1 需求分析 等
-        # 标题一般不会超过一行，字数不会超过50个
+        # 规则：
+        # - 在文本中间（不在新页开头）
+        # - 格式：数字.数字（两个数字中间有个点）
+        # - 在行开头处
+        # - 内容：不超过20个字
+        # - 总长度：数字.数字(如"2.1"=3) + 空格(1) + 文字(20) ≈ 最多25个字符
         section_match = re.match(r"^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$", text)
         if section_match:
-            # 匹配到 数字.数字 格式
-            # 如果后面有文字内容（如"2.1 系统设计"），也是标题
-            # 如果后面只有标点符号或为空，也是标题
-            remaining_text = section_match.group(3).strip() if section_match.group(3) else ""
-            # 标题通常不会超过50个字符，且段落较短
-            if len(text) <= 50:
+            number_part = section_match.group(1)  # 如 "2.1"
+            text_part = section_match.group(3).strip() if section_match.group(3) else ""
+            # 检查是否在新页开头（二级标题通常不在新页开头）
+            is_new_page = paragraph.paragraph_format.page_break_before
+            if not is_new_page:
+                for run in paragraph.runs:
+                    if hasattr(run, 'element'):
+                        run_xml = str(run.element.xml)
+                        if 'w:br' in run_xml and 'type="page"' in run_xml:
+                            is_new_page = True
+                            break
+            # 二级标题：不在新页开头，文字部分不超过20个字，总长度不超过25个字符
+            if not is_new_page and len(text_part) <= 20 and len(text) <= 25:
                 return "title_level_2"
         
         # 也支持"第X节"格式的二级标题
@@ -1397,13 +1428,39 @@ class DocumentService:
                             is_heading = True
                             if idx < 10:
                                 print(f"[格式应用] 段落 {idx} 被识别为标题（绪论/概述: {paragraph_text}）")
-                    # 或者检查是否以数字开头且较短（标题一般不会超过一行，字数不会超过50个）
-                    elif paragraph_text and paragraph_text[0].isdigit() and len(paragraph_text) <= 50:
-                        # 二级标题格式：数字.数字 或 数字.数字 后跟文字（如"2.1 系统设计"）
-                        if re.match(r'^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$', paragraph_text):
-                            is_heading = True
-                            if idx < 10:
-                                print(f"[格式应用] 段落 {idx} 被识别为二级标题（数字编号: {paragraph_text}）")
+                    # 或者检查是否以数字开头（根据新的规则进行更精确的检测）
+                    elif paragraph_text and paragraph_text[0].isdigit():
+                        # 检查是否在新页开头
+                        is_new_page = paragraph.paragraph_format.page_break_before
+                        if not is_new_page:
+                            for run in paragraph.runs:
+                                if hasattr(run, 'element'):
+                                    run_xml = str(run.element.xml)
+                                    if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                        is_new_page = True
+                                        break
+                        
+                        # 一级标题格式：数字(1-6位) + 空格 + 文字(不超过30字)，总长度不超过40
+                        # 通常在新页开头
+                        level1_match = re.match(r'^(\d{1,6})\s+([^\.]+)$', paragraph_text)
+                        if level1_match:
+                            number_part = level1_match.group(1)
+                            text_part = level1_match.group(2).strip()
+                            if len(number_part) <= 6 and len(text_part) <= 30 and len(paragraph_text) <= 40:
+                                if is_new_page or (len(text_part) > 0 and len(text_part) <= 30):
+                                    is_heading = True
+                                    if idx < 10:
+                                        print(f"[格式应用] 段落 {idx} 被识别为一级标题（数字编号: {paragraph_text}）")
+                        # 二级标题格式：数字.数字 + 文字(不超过20字)，总长度不超过25
+                        # 不在新页开头
+                        elif not is_new_page:
+                            level2_match = re.match(r'^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$', paragraph_text)
+                            if level2_match:
+                                text_part = level2_match.group(3).strip() if level2_match.group(3) else ""
+                                if len(text_part) <= 20 and len(paragraph_text) <= 25:
+                                    is_heading = True
+                                    if idx < 10:
+                                        print(f"[格式应用] 段落 {idx} 被识别为二级标题（数字编号: {paragraph_text}）")
                         # 三级标题格式：数字.数字.数字
                         elif re.match(r'^(\d+\.\d+\.\d+)([，,。.：:；;]?)$', paragraph_text):
                             is_heading = True
@@ -1551,11 +1608,21 @@ class DocumentService:
                     if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3"]:
                         if applied_rule_name in FONT_STANDARDS:
                             title_style = FONT_STANDARDS[applied_rule_name]
-                            # 一级标题：黑体；二级标题：宋体；三级标题：黑体
-                            rule["font_name"] = title_style.get("font_name", "黑体" if applied_rule_name != "title_level_2" else "宋体")
-                            rule["font_size"] = title_style.get("font_size", 16 if applied_rule_name == "title_level_1" else 12)
+                            # 一级标题：三号黑体，居中，上下各空2行
+                            # 二级标题：四号黑体，左对齐，固定行距20磅
+                            # 三级标题：小四黑体
+                            rule["font_name"] = title_style.get("font_name", "黑体")
+                            rule["font_size"] = title_style.get("font_size", 16 if applied_rule_name == "title_level_1" else (14 if applied_rule_name == "title_level_2" else 12))
                             rule["bold"] = title_style.get("bold", True)
-                            print(f"[格式应用] 段落 {idx} 应用标题格式：{applied_rule_name}，字体：{rule['font_name']}，字号：{rule['font_size']}pt")
+                            rule["alignment"] = title_style.get("alignment", "center" if applied_rule_name == "title_level_1" else "left")
+                            # 一级标题：上下各空2行
+                            if applied_rule_name == "title_level_1":
+                                rule["space_before"] = title_style.get("space_before", 24)  # 段前2行
+                                rule["space_after"] = title_style.get("space_after", 24)    # 段后2行
+                            # 二级标题：固定行距20磅
+                            if applied_rule_name == "title_level_2":
+                                rule["line_spacing"] = title_style.get("line_spacing", 20)  # 固定行距20磅
+                            print(f"[格式应用] 段落 {idx} 应用标题格式：{applied_rule_name}，字体：{rule['font_name']}，字号：{rule['font_size']}pt，对齐：{rule.get('alignment', 'left')}")
                     else:
                         # 其他标题（如摘要、目录等）使用黑体
                         if rule.get("font_name") is None or "黑" not in str(rule.get("font_name", "")):
