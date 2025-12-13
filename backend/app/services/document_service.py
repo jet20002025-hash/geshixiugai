@@ -3299,10 +3299,15 @@ class DocumentService:
         integrity_start = None
         integrity_end = None
         abstract_zh_start = None
+        abstract_zh_end = None
+        abstract_en_start = None
+        abstract_en_end = None
         if "integrity" in section_ranges:
             integrity_start, integrity_end = section_ranges["integrity"]
         if "abstract_zh" in section_ranges:
-            abstract_zh_start, _ = section_ranges["abstract_zh"]
+            abstract_zh_start, abstract_zh_end = section_ranges["abstract_zh"]
+        if "abstract_en" in section_ranges:
+            abstract_en_start, abstract_en_end = section_ranges["abstract_en"]
         
         # 在整个文档中检测整页空白
         # 使用while循环，因为删除段落后索引会变化
@@ -3317,6 +3322,12 @@ class DocumentService:
             if integrity_end is not None and abstract_zh_start is not None:
                 if integrity_end <= idx < abstract_zh_start:
                     is_between_integrity_and_abstract = True
+            
+            # 检查是否在英文摘要之后（可能是空白页）
+            is_after_abstract_en = False
+            if abstract_en_end is not None:
+                if idx >= abstract_en_end:
+                    is_after_abstract_en = True
             
             if is_between_integrity_and_abstract:
                 # 在诚信承诺和摘要之间，只删除空白段落（不包含分页符的）
@@ -3371,6 +3382,92 @@ class DocumentService:
                     blank_start_idx = None
                 idx += 1
                 continue
+            
+            # 检查是否在英文摘要之后，如果是空白段落，需要特别处理
+            if is_after_abstract_en:
+                is_blank = len(para_text) == 0
+                if is_blank:
+                    if consecutive_blanks == 0:
+                        blank_start_idx = idx
+                    consecutive_blanks += 1
+                    # 如果连续空白段落较多，可能是空白页，需要删除
+                    if consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD:
+                        # 检查前后是否有分页符
+                        has_break_before = False
+                        if blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
+                            prev_para = document.paragraphs[blank_start_idx - 1]
+                            if prev_para.paragraph_format.page_break_before or any('w:br' in str(run.element.xml) and 'type="page"' in str(run.element.xml) for run in prev_para.runs if hasattr(run, 'element')):
+                                has_break_before = True
+                        
+                        has_break_after = False
+                        if idx + 1 < len(document.paragraphs):
+                            next_para = document.paragraphs[idx + 1]
+                            if next_para.paragraph_format.page_break_before or any('w:br' in str(run.element.xml) and 'type="page"' in str(run.element.xml) for run in next_para.runs if hasattr(run, 'element')):
+                                has_break_after = True
+                        
+                        # 如果前后有分页符，或者连续空白段落很多，说明是空白页，删除这些空白段落
+                        if has_break_before or has_break_after or consecutive_blanks >= BLANK_PAGE_THRESHOLD:
+                            delete_end = min(blank_start_idx + consecutive_blanks - 1, len(document.paragraphs) - 1)
+                            deleted_count = 0
+                            for delete_idx in range(delete_end, blank_start_idx - 1, -1):
+                                if delete_idx >= 0 and delete_idx < len(document.paragraphs):
+                                    para_to_delete = document.paragraphs[delete_idx]
+                                    if len(para_to_delete.text.strip()) == 0 and not has_page_break(para_to_delete):
+                                        para_to_delete._element.getparent().remove(para_to_delete._element)
+                                        deleted_count += 1
+                                        if delete_idx < idx:
+                                            idx -= 1
+                            
+                            if deleted_count > 0:
+                                issues.append({
+                                    "type": "blank_page_removed",
+                                    "message": f"已删除英文摘要后的 {deleted_count} 个空白段落（空白页）",
+                                    "suggestion": "已自动删除空白页",
+                                    "blank_start": blank_start_idx,
+                                    "blank_count": deleted_count,
+                                })
+                                consecutive_blanks = 0
+                                blank_start_idx = None
+                                continue
+                    idx += 1
+                    continue
+                else:
+                    # 遇到非空白段落，检查之前是否有大量空白需要删除
+                    if consecutive_blanks >= BLANK_PAGE_WITH_HEADER_THRESHOLD and blank_start_idx is not None:
+                        # 检查空白段落前是否有分页符
+                        has_break_before = False
+                        if blank_start_idx > 0 and blank_start_idx - 1 < len(document.paragraphs):
+                            prev_para = document.paragraphs[blank_start_idx - 1]
+                            if prev_para.paragraph_format.page_break_before or any('w:br' in str(run.element.xml) and 'type="page"' in str(run.element.xml) for run in prev_para.runs if hasattr(run, 'element')):
+                                has_break_before = True
+                        
+                        # 如果前面有分页符，或者连续空白段落很多，说明是空白页，删除这些空白段落
+                        if has_break_before or consecutive_blanks >= BLANK_PAGE_THRESHOLD:
+                            delete_end = min(blank_start_idx + consecutive_blanks - 1, len(document.paragraphs) - 1)
+                            deleted_count = 0
+                            for delete_idx in range(delete_end, blank_start_idx - 1, -1):
+                                if delete_idx >= 0 and delete_idx < len(document.paragraphs):
+                                    para_to_delete = document.paragraphs[delete_idx]
+                                    if len(para_to_delete.text.strip()) == 0 and not has_page_break(para_to_delete):
+                                        para_to_delete._element.getparent().remove(para_to_delete._element)
+                                        deleted_count += 1
+                                        if delete_idx < idx:
+                                            idx -= 1
+                            
+                            if deleted_count > 0:
+                                issues.append({
+                                    "type": "blank_page_removed",
+                                    "message": f"已删除英文摘要后的 {deleted_count} 个空白段落（空白页）",
+                                    "suggestion": "已自动删除空白页",
+                                    "blank_start": blank_start_idx,
+                                    "blank_count": deleted_count,
+                                })
+                                consecutive_blanks = 0
+                                blank_start_idx = None
+                                continue
+                    # 重置计数
+                    consecutive_blanks = 0
+                    blank_start_idx = None
             
             # 检查是否是空白段落
             is_blank = len(para_text) == 0
