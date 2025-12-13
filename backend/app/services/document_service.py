@@ -746,10 +746,14 @@ class DocumentService:
         
         return merged
     
-    def _detect_paragraph_style(self, paragraph: Paragraph) -> str:
+    def _detect_paragraph_style(self, paragraph: Paragraph, para_idx: int = None) -> str:
         """
         根据段落内容自动检测应该应用的样式
         返回样式名称（对应FONT_STANDARDS中的key）
+        
+        Args:
+            paragraph: 段落对象
+            para_idx: 段落索引（可选，用于日志记录）
         """
         text = paragraph.text.strip() if paragraph.text else ""
         if not text:
@@ -799,6 +803,8 @@ class DocumentService:
         if chapter_match:
             remaining_text = text[len(chapter_match.group(0)):].strip()
             if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                self._log_to_file(f"[标题检测] ✅ 检测到一级标题（第X章格式）{para_info}: 完整内容=\"{text}\"")
                 return "title_level_1"
         
         # 2. "数字 文字"格式（如"2 电气火灾报警系统的设计方案"）
@@ -826,6 +832,8 @@ class DocumentService:
                                 break
                 # 如果在新页开头，或者即使不在新页开头但格式完全匹配，也认为是一级标题
                 if is_new_page or (len(text_part) > 0 and len(text_part) <= 30):
+                    para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                    self._log_to_file(f"[标题检测] ✅ 检测到一级标题（数字+文字格式）{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 完整内容=\"{text}\"")
                     return "title_level_1"
         
         # 二级标题检测：格式为 数字.数字 或 数字.数字 后跟文字内容
@@ -850,6 +858,8 @@ class DocumentService:
                             break
             # 二级标题：不在新页开头，文字部分不超过20个字，总长度不超过25个字符
             if not is_new_page and len(text_part) <= 20 and len(text) <= 25:
+                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                self._log_to_file(f"[标题检测] ✅ 检测到二级标题（数字.数字格式）{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 完整内容=\"{text}\"")
                 return "title_level_2"
         
         # 也支持"第X节"格式的二级标题
@@ -857,6 +867,8 @@ class DocumentService:
         if section_chinese_match:
             remaining_text = text[len(section_chinese_match.group(0)):].strip()
             if len(text) <= 30 and (len(remaining_text) == 0 or remaining_text in ["，", "。", "：", "；", ",", ".", ":", ";"]):
+                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                self._log_to_file(f"[标题检测] ✅ 检测到二级标题（第X节格式）{para_info}: 完整内容=\"{text}\"")
                 return "title_level_2"
         
         # 三级标题检测：必须是独立的、较短的段落
@@ -1375,7 +1387,7 @@ class DocumentService:
             # 处理正文部分（使用原有逻辑）
             else:
                 # 优先使用标准格式检测
-                detected_style = self._detect_paragraph_style(paragraph)
+                detected_style = self._detect_paragraph_style(paragraph, para_idx=idx)
                 if detected_style in rules:
                     rule = rules[detected_style].copy()
                     applied_rule_name = detected_style
@@ -1406,6 +1418,9 @@ class DocumentService:
                     # 如果应用的规则是标题样式，则认为是标题
                     if applied_rule_name in ["title_level_1", "title_level_2", "title_level_3", "abstract_title", "toc_title", "reference_title", "acknowledgment_title", "abstract_title_en"]:
                         is_heading = True
+                        # 记录标题应用结果到日志（只记录一级和二级标题）
+                        if applied_rule_name in ["title_level_1", "title_level_2"]:
+                            self._log_to_file(f"[标题应用] ✅ 应用标题格式: 段落索引={idx}, 标题级别={applied_rule_name}, 内容=\"{paragraph_text[:50]}\"")
                         if idx < 10:  # 只记录前10个段落的详细信息
                             print(f"[格式应用] 段落 {idx} 被识别为标题（规则: {applied_rule_name}）")
                     # 或者检查样式名称（但更严格）
@@ -1449,6 +1464,7 @@ class DocumentService:
                             if len(number_part) <= 6 and len(text_part) <= 30 and len(paragraph_text) <= 40:
                                 if is_new_page or (len(text_part) > 0 and len(text_part) <= 30):
                                     is_heading = True
+                                    self._log_to_file(f"[标题应用] ✅ 应用一级标题格式: 段落索引={idx}, 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 完整内容=\"{paragraph_text}\"")
                                     if idx < 10:
                                         print(f"[格式应用] 段落 {idx} 被识别为一级标题（数字编号: {paragraph_text}）")
                         # 二级标题格式：数字.数字 + 文字(不超过20字)，总长度不超过25
@@ -1459,6 +1475,8 @@ class DocumentService:
                                 text_part = level2_match.group(3).strip() if level2_match.group(3) else ""
                                 if len(text_part) <= 20 and len(paragraph_text) <= 25:
                                     is_heading = True
+                                    number_part = level2_match.group(1)
+                                    self._log_to_file(f"[标题应用] ✅ 应用二级标题格式: 段落索引={idx}, 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 完整内容=\"{paragraph_text}\"")
                                     if idx < 10:
                                         print(f"[格式应用] 段落 {idx} 被识别为二级标题（数字编号: {paragraph_text}）")
                         # 三级标题格式：数字.数字.数字
