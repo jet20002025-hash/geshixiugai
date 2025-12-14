@@ -817,11 +817,18 @@ class DocumentService:
                 elif "3" in style_name or "三" in style_name or "heading 3" in style_lower:
                     return "title_level_3"
         
-        # 检查段落内容特征
+        # 检查段落内容特征（优先级最高，避免被误判为标题）
+        # 图题格式：图 + 数字（如"图3.6"、"图1-1"等）
         if text.startswith("图") and len(text) < 100:
-            return "figure_caption"
+            # 更精确的图题检测：确保包含数字
+            if re.search(r'图\s*\d+[\.\-]?\d*', text):
+                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                self._log_to_file(f"[标题检测] ✅ 检测到图题{para_info}: 完整内容=\"{text}\"")
+                return "figure_caption"
+        # 表题格式：表 + 数字
         if text.startswith("表") and len(text) < 100:
-            return "table_caption"
+            if re.search(r'表\s*\d+[\.\-]?\d*', text):
+                return "table_caption"
         
         # 对于可能是一级标题的段落，记录是否执行到了一级标题检测部分
         if para_idx is not None and re.match(r"^\d{1,6}\s+", text) and len(text) <= 50:
@@ -884,27 +891,29 @@ class DocumentService:
         # 规则：
         # - 在文本中间（不在新页开头）
         # - 格式：数字.数字（两个数字中间有个点）
-        # - 在行开头处
+        # - 在行开头处（不能以"图"或"表"开头，避免误判图题/表题）
         # - 内容：不超过20个字
         # - 总长度：数字.数字(如"2.1"=3) + 空格(1) + 文字(20) ≈ 最多25个字符
-        section_match = re.match(r"^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$", text)
-        if section_match:
-            number_part = section_match.group(1)  # 如 "2.1"
-            text_part = section_match.group(3).strip() if section_match.group(3) else ""
-            # 检查是否在新页开头（二级标题通常不在新页开头）
-            is_new_page = paragraph.paragraph_format.page_break_before
-            if not is_new_page:
-                for run in paragraph.runs:
-                    if hasattr(run, 'element'):
-                        run_xml = str(run.element.xml)
-                        if 'w:br' in run_xml and 'type="page"' in run_xml:
-                            is_new_page = True
-                            break
-            # 二级标题：不在新页开头，文字部分不超过20个字，总长度不超过25个字符
-            if not is_new_page and len(text_part) <= 20 and len(text) <= 25:
-                para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
-                self._log_to_file(f"[标题检测] ✅ 检测到二级标题（数字.数字格式）{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 完整内容=\"{text}\"")
-                return "title_level_2"
+        # 排除图题和表题：不能以"图"或"表"开头
+        if not text.startswith("图") and not text.startswith("表"):
+            section_match = re.match(r"^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$", text)
+            if section_match:
+                number_part = section_match.group(1)  # 如 "2.1"
+                text_part = section_match.group(3).strip() if section_match.group(3) else ""
+                # 检查是否在新页开头（二级标题通常不在新页开头）
+                is_new_page = paragraph.paragraph_format.page_break_before
+                if not is_new_page:
+                    for run in paragraph.runs:
+                        if hasattr(run, 'element'):
+                            run_xml = str(run.element.xml)
+                            if 'w:br' in run_xml and 'type="page"' in run_xml:
+                                is_new_page = True
+                                break
+                # 二级标题：不在新页开头，文字部分不超过20个字，总长度不超过25个字符
+                if not is_new_page and len(text_part) <= 20 and len(text) <= 25:
+                    para_info = f", 段落索引={para_idx}" if para_idx is not None else ""
+                    self._log_to_file(f"[标题检测] ✅ 检测到二级标题（数字.数字格式）{para_info}: 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 总长度={len(text)}, 在新页开头={is_new_page}, 完整内容=\"{text}\"")
+                    return "title_level_2"
         
         # 也支持"第X节"格式的二级标题
         section_chinese_match = re.match(r"^(第[一二三四五六七八九十\d]+节)([，,。.：:；;]?)$", text)
@@ -1591,15 +1600,19 @@ class DocumentService:
                 
                 # 对于图题（图片说明），强制居中并应用图题格式
                 if is_figure_caption:
-                    # 使用图题格式标准
+                    # 使用图题格式标准：五号宋体（10.5pt），居中，不加粗
                     if "figure_caption" in rules:
                         rule = rules["figure_caption"].copy()
                         applied_rule_name = "figure_caption"
                     else:
                         rule = FONT_STANDARDS.get("figure_caption", {}).copy()
                         applied_rule_name = "figure_caption"
-                    # 强制确保图题居中对齐
+                    # 强制确保图题格式：五号宋体（10.5pt），居中，不加粗
+                    rule["font_name"] = "宋体"
+                    rule["font_size"] = 10.5  # 五号字
+                    rule["bold"] = False
                     rule["alignment"] = "center"
+                    self._log_to_file(f"[图题应用] ✅ 应用图题格式: 段落索引={idx}, 内容=\"{paragraph_text[:50]}\"")
                 
                 # 对于正文段落（非标题、非图片、非公式、非流程图），保留原有字体，不强制统一
                 if not is_heading and not has_image_or_equation and not has_flowchart:
@@ -1779,6 +1792,41 @@ class DocumentService:
                         r_fonts.set(qn("w:ascii"), "黑体")
                         r_fonts.set(qn("w:hAnsi"), "黑体")
                     self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式（增强加粗）: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\", applied_rule_name={applied_rule_name}")
+                
+                # 最终检查：确保图题格式正确应用（五号宋体，居中，不加粗）
+                is_figure_caption_final = (
+                    applied_rule_name == "figure_caption" or
+                    (paragraph_text and paragraph_text.startswith("图") and len(paragraph_text) < 100 and re.search(r'图\s*\d+[\.\-]?\d*', paragraph_text))
+                )
+                if is_figure_caption_final:
+                    # 强制确保图题格式：五号宋体（10.5pt），居中，不加粗
+                    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+                    # 设置所有runs的字体格式
+                    for run in paragraph.runs:
+                        run.font.name = "宋体"
+                        run.font.size = Pt(10.5)  # 五号字
+                        run.font.bold = False
+                        # 通过XML直接设置，确保格式正确
+                        r_pr = run._element.get_or_add_rPr()
+                        # 确保不加粗（移除加粗设置）
+                        b_elements = r_pr.findall(qn("w:b"))
+                        for b_elem in b_elements:
+                            r_pr.remove(b_elem)
+                        # 设置字体为宋体
+                        r_fonts = r_pr.find(qn("w:rFonts"))
+                        if r_fonts is None:
+                            r_fonts = OxmlElement("w:rFonts")
+                            r_pr.append(r_fonts)
+                        r_fonts.set(qn("w:eastAsia"), "宋体")
+                        r_fonts.set(qn("w:ascii"), "宋体")
+                        r_fonts.set(qn("w:hAnsi"), "宋体")
+                    # 如果段落没有runs，创建一个run并设置格式
+                    if not paragraph.runs:
+                        run = paragraph.add_run()
+                        run.font.name = "宋体"
+                        run.font.size = Pt(10.5)
+                        run.font.bold = False
+                    self._log_to_file(f"[图题应用] ✅ 强制应用图题格式: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\"")
                 
                 # 最终检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
