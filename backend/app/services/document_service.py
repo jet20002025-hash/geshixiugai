@@ -1726,6 +1726,25 @@ class DocumentService:
                 # 应用规则
                 docx_format_utils.apply_paragraph_rule(paragraph, rule)
                 
+                # 最终检查：确保二级标题格式正确应用
+                if applied_rule_name == "title_level_2":
+                    # 强制确保二级标题格式：四号黑体（14pt）、加粗、左对齐、固定行距20磅
+                    paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+                    # 设置段落格式：固定行距20磅
+                    paragraph.paragraph_format.line_spacing = Pt(20)
+                    # 设置所有runs的字体格式
+                    for run in paragraph.runs:
+                        run.font.name = "黑体"
+                        run.font.size = Pt(14)  # 四号字
+                        run.font.bold = True
+                    # 如果段落没有runs，创建一个run并设置格式
+                    if not paragraph.runs:
+                        run = paragraph.add_run()
+                        run.font.name = "黑体"
+                        run.font.size = Pt(14)
+                        run.font.bold = True
+                    self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\"")
+                
                 # 最终检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
                 if para_text_check:
