@@ -1452,15 +1452,32 @@ class DocumentService:
                     )
                     if is_possible_title:
                         self._log_to_file(f"[标题检测] 🔍 正文段落 {idx} (可能标题): 内容=\"{paragraph_text}\", 当前部分={current_section}")
-                detected_style = self._detect_paragraph_style(paragraph, para_idx=idx)
-                # 记录检测结果
-                if detected_style == "title_level_1":
-                    self._log_to_file(f"[标题检测] ✅ 段落 {idx} 被检测为一级标题: 内容=\"{paragraph_text[:50]}\", 检测样式={detected_style}")
+                # 优先检查是否是图题或表题（必须在标题检测之前）
+                is_figure_or_table_caption = False
+                if paragraph_text and len(paragraph_text) < 100:
+                    if paragraph_text.startswith("图") and re.search(r'图\s*\d+[\.\-]?\d*', paragraph_text):
+                        is_figure_or_table_caption = True
+                        detected_style = "figure_caption"
+                        self._log_to_file(f"[图题检测] ✅ 段落 {idx} 被识别为图题: 内容=\"{paragraph_text[:50]}\"")
+                    elif paragraph_text.startswith("表") and re.search(r'表\s*\d+[\.\-]?\d*', paragraph_text):
+                        is_figure_or_table_caption = True
+                        detected_style = "table_caption"
+                        self._log_to_file(f"[表题检测] ✅ 段落 {idx} 被识别为表题: 内容=\"{paragraph_text[:50]}\"")
+                
+                # 如果不是图题/表题，才进行标题检测
+                if not is_figure_or_table_caption:
+                    detected_style = self._detect_paragraph_style(paragraph, para_idx=idx)
+                    # 记录检测结果
+                    if detected_style == "title_level_1":
+                        self._log_to_file(f"[标题检测] ✅ 段落 {idx} 被检测为一级标题: 内容=\"{paragraph_text[:50]}\", 检测样式={detected_style}")
+                
                 if detected_style in rules:
                     rule = rules[detected_style].copy()
                     applied_rule_name = detected_style
                     if detected_style == "title_level_1":
                         self._log_to_file(f"[标题检测] ✅ 段落 {idx} 应用一级标题规则: 内容=\"{paragraph_text[:50]}\"")
+                    elif detected_style in ["figure_caption", "table_caption"]:
+                        self._log_to_file(f"[图题/表题检测] ✅ 段落 {idx} 应用图题/表题规则: 内容=\"{paragraph_text[:50]}\"")
                 elif detected_style == "title_level_1":
                     # 检测到了一级标题，但rules中没有，记录警告
                     self._log_to_file(f"[标题检测] ⚠️ 段落 {idx} 检测为一级标题，但rules中未找到title_level_1规则: 内容=\"{paragraph_text[:50]}\"")
@@ -1542,7 +1559,8 @@ class DocumentService:
                                         print(f"[格式应用] 段落 {idx} 被识别为一级标题（数字编号: {paragraph_text}）")
                         # 二级标题格式：数字.数字 + 文字(不超过20字)，总长度不超过25
                         # 不在新页开头
-                        elif not is_new_page:
+                        # 重要：排除图题和表题（以"图"或"表"开头的不是二级标题）
+                        elif not is_new_page and not paragraph_text.startswith("图") and not paragraph_text.startswith("表"):
                             level2_match = re.match(r'^(\d+\.\d+)(\s*[，,。.：:；;]?\s*)(.*)$', paragraph_text)
                             if level2_match:
                                 text_part = level2_match.group(3).strip() if level2_match.group(3) else ""
@@ -1742,8 +1760,11 @@ class DocumentService:
                 
                 # 最终检查：确保二级标题格式正确应用
                 # 检查是否是二级标题：通过 applied_rule_name 或段落内容格式判断
+                # 重要：排除图题和表题（以"图"或"表"开头的不是二级标题）
                 is_level2_title = (
-                    applied_rule_name == "title_level_2" or
+                    applied_rule_name == "title_level_2" and
+                    not paragraph_text.startswith("图") and
+                    not paragraph_text.startswith("表") and
                     (is_heading and paragraph_text and re.match(r'^\d+\.\d+', paragraph_text) and len(paragraph_text) <= 25)
                 )
                 if is_level2_title:
