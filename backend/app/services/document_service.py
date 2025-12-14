@@ -1738,18 +1738,47 @@ class DocumentService:
                     paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
                     # 设置段落格式：固定行距20磅
                     paragraph.paragraph_format.line_spacing = Pt(20)
-                    # 设置所有runs的字体格式
+                    # 设置所有runs的字体格式，强制加粗（双重设置确保加粗明显）
                     for run in paragraph.runs:
+                        # 方法1：通过font属性设置
                         run.font.name = "黑体"
                         run.font.size = Pt(14)  # 四号字
                         run.font.bold = True
+                        # 方法2：通过XML直接设置加粗，确保更强制
+                        r_pr = run._element.get_or_add_rPr()
+                        # 移除旧的加粗设置（如果有）
+                        b_elements = r_pr.findall(qn("w:b"))
+                        for b_elem in b_elements:
+                            r_pr.remove(b_elem)
+                        # 添加新的加粗设置
+                        b = OxmlElement("w:b")
+                        r_pr.append(b)
+                        b.set(qn("w:val"), "true")
+                        # 确保字体是黑体（通过XML）
+                        r_fonts = r_pr.find(qn("w:rFonts"))
+                        if r_fonts is None:
+                            r_fonts = OxmlElement("w:rFonts")
+                            r_pr.append(r_fonts)
+                        r_fonts.set(qn("w:eastAsia"), "黑体")
+                        r_fonts.set(qn("w:ascii"), "黑体")
+                        r_fonts.set(qn("w:hAnsi"), "黑体")
                     # 如果段落没有runs，创建一个run并设置格式
                     if not paragraph.runs:
                         run = paragraph.add_run()
                         run.font.name = "黑体"
                         run.font.size = Pt(14)
                         run.font.bold = True
-                    self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\", applied_rule_name={applied_rule_name}")
+                        # 通过XML直接设置加粗
+                        r_pr = run._element.get_or_add_rPr()
+                        b = OxmlElement("w:b")
+                        r_pr.append(b)
+                        b.set(qn("w:val"), "true")
+                        r_fonts = OxmlElement("w:rFonts")
+                        r_pr.append(r_fonts)
+                        r_fonts.set(qn("w:eastAsia"), "黑体")
+                        r_fonts.set(qn("w:ascii"), "黑体")
+                        r_fonts.set(qn("w:hAnsi"), "黑体")
+                    self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式（增强加粗）: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\", applied_rule_name={applied_rule_name}")
                 
                 # 最终检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
