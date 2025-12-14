@@ -1539,6 +1539,7 @@ class DocumentService:
                                 text_part = level2_match.group(3).strip() if level2_match.group(3) else ""
                                 if len(text_part) <= 20 and len(paragraph_text) <= 25:
                                     is_heading = True
+                                    applied_rule_name = "title_level_2"  # 重要：设置规则名称，以便后续强制应用格式
                                     number_part = level2_match.group(1)
                                     self._log_to_file(f"[标题应用] ✅ 应用二级标题格式: 段落索引={idx}, 数字部分=\"{number_part}\", 文字部分=\"{text_part}\", 完整内容=\"{paragraph_text}\"")
                                     if idx < 10:
@@ -1727,7 +1728,12 @@ class DocumentService:
                 docx_format_utils.apply_paragraph_rule(paragraph, rule)
                 
                 # 最终检查：确保二级标题格式正确应用
-                if applied_rule_name == "title_level_2":
+                # 检查是否是二级标题：通过 applied_rule_name 或段落内容格式判断
+                is_level2_title = (
+                    applied_rule_name == "title_level_2" or
+                    (is_heading and paragraph_text and re.match(r'^\d+\.\d+', paragraph_text) and len(paragraph_text) <= 25)
+                )
+                if is_level2_title:
                     # 强制确保二级标题格式：四号黑体（14pt）、加粗、左对齐、固定行距20磅
                     paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
                     # 设置段落格式：固定行距20磅
@@ -1743,7 +1749,7 @@ class DocumentService:
                         run.font.name = "黑体"
                         run.font.size = Pt(14)
                         run.font.bold = True
-                    self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\"")
+                    self._log_to_file(f"[标题应用] ✅ 强制应用二级标题格式: 段落索引={idx}, 内容=\"{paragraph.text[:50]}\", applied_rule_name={applied_rule_name}")
                 
                 # 最终检查：确保"摘要"、"ABSTRACT"和"目录"标题始终居中（防止被其他逻辑覆盖）
                 para_text_check = paragraph.text.strip() if paragraph.text else ""
